@@ -1,6 +1,4 @@
-# tutorial
-tutrial respiratory
-Monthly Budget Manager
+# Monthly Budget Manager
 ======================
 
 A simple Python tool (CLI and GUI) to track monthly income and expenses and compute percentage breakdowns and profit margin.
