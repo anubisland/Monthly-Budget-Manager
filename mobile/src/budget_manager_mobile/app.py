@@ -12,4 +12,5 @@ def build(app):
 
 
 def main():
-	return toga.App("Budget Manager", "com.example.budgetmanager", startup=build)
+	# App ID must match Briefcase package: com.example + .budget_manager_mobile
+	return toga.App("Budget Manager", "com.example.budget_manager_mobile", startup=build)
