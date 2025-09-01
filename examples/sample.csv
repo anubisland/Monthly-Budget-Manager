@@ -1,0 +1,12 @@
+type,name,category,amount,date
+income,Salary,,5000,2025-08-01
+income,Freelance,,800,2025-08-15
+expense,Rent,Housing,1500,2025-08-03
+expense,Electricity,Utilities,120,2025-08-07
+expense,Internet,Utilities,60,2025-08-08
+expense,Groceries,Food,420,2025-08
+expense,Eating out,Food,180,2025-08-12
+expense,Transport,Transportation,140,2025-08-05
+expense,Gym,Health,45,2025-08-10
+expense,Insurance,Insurance,220,2025-08-20
+expense,Entertainment,Leisure,90,2025-08-22
