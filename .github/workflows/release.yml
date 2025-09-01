@@ -113,3 +113,71 @@ jobs:
           prerelease: true
           files: |
             artifacts/BudgetManager-*
+
+  mobile:
+    name: build mobile (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-latest ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Briefcase
+        run: |
+          python -m pip install --upgrade pip
+          pip install briefcase==0.3.20 toga==0.4.7
+
+      - name: Build Android (Ubuntu)
+        if: runner.os == 'Linux'
+        working-directory: mobile
+        run: |
+          briefcase create android -v
+          briefcase build android -v
+          briefcase package android -v
+          ls -R
+          mkdir -p ../artifacts
+          cp -v build/budget_manager_mobile/android/*.apk ../artifacts/ || true
+
+      - name: Build iOS (macOS)
+        if: runner.os == 'macOS'
+        working-directory: mobile
+        run: |
+          briefcase create iOS -v
+          briefcase build iOS -v
+          # Packaging iOS produces an Xcode project; zip it as an artifact
+          zip -r ../artifacts/BudgetManager-iOS-Xcode.zip build/budget_manager_mobile/iOS/* || true
+
+      - name: Upload mobile artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-${{ runner.os }}
+          path: artifacts/*
+          if-no-files-found: ignore
+
+  release-mobile:
+    name: attach mobile artifacts
+    needs: [release, mobile]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag || '' }}
+          files: |
+            artifacts/*.apk
+            artifacts/BudgetManager-iOS-Xcode.zip

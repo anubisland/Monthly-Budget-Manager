@@ -1,0 +1,34 @@
+[tool.briefcase]
+project_name = "Budget Manager"
+bundle = "com.example"
+version = "0.1.0"
+url = "https://github.com/melwazeer/tutorial"
+license = "BSD-3-Clause"
+author = "Budget Manager"
+author_email = "noreply@example.com"
+
+[tool.briefcase.app.budget_manager_mobile]
+formal_name = "Budget Manager"
+description = "Simple income/expenses manager"
+sources = ["src/budget_manager_mobile"]
+requires = ["toga==0.4.7"]
+
+# macOS
+[tool.briefcase.app.budget_manager_mobile.macOS]
+requires = []
+
+# iOS
+[tool.briefcase.app.budget_manager_mobile.iOS]
+requires = []
+
+# Linux
+[tool.briefcase.app.budget_manager_mobile.linux]
+requires = []
+
+# Windows
+[tool.briefcase.app.budget_manager_mobile.windows]
+requires = []
+
+# Android
+[tool.briefcase.app.budget_manager_mobile.android]
+requires = []
