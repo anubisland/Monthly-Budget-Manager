@@ -3,7 +3,7 @@ tutrial respiratory
 Monthly Budget Manager
 ======================
 
-A simple Python tool (CLI and GUI) to track monthly income and expenses and compute percentage breakdowns and profit margin. No external dependencies.
+A simple Python tool (CLI and GUI) to track monthly income and expenses and compute percentage breakdowns and profit margin.
 
 Features
 - Interactive entry of incomes and expenses
@@ -12,6 +12,10 @@ Features
 - Dates display in the table as "31 (Sun)" when a full YYYY-MM-DD is known
 - Totals, category breakdowns, percent of income/expenses, and profit margin
 - Optional JSON output and save-to-file
+- Charts on the Report tab: bar chart (Income vs Expenses) and pie chart (Expense Categories)
+- Export to Excel (.xlsx) with three sheets: Income, Expenses, and Report (requires openpyxl)
+- Keyboard shortcuts: Ctrl+O (Open), Ctrl+S (Save), F5 (Refresh Report); Enter to add, Esc to clear in form fields
+- Remembers your last selected Month between runs
 
 Quick start (Windows PowerShell)
 1) Interactive mode:
@@ -38,7 +42,9 @@ python .\budget_manager_gui.py
 - You can also enter just the day (DD). It will be saved as YYYY-MM-DD using the Month field or today's month.
 - Use Open/Save CSV to import/export data
 - Switch to the Report tab for totals and percentage breakdowns
-- Export JSON for a structured report
+	- The Report tab also shows charts: a bar chart comparing Income vs Expenses, and a pie chart of Expense Categories.
+	- Charts redraw responsively when you resize the window; pie slices ≥5% show labels.
+- Export Excel from the toolbar for a multi-sheet workbook; or export JSON from the File menu for a structured report
  - Save CSV adds a 'date' column (YYYY-MM) per row for round-trip
 
 GUI tips
@@ -46,6 +52,8 @@ GUI tips
 - Day-only input: entering DD auto-expands to YYYY-MM-DD using the Month field (or today’s month when Month is empty).
 - Expense categories: click “Pick…” beside Category to choose common categories (Food, Rent, Fuel, Electricity, etc.).
 - Month inference: when opening a CSV, the app infers the Month field from the most common months in the entries.
+- Keyboard: Ctrl+O to open CSV, Ctrl+S to save CSV, F5 to refresh report; press Enter to add a row and Esc to clear the form.
+- Preferences: the app remembers your last selected Month in a simple preferences file in your home folder.
 
 CSV format
 ```
@@ -61,4 +69,5 @@ Notes
 - Category is optional for income rows and defaults to "Uncategorized" for expenses when omitted.
 - The optional 'date' column accepts YYYY-MM or YYYY-MM-DD. If omitted, data still loads; the GUI includes it when saving.
 - In the GUI, entering only DD will be normalized to a full date for storage; tables show day as "DD (Weekday)".
+ - Excel export uses openpyxl; if you run outside the provided venv, install with: `pip install openpyxl`
 
