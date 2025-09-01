@@ -41,6 +41,12 @@ python .\budget_manager_gui.py
 - Export JSON for a structured report
  - Save CSV adds a 'date' column (YYYY-MM) per row for round-trip
 
+GUI tips
+- Date picker: use the “Pick…” button beside the date fields to choose from a mini calendar. “Today” fills today’s date quickly.
+- Day-only input: entering DD auto-expands to YYYY-MM-DD using the Month field (or today’s month when Month is empty).
+- Expense categories: click “Pick…” beside Category to choose common categories (Food, Rent, Fuel, Electricity, etc.).
+- Month inference: when opening a CSV, the app infers the Month field from the most common months in the entries.
+
 CSV format
 ```
 type,name,category,amount,date

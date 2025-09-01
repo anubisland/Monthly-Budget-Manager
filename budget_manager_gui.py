@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Budget Manager GUI (Tkinter)
-- Add/remove income and expense items with per-entry Date (YYYY-MM or YYYY-MM-DD)
+- Manage incomes and expenses with per-entry date (YYYY-MM or YYYY-MM-DD)
 - CSV import/export compatible with CLI; includes 'date' column
 - Live report totals, profit margin, and category percentages
 Run: python budget_manager_gui.py
@@ -11,40 +11,47 @@ from __future__ import annotations
 import csv
 import json
 import os
+import tkinter as tk
+from tkinter import ttk, messagebox, filedialog
+from pathlib import Path
 import datetime as _dt
 import calendar as _cal
-from pathlib import Path
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
 
 from budget_manager import BudgetMonth, read_csv
 
 
 def _valid_ym(s: str) -> bool:
-    return len(s) == 7 and s[4] == '-' and s[:4].isdigit() and s[5:].isdigit() and 1 <= int(s[5:]) <= 12
+    return len(s) == 7 and s[4] == '-' and s[:4].isdigit() and s[5:7].isdigit() and 1 <= int(s[5:7]) <= 12
 
 
 def _valid_ymd(s: str) -> bool:
-    return (
-        len(s) == 10 and s[4] == '-' and s[7] == '-' and s[:4].isdigit() and s[5:7].isdigit() and s[8:].isdigit()
-        and 1 <= int(s[5:7]) <= 12 and 1 <= int(s[8:]) <= 31
-    )
+    if len(s) != 10 or s[4] != '-' or s[7] != '-':
+        return False
+    y, m, d = s.split('-')
+    if not (y.isdigit() and m.isdigit() and d.isdigit()):
+        return False
+    try:
+        _dt.date(int(y), int(m), int(d))
+        return True
+    except ValueError:
+        return False
 
 
 class BudgetApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
-        self.title("Monthly Budget Manager")
-        self.geometry("920x680")
-        self.minsize(860, 600)
+        self.title("Budget Manager")
+        self.geometry("900x600")
 
         self.bm = BudgetMonth()
 
-        # UI state
-        self.var_month = tk.StringVar(value="")
+        # Tk variables
+        self.var_month = tk.StringVar()
+
         self.var_income_name = tk.StringVar()
         self.var_income_amount = tk.StringVar()
         self.var_income_date = tk.StringVar()
+
         self.var_expense_name = tk.StringVar()
         self.var_expense_category = tk.StringVar()
         self.var_expense_amount = tk.StringVar()
@@ -104,12 +111,17 @@ class BudgetApp(tk.Tk):
         ttk.Entry(form, textvariable=self.var_income_amount, width=12).grid(row=1, column=1, padx=(0, 8))
         ttk.Label(form, text="Date (YYYY-MM, YYYY-MM-DD, or DD)").grid(row=0, column=2, sticky="w")
         ttk.Entry(form, textvariable=self.var_income_date, width=12).grid(row=1, column=2, padx=(0, 4))
-        ttk.Button(form, text="Pick…", command=self.pick_income_date).grid(row=1, column=3, padx=(0,4))
-        ttk.Button(form, text="Today", command=self.use_today_income_date).grid(row=1, column=4, padx=(0,8))
+        ttk.Button(form, text="Pick…", command=self.pick_income_date).grid(row=1, column=3, padx=(0, 4))
+        ttk.Button(form, text="Today", command=self.use_today_income_date).grid(row=1, column=4, padx=(0, 8))
         ttk.Button(form, text="Add Income", command=self.add_income).grid(row=1, column=5)
         form.grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        self.tv_income = ttk.Treeview(tab_income, columns=("name", "amount", "date"), show="headings", selectmode="extended")
+        self.tv_income = ttk.Treeview(
+            tab_income,
+            columns=("name", "amount", "date"),
+            show="headings",
+            selectmode="extended",
+        )
         self.tv_income.heading("name", text="Name")
         self.tv_income.heading("amount", text="Amount ($)")
         self.tv_income.heading("date", text="Day (weekday)")
@@ -132,17 +144,25 @@ class BudgetApp(tk.Tk):
         ttk.Label(form2, text="Name").grid(row=0, column=0, sticky="w")
         ttk.Entry(form2, textvariable=self.var_expense_name, width=24).grid(row=1, column=0, padx=(0, 8))
         ttk.Label(form2, text="Category").grid(row=0, column=1, sticky="w")
-        ttk.Entry(form2, textvariable=self.var_expense_category, width=18).grid(row=1, column=1, padx=(0, 8))
+        cat_field = ttk.Frame(form2)
+        ttk.Entry(cat_field, textvariable=self.var_expense_category, width=18).grid(row=0, column=0)
+        ttk.Button(cat_field, text="Pick…", width=6, command=self.pick_category).grid(row=0, column=1, padx=(4, 0))
+        cat_field.grid(row=1, column=1, padx=(0, 8), sticky="w")
         ttk.Label(form2, text="Amount").grid(row=0, column=2, sticky="w")
         ttk.Entry(form2, textvariable=self.var_expense_amount, width=12).grid(row=1, column=2, padx=(0, 8))
         ttk.Label(form2, text="Date (YYYY-MM, YYYY-MM-DD, or DD)").grid(row=0, column=3, sticky="w")
         ttk.Entry(form2, textvariable=self.var_expense_date, width=12).grid(row=1, column=3, padx=(0, 4))
-        ttk.Button(form2, text="Pick…", command=self.pick_expense_date).grid(row=1, column=4, padx=(0,4))
-        ttk.Button(form2, text="Today", command=self.use_today_expense_date).grid(row=1, column=5, padx=(0,8))
+        ttk.Button(form2, text="Pick…", command=self.pick_expense_date).grid(row=1, column=4, padx=(0, 4))
+        ttk.Button(form2, text="Today", command=self.use_today_expense_date).grid(row=1, column=5, padx=(0, 8))
         ttk.Button(form2, text="Add Expense", command=self.add_expense).grid(row=1, column=6)
         form2.grid(row=0, column=0, sticky="w", pady=(0, 8))
 
-        self.tv_expense = ttk.Treeview(tab_expense, columns=("name", "category", "amount", "date"), show="headings", selectmode="extended")
+        self.tv_expense = ttk.Treeview(
+            tab_expense,
+            columns=("name", "category", "amount", "date"),
+            show="headings",
+            selectmode="extended",
+        )
         self.tv_expense.heading("name", text="Name")
         self.tv_expense.heading("category", text="Category")
         self.tv_expense.heading("amount", text="Amount ($)")
@@ -174,7 +194,11 @@ class BudgetApp(tk.Tk):
         self.lbl_margin.grid(row=0, column=3, sticky="w")
         summary.grid(row=0, column=0, sticky="ew", pady=(0, 8))
 
-        self.tv_breakdown = ttk.Treeview(tab_report, columns=("category", "amount", "p_income", "p_expenses"), show="headings")
+        self.tv_breakdown = ttk.Treeview(
+            tab_report,
+            columns=("category", "amount", "p_income", "p_expenses"),
+            show="headings",
+        )
         self.tv_breakdown.heading("category", text="Category")
         self.tv_breakdown.heading("amount", text="Amount ($)")
         self.tv_breakdown.heading("p_income", text="% of Income")
@@ -299,6 +323,16 @@ class BudgetApp(tk.Tk):
     def use_today_expense_date(self) -> None:
         self.var_expense_date.set(_dt.date.today().strftime("%Y-%m-%d"))
 
+    def pick_category(self) -> None:
+        cats = [
+            "Food", "Rent", "Fuel", "Electricity", "Internet", "Water", "Transport",
+            "Healthcare", "Entertainment", "Education", "Clothing", "Savings",
+            "Debt", "Subscriptions", "Gifts", "Misc"
+        ]
+        sel = _CategoryPicker(self, cats).show()
+        if sel:
+            self.var_expense_category.set(sel)
+
     def clear_incomes(self) -> None:
         if messagebox.askyesno("Clear incomes", "Remove all income entries?"):
             self.bm.incomes.clear()
@@ -335,7 +369,6 @@ class BudgetApp(tk.Tk):
             return
         self.bm.incomes = list(incomes)
         self.bm.expenses = list(expenses)
-        # Try to infer the month (YYYY-MM) from loaded entries
         inferred = self._infer_month_from_entries()
         if inferred:
             self.var_month.set(inferred)
@@ -346,7 +379,12 @@ class BudgetApp(tk.Tk):
         self.status.set(f"Loaded {os.path.basename(path)}")
 
     def save_csv(self) -> None:
-        path = filedialog.asksaveasfilename(title="Save CSV", defaultextension=".csv", filetypes=[["CSV files", "*.csv"], ["All files", "*.*"]], initialfile="budget.csv")
+        path = filedialog.asksaveasfilename(
+            title="Save CSV",
+            defaultextension=".csv",
+            filetypes=[["CSV files", "*.csv"], ["All files", "*.*"]],
+            initialfile="budget.csv",
+        )
         if not path:
             return
         try:
@@ -363,7 +401,12 @@ class BudgetApp(tk.Tk):
         self.status.set(f"Saved to {os.path.basename(path)}")
 
     def export_json(self) -> None:
-        path = filedialog.asksaveasfilename(title="Export JSON Report", defaultextension=".json", filetypes=[["JSON files", "*.json"], ["All files", "*.*"]], initialfile="budget_report.json")
+        path = filedialog.asksaveasfilename(
+            title="Export JSON Report",
+            defaultextension=".json",
+            filetypes=[["JSON files", "*.json"], ["All files", "*.*"]],
+            initialfile="budget_report.json",
+        )
         if not path:
             return
         try:
@@ -410,39 +453,31 @@ class BudgetApp(tk.Tk):
         return True
 
     def _format_day_display(self, ds: str | None) -> str:
-        """Return a display string like '31 (Sun)' for YYYY-MM-DD; blank otherwise.
-        - If ds is YYYY-MM, returns an empty string as day is unknown.
-        - If ds is invalid, returns the original string for visibility.
-        """
+        """Return display like '31 (Sun)' for YYYY-MM-DD; blank for YYYY-MM or None."""
         if not ds:
             return ""
         try:
             if len(ds) == 10:
                 d = _dt.datetime.strptime(ds, "%Y-%m-%d").date()
                 return f"{d.day} ({d.strftime('%a')})"
-            # month-level date has no exact day -> omit
             return ""
         except Exception:
             return ds
 
-    def _normalize_date_input(self, s: str) -> tuple["str | None", "str | None"]:
-        """Normalize user-entered date string into one of:
-        - YYYY-MM-DD if day-only provided (uses Month field or today's month)
-        - YYYY-MM or YYYY-MM-DD if already valid
-        - None if left blank and no Month provided
-        Returns (normalized_value, error_message). error_message is None on success.
+    def _normalize_date_input(self, s: str) -> tuple[str | None, str | None]:
+        """Normalize user-entered date:
+        - Accept YYYY-MM, YYYY-MM-DD, or day-of-month (DD)
+        - DD uses Month field or today's month
+        Returns (normalized, error_message).
         """
         s = s.strip()
-        # If blank, fall back to Month or None
         if not s:
             m = (self.var_month.get() or "").strip()
             if _valid_ym(m):
                 return m, None
             return None, None
-        # If already valid YYYY-MM or YYYY-MM-DD
         if _valid_ym(s) or _valid_ymd(s):
             return s, None
-        # Day-of-month only (e.g., "5" or "05")
         if s.isdigit():
             try:
                 day = int(s)
@@ -463,9 +498,6 @@ class BudgetApp(tk.Tk):
         return None, "Enter date as YYYY-MM, YYYY-MM-DD, or day-of-month (DD)."
 
     def _infer_month_from_entries(self) -> str | None:
-        """Infer YYYY-MM from existing entries by taking the most common month among dates.
-        Returns None if no dates are present.
-        """
         counts: dict[str, int] = {}
         def add_date(ds: str | None) -> None:
             if not ds:
@@ -477,7 +509,6 @@ class BudgetApp(tk.Tk):
                 ym = ds
             if ym:
                 counts[ym] = counts.get(ym, 0) + 1
-
         for inc in self.bm.incomes:
             add_date(getattr(inc, 'date', None))
         for exp in self.bm.expenses:
@@ -491,7 +522,6 @@ class BudgetApp(tk.Tk):
 def main() -> int:
     app = BudgetApp()
     try:
-        import datetime as _dt
         app.var_month.set(_dt.date.today().strftime("%Y-%m"))
     except Exception:
         pass
@@ -530,10 +560,9 @@ class _CalendarPopup(tk.Toplevel):
     def _render_days(self) -> None:
         for w in list(self.grid_days.winfo_children()):
             w.destroy()
-        # Weekday headers
         for i, wd in enumerate(["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]):
             ttk.Label(self.grid_days, text=wd, width=4, anchor="center").grid(row=0, column=i, padx=1, pady=2)
-        cal = _cal.Calendar(firstweekday=0)  # Monday first
+        cal = _cal.Calendar(firstweekday=0)
         row = 1
         for week in cal.monthdayscalendar(self._year, self._month):
             for col, day in enumerate(week):
@@ -569,6 +598,49 @@ class _CalendarPopup(tk.Toplevel):
         else:
             self._month += 1
         self._render_days()
+
+    def show(self) -> str | None:
+        self.wait_window()
+        return self._selected
+
+
+class _CategoryPicker(tk.Toplevel):
+    def __init__(self, master: tk.Misc, categories: list[str]) -> None:
+        super().__init__(master)
+        self.title("Pick a category")
+        self.resizable(False, False)
+        self.transient(master)
+        self.grab_set()
+        self._selected: str | None = None
+        self._cats = categories
+        self._build()
+        self.protocol("WM_DELETE_WINDOW", self._on_cancel)
+
+    def _build(self) -> None:
+        frm = ttk.Frame(self, padding=8)
+        frm.grid(row=0, column=0)
+        lb = tk.Listbox(frm, height=min(12, max(6, len(self._cats))), exportselection=False)
+        for c in self._cats:
+            lb.insert(tk.END, c)
+        lb.grid(row=0, column=0, sticky="nsew")
+        sb = ttk.Scrollbar(frm, orient="vertical", command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        sb.grid(row=0, column=1, sticky="ns")
+
+        btns = ttk.Frame(self, padding=8)
+        ttk.Button(btns, text="OK", command=lambda: self._on_ok(lb)).grid(row=0, column=0, padx=4)
+        ttk.Button(btns, text="Cancel", command=self._on_cancel).grid(row=0, column=1, padx=4)
+        btns.grid(row=1, column=0)
+
+    def _on_ok(self, lb: tk.Listbox) -> None:
+        sel = lb.curselection()
+        if sel:
+            self._selected = lb.get(sel[0])
+        self.destroy()
+
+    def _on_cancel(self) -> None:
+        self._selected = None
+        self.destroy()
 
     def show(self) -> str | None:
         self.wait_window()
