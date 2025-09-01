@@ -2,7 +2,8 @@ name: build-and-release
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,31 +15,23 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ windows-latest, ubuntu-latest, macos-latest ]
-
+        os: [windows-latest, ubuntu-latest, macos-latest]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
-      - name: Cache pip
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
       - name: Build executable (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -47,7 +40,6 @@ jobs:
           $Artifact = "BudgetManager-windows-${{ runner.arch }}.zip"
           Compress-Archive -Path "dist/BudgetManager.exe" -DestinationPath $Artifact -Force
           echo "ARTIFACT_NAME=$Artifact" >> $env:GITHUB_ENV
-
       - name: Build executable (Linux)
         if: runner.os == 'Linux'
         shell: bash
@@ -56,7 +48,6 @@ jobs:
           ARTIFACT="BudgetManager-linux-${{ runner.arch }}.tar.gz"
           tar -C dist -czf "$ARTIFACT" BudgetManager
           echo "ARTIFACT_NAME=$ARTIFACT" >> $GITHUB_ENV
-
       - name: Build executable (macOS)
         if: runner.os == 'macOS'
         shell: bash
@@ -65,7 +56,6 @@ jobs:
           ARTIFACT="BudgetManager-macos-${{ runner.arch }}.zip"
           (cd dist && zip -9 -r "../$ARTIFACT" BudgetManager)
           echo "ARTIFACT_NAME=$ARTIFACT" >> $GITHUB_ENV
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -80,12 +70,10 @@ jobs:
     outputs:
       tag: ${{ steps.prep.outputs.tag }}
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: ./artifacts
           merge-multiple: true
-
       - name: Prepare tag
         id: prep
         shell: bash
@@ -94,7 +82,6 @@ jobs:
           SHORT_SHA=${GITHUB_SHA::7}
           echo "tag=v${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
           echo "name=Budget Manager ${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -123,28 +110,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest ]
+        os: [ubuntu-latest, macos-latest]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install Briefcase
         run: |
           python -m pip install --upgrade pip
           pip install briefcase==0.3.20
-
       - name: Setup Java (Linux)
         if: runner.os == 'Linux'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
       - name: Build Android (Ubuntu)
         if: runner.os == 'Linux'
         working-directory: mobile
@@ -155,41 +136,19 @@ jobs:
           ls -R
           mkdir -p ../artifacts
           find build -type f -name "*.apk" -print -exec cp -v {} ../artifacts/ \; || true
-
       - name: Build iOS (macOS)
         if: runner.os == 'macOS'
         working-directory: mobile
         run: |
           briefcase create iOS -v
           briefcase build iOS -v
-          # Packaging iOS produces an Xcode project; zip it as an artifact
           zip -r ../artifacts/BudgetManager-iOS-Xcode.zip build/budget_manager_mobile/iOS/* || true
-
       - name: Upload mobile artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mobile-${{ runner.os }}
           path: artifacts/*
           if-no-files-found: ignore
-
-  release-mobile:
-    name: attach mobile artifacts
-  needs: [release, mobile, android-test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: ./artifacts
-          merge-multiple: true
-
-      - name: Upload to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.release.outputs.tag }}
-          files: |
-            artifacts/*.apk
-            artifacts/BudgetManager-iOS-Xcode.zip
 
   android-test:
     name: test android apk on emulator
@@ -201,20 +160,14 @@ jobs:
         with:
           name: mobile-Linux
           path: apk
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install build-tools for aapt
+      - uses: android-actions/setup-android@v3
+      - name: Install SDK components
         run: |
-          yes | sdkmanager "platform-tools" "platforms;android-30" "build-tools;34.0.0"
-
+          yes | sdkmanager "platform-tools" "platforms;android-30" "build-tools;30.0.3"
       - name: Run emulator and smoke test APK
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -237,16 +190,30 @@ jobs:
             if [ -z "$PKG" ] || [ -z "$ACT" ]; then echo "Failed to parse package/activity"; aapt dump badging "$APK"; exit 1; fi
             adb shell am start -n "$PKG/$ACT"
             sleep 10
-            # drive a few basic UI events
             adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 10 || true
             adb logcat -d | tail -n 800 > logcat.txt
-            # Fail on fatal crash markers
             if grep -E "FATAL EXCEPTION|Traceback|crash" -i logcat.txt; then
               echo "Detected crash markers in logcat"; exit 1; fi
-
       - name: Upload logcat
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: android-logcat
           path: logcat.txt
+
+  release-mobile:
+    name: attach mobile artifacts
+    needs: [release, mobile, android-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
+          merge-multiple: true
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release.outputs.tag }}
+          files: |
+            artifacts/*.apk
+            artifacts/BudgetManager-iOS-Xcode.zip
