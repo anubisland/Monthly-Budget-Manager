@@ -174,7 +174,7 @@ jobs:
 
   release-mobile:
     name: attach mobile artifacts
-    needs: [release, mobile]
+  needs: [release, mobile, android-test]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -190,3 +190,63 @@ jobs:
           files: |
             artifacts/*.apk
             artifacts/BudgetManager-iOS-Xcode.zip
+
+  android-test:
+    name: test android apk on emulator
+    needs: mobile
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-Linux
+          path: apk
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install build-tools for aapt
+        run: |
+          yes | sdkmanager "platform-tools" "platforms;android-30" "build-tools;34.0.0"
+
+      - name: Run emulator and smoke test APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          profile: pixel_5
+          disk-size: 2048M
+          ram-size: 2048M
+          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect
+          disable-animations: true
+          script: |
+            set -e
+            APK=$(ls apk/*.apk | head -n1)
+            echo "APK=$APK"
+            if [ ! -f "$APK" ]; then echo "No APK found"; exit 1; fi
+            adb install -r "$APK"
+            PKG=$(aapt dump badging "$APK" | awk -F\" '/package: name=/{print $2}')
+            ACT=$(aapt dump badging "$APK" | awk -F\" '/launchable-activity: name=/{print $2}')
+            echo "PKG=$PKG ACT=$ACT"
+            if [ -z "$PKG" ] || [ -z "$ACT" ]; then echo "Failed to parse package/activity"; aapt dump badging "$APK"; exit 1; fi
+            adb shell am start -n "$PKG/$ACT"
+            sleep 10
+            # drive a few basic UI events
+            adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 10 || true
+            adb logcat -d | tail -n 800 > logcat.txt
+            # Fail on fatal crash markers
+            if grep -E "FATAL EXCEPTION|Traceback|crash" -i logcat.txt; then
+              echo "Detected crash markers in logcat"; exit 1; fi
+
+      - name: Upload logcat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-logcat
+          path: logcat.txt
