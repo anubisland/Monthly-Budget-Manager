@@ -61,3 +61,4 @@ Notes
 - Category is optional for income rows and defaults to "Uncategorized" for expenses when omitted.
 - The optional 'date' column accepts YYYY-MM or YYYY-MM-DD. If omitted, data still loads; the GUI includes it when saving.
 - In the GUI, entering only DD will be normalized to a full date for storage; tables show day as "DD (Weekday)".
+
