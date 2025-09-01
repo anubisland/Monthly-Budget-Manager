@@ -11,7 +11,7 @@ author_email = "noreply@example.com"
 formal_name = "Budget Manager"
 description = "Simple income/expenses manager"
 sources = ["src/budget_manager_mobile"]
-requires = ["toga==0.4.7"]
+requires = ["toga-core==0.4.7"]
 
 # macOS
 [tool.briefcase.app.budget_manager_mobile.macOS]
@@ -19,7 +19,7 @@ requires = []
 
 # iOS
 [tool.briefcase.app.budget_manager_mobile.iOS]
-requires = []
+requires = ["toga-iOS==0.4.7"]
 
 # Linux
 [tool.briefcase.app.budget_manager_mobile.linux]
@@ -31,4 +31,4 @@ requires = []
 
 # Android
 [tool.briefcase.app.budget_manager_mobile.android]
-requires = []
+requires = ["toga-android==0.4.7"]
