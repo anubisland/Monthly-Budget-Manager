@@ -75,8 +75,8 @@ if (-not $Apk) {
     $reqPath = Join-Path $gradleAppDir "requirements.txt"
     Write-Host "==> Writing Gradle requirements.txt (fallback)"
     $reqContent = @(
-        "toga-android==0.4.7",
-        "travertino==0.3.0",
+        "toga-android==0.5.2",
+    "travertino==0.5.2",
         "XlsxWriter==3.2.0"
     ) -join [Environment]::NewLine
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)

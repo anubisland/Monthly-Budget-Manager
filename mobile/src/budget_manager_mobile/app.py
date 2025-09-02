@@ -89,7 +89,10 @@ class BudgetMobile(toga.App):
 		self.income_box = income_box
 		self.expense_box = expense_box
 		self.report_box = report_box
-		self.section = toga.Selection(items=["Income", "Expenses", "Report"], on_select=self.on_section_change)
+		# In Toga 0.5.x, avoid passing on_select via constructor to prevent it being
+		# misrouted into Pack.__init__; set the handler after creation instead.
+		self.section = toga.Selection(items=["Income", "Expenses", "Report"])
+		self.section.on_select = self.on_section_change
 		self.section.value = "Income"
 		self.content = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
 		self.content.add(self.income_box)
@@ -370,7 +373,7 @@ class BudgetMobile(toga.App):
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
-				import xlsxwriter
+				import xlsxwriter  # type: ignore
 				buffer = io.BytesIO()
 				wb = xlsxwriter.Workbook(buffer, {"in_memory": True})
 				fmt_bold = wb.add_format({"bold": True})
