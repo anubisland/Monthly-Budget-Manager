@@ -3,7 +3,7 @@ project_name = "Budget Manager"
 bundle = "com.example"
 version = "0.1.0"
 url = "https://github.com/melwazeer/tutorial"
-license = "BSD-3-Clause"
+license = { file = "LICENSE" }
 author = "Budget Manager"
 author_email = "noreply@example.com"
 
@@ -11,7 +11,10 @@ author_email = "noreply@example.com"
 formal_name = "Budget Manager"
 description = "Simple income/expenses manager"
 sources = ["src/budget_manager_mobile"]
-requires = ["toga-core==0.4.7"]
+requires = [
+	"toga-core==0.4.7",
+	"travertino==0.3.1"
+]
 
 # macOS
 [tool.briefcase.app.budget_manager_mobile.macOS]
@@ -19,7 +22,10 @@ requires = []
 
 # iOS
 [tool.briefcase.app.budget_manager_mobile.iOS]
-requires = ["toga-iOS==0.4.7"]
+requires = [
+	"toga-iOS==0.4.7",
+	"travertino==0.3.1"
+]
 
 # Linux
 [tool.briefcase.app.budget_manager_mobile.linux]
@@ -31,4 +37,10 @@ requires = []
 
 # Android
 [tool.briefcase.app.budget_manager_mobile.android]
-requires = ["toga-android==0.4.7"]
+requires = [
+	"toga-android==0.4.7",
+	"travertino==0.3.1"
+]
+gradle_dependencies = [
+	"com.google.android.material:material:1.11.0"
+]

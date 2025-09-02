@@ -69,3 +69,11 @@ Notes
 - In the GUI, entering only DD will be normalized to a full date for storage; tables show day as "DD (Weekday)".
  - Excel export uses openpyxl; if you run outside the provided venv, install with: `pip install openpyxl`
 
+## Mobile (Android/iOS)
+
+The mobile app is built with BeeWare Briefcase and Toga.
+
+Compatibility notes:
+- We pin Toga 0.4.7 and Travertino 0.3.0 to match API expectations on mobile.
+- After changing `mobile/pyproject.toml`, re-run the Android build so Gradle picks up dependency changes.
+
