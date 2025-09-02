@@ -13,7 +13,7 @@ description = "Simple income/expenses manager"
 sources = ["src/budget_manager_mobile"]
 requires = [
 	"toga-core==0.4.7",
-	"travertino==0.3.1"
+	"travertino==0.3.0"
 ]
 
 # macOS
@@ -24,7 +24,7 @@ requires = []
 [tool.briefcase.app.budget_manager_mobile.iOS]
 requires = [
 	"toga-iOS==0.4.7",
-	"travertino==0.3.1"
+	"travertino==0.3.0"
 ]
 
 # Linux
@@ -39,7 +39,7 @@ requires = []
 [tool.briefcase.app.budget_manager_mobile.android]
 requires = [
 	"toga-android==0.4.7",
-	"travertino==0.3.1"
+	"travertino==0.3.0"
 ]
 gradle_dependencies = [
 	"com.google.android.material:material:1.11.0"
