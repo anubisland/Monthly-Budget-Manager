@@ -13,10 +13,11 @@ description = "Simple income/expenses manager"
 sources = ["src/budget_manager_mobile"]
 requires = [
 	"toga-core==0.4.7",
-	"travertino==0.3.0"
+	"travertino==0.3.0",
+	"XlsxWriter==3.2.0",
 ]
 
-# macOS
+# macOS (not used for Android build)
 [tool.briefcase.app.budget_manager_mobile.macOS]
 requires = []
 
@@ -24,7 +25,8 @@ requires = []
 [tool.briefcase.app.budget_manager_mobile.iOS]
 requires = [
 	"toga-iOS==0.4.7",
-	"travertino==0.3.0"
+	"travertino==0.3.0",
+	"XlsxWriter==3.2.0",
 ]
 
 # Linux
@@ -39,7 +41,8 @@ requires = []
 [tool.briefcase.app.budget_manager_mobile.android]
 requires = [
 	"toga-android==0.4.7",
-	"travertino==0.3.0"
+	"travertino==0.3.0",
+	"XlsxWriter==3.2.0",
 ]
 gradle_dependencies = [
 	"com.google.android.material:material:1.11.0"

@@ -1,4 +1,5 @@
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -59,9 +60,11 @@ class BudgetMobile(toga.App):
 		self.r_margin = toga.Label("")
 		self.r_categories = toga.Table(headings=["Category", "Amount", "Percent"], data=[])
 		# File actions
+		self.new_btn = toga.Button("New", on_press=self.on_new)
 		self.save_btn = toga.Button("Save", on_press=self.on_save)
 		self.open_btn = toga.Button("Open", on_press=self.on_open)
 		self.export_btn = toga.Button("Export", on_press=self.on_export)
+		self.status_label = toga.Label("")
 
 		report_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
 		for w in (
@@ -76,7 +79,8 @@ class BudgetMobile(toga.App):
 			self.r_margin,
 			toga.Label("Expense Categories"),
 			self.r_categories,
-			toga.Box(children=[self.save_btn, self.open_btn, self.export_btn]),
+			toga.Box(children=[self.new_btn, self.save_btn, self.open_btn, self.export_btn]),
+			self.status_label,
 		):
 			report_box.add(w)
 
@@ -178,6 +182,11 @@ class BudgetMobile(toga.App):
 			self.content.add(self.report_box)
 
 	# Date helpers
+	def _is_mobile(self) -> bool:
+		# Android reports 'android'; iOS may report 'ios'
+		plat = sys.platform.lower()
+		return plat.startswith("android") or plat == "ios"
+
 	def _sync_date_controls(self):
 		self.year_input.value = str(self.meta_year)
 		self.month_select.value = str(self.meta_month).zfill(2)
@@ -257,125 +266,225 @@ class BudgetMobile(toga.App):
 		base.mkdir(parents=True, exist_ok=True)
 		return base / filename
 
-	def on_save(self, button):
+	async def on_save(self, button):
 		try:
-			# Try native save dialog if available
+			# Use a native save dialog; require explicit selection
+			json_filter = getattr(toga, "FileDialogFilter", None)
+			filters = None
+			if json_filter is not None:
+				filters = [toga.FileDialogFilter("JSON", extensions=["json"])]
+			sel = await self.main_window.save_file_dialog(
+				"Save Budget JSON",
+				suggested_filename=self._default_filename("json"),
+				file_types=filters,
+			)
 			path = None
-			if hasattr(self.main_window, "save_file_dialog"):
-				path = self.main_window.save_file_dialog(
-					"Save Budget JSON",
-					suggested_filename=self._default_filename("json"),
-					file_types=[("JSON", "json")],
-				)
+			if isinstance(sel, str) and sel:
+				path = sel
+			elif isinstance(sel, (list, tuple)) and sel:
+				path = sel[0]
 			if not path:
-				path = str(self._safe_app_path(self._default_filename("json")))
+				self.status_label.text = "Save canceled"
+				return
 			data = self._serialize()
 			with open(path, "w", encoding="utf-8") as f:
 				json.dump(data, f, ensure_ascii=False, indent=2)
+			self.status_label.text = f"Saved: {path}"
 		except Exception as e:
-			# Minimal feedback; in production you'd use an alert dialog
-			print(f"Save failed: {e}")
+			self.status_label.text = f"Save failed: {e}"
 
-	def on_open(self, button):
+	async def on_open(self, button):
 		try:
+			# Use a native open dialog; require explicit selection
+			json_filter = getattr(toga, "FileDialogFilter", None)
+			filters = None
+			if json_filter is not None:
+				filters = [toga.FileDialogFilter("JSON", extensions=["json"])]
+			sel = await self.main_window.open_file_dialog(
+				"Open Budget JSON",
+				multiselect=False,
+				file_types=filters,
+			)
 			path = None
-			if hasattr(self.main_window, "open_file_dialog"):
-				sel = self.main_window.open_file_dialog(
-					"Open Budget JSON",
-					multiselect=False,
-					file_types=[("JSON", "json")],
-				)
-				if isinstance(sel, (list, tuple)) and sel:
-					path = sel[0]
-				elif isinstance(sel, str):
-					path = sel
+			if isinstance(sel, str) and sel:
+				path = sel
+			elif isinstance(sel, (list, tuple)) and sel:
+				path = sel[0]
 			if not path:
-				# Fall back to app data default file
-				path = str(self._safe_app_path(self._default_filename("json")))
+				self.status_label.text = "Open canceled"
+				return
 			with open(path, "r", encoding="utf-8") as f:
 				data = json.load(f)
 			self._deserialize(data)
+			self.status_label.text = f"Opened: {path}"
 		except FileNotFoundError:
-			print("Open failed: file not found")
+			self.status_label.text = "Open failed: file not found"
 		except Exception as e:
-			print(f"Open failed: {e}")
+			self.status_label.text = f"Open failed: {e}"
 
-	def on_export(self, button):
+	async def on_export(self, button):
 		try:
-			# Defer import so Android only needs it when exporting
-			from openpyxl import Workbook
-			from openpyxl.utils import get_column_letter
-			from openpyxl.styles import Font, Alignment, PatternFill
+			# Try XlsxWriter first (pure-Python), then openpyxl
+			engine = None
+			try:
+				import xlsxwriter  # type: ignore
+				engine = "xlsxwriter"
+			except Exception:
+				pass
+			if engine is None:
+				try:
+					from openpyxl import Workbook  # type: ignore
+					from openpyxl.utils import get_column_letter  # type: ignore
+					from openpyxl.styles import Font, Alignment, PatternFill  # type: ignore
+					engine = "openpyxl"
+				except Exception:
+					engine = None
+			if engine is None:
+				self.status_label.text = "Export failed: No Excel engine (install XlsxWriter or openpyxl)"
+				return
 
+			# Ask user where to save; require explicit selection
+			xlsx_filter = getattr(toga, "FileDialogFilter", None)
+			filters = None
+			if xlsx_filter is not None:
+				filters = [toga.FileDialogFilter("Excel", extensions=["xlsx"])]
+			sel = await self.main_window.save_file_dialog(
+				"Export to Excel",
+				suggested_filename=self._default_filename("xlsx"),
+				file_types=filters,
+			)
 			path = None
-			if hasattr(self.main_window, "save_file_dialog"):
-				path = self.main_window.save_file_dialog(
-					"Export to Excel",
-					suggested_filename=self._default_filename("xlsx"),
-					file_types=[("Excel", "xlsx")],
-				)
+			if isinstance(sel, str) and sel:
+				path = sel
+			elif isinstance(sel, (list, tuple)) and sel:
+				path = sel[0]
 			if not path:
-				path = str(self._safe_app_path(self._default_filename("xlsx")))
+				self.status_label.text = "Export canceled"
+				return
 
-			wb = Workbook()
-			# Summary sheet
-			ws = wb.active
-			ws.title = "Summary"
-			ws.append(["Year", self.meta_year])
-			ws.append(["Month", self.meta_month])
-			ws.append([])
-			t = totals(self.incomes, self.expenses)
-			ws.append(["Income Total", t["income_total"]])
-			ws.append(["Expense Total", t["expense_total"]])
-			ws.append(["Profit", t["profit"]])
-			ws.append(["Profit Margin %", t["profit_margin"]])
-			for col in range(1, 3):
-				ws.column_dimensions[get_column_letter(col)].width = 20
-			for cell in ws[1]:
-				cell.font = Font(bold=True)
-
-			# Incomes sheet
-			inc = wb.create_sheet("Incomes")
-			inc.append(["Name", "Amount", "Date"])
-			for c in inc[1]:
-				c.font = Font(bold=True)
-				c.fill = PatternFill("solid", fgColor="DDDDDD")
-				c.alignment = Alignment(horizontal="center")
-			for r in self.incomes:
-				inc.append([r.get("name", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-			inc.column_dimensions['A'].width = 30
-			inc.column_dimensions['B'].width = 15
-			inc.column_dimensions['C'].width = 15
-
-			# Expenses sheet
-			exp = wb.create_sheet("Expenses")
-			exp.append(["Name", "Category", "Amount", "Date"])
-			for c in exp[1]:
-				c.font = Font(bold=True)
-				c.fill = PatternFill("solid", fgColor="DDDDDD")
-				c.alignment = Alignment(horizontal="center")
-			for r in self.expenses:
-				exp.append([r.get("name", ""), r.get("category", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-			exp.column_dimensions['A'].width = 30
-			exp.column_dimensions['B'].width = 20
-			exp.column_dimensions['C'].width = 15
-			exp.column_dimensions['D'].width = 15
-
-			# Categories sheet
-			cat = wb.create_sheet("Categories")
-			cat.append(["Category", "Amount", "Percent"])
-			for c in cat[1]:
-				c.font = Font(bold=True)
-				c.fill = PatternFill("solid", fgColor="DDDDDD")
-				c.alignment = Alignment(horizontal="center")
-			for row in expenses_by_category(self.expenses):
-				cat.append([row["category"], row["amount"], row["percent"]])
-			for col in ('A','B','C'):
-				cat.column_dimensions[col].width = 20
-
-			wb.save(path)
+			if engine == "xlsxwriter":
+				# Build workbook with XlsxWriter
+				import xlsxwriter
+				wb = xlsxwriter.Workbook(path)
+				fmt_bold = wb.add_format({"bold": True})
+				fmt_hdr = wb.add_format({"bold": True, "bg_color": "#DDDDDD", "align": "center"})
+				# Summary
+				sum_ws = wb.add_worksheet("Summary")
+				sum_ws.write_row(0, 0, ["Year", self.meta_year], fmt_bold)
+				sum_ws.write_row(1, 0, ["Month", self.meta_month])
+				sum_ws.write(2, 0, "")
+				t = totals(self.incomes, self.expenses)
+				sum_ws.write_row(3, 0, ["Income Total", t["income_total"]])
+				sum_ws.write_row(4, 0, ["Expense Total", t["expense_total"]])
+				sum_ws.write_row(5, 0, ["Profit", t["profit"]])
+				sum_ws.write_row(6, 0, ["Profit Margin %", t["profit_margin"]])
+				sum_ws.set_column(0, 1, 20)
+				# Incomes
+				inc = wb.add_worksheet("Incomes")
+				inc.write_row(0, 0, ["Name", "Amount", "Date"], fmt_hdr)
+				rowi = 1
+				for r in self.incomes:
+					inc.write_row(rowi, 0, [r.get("name", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
+					rowi += 1
+				inc.set_column(0, 0, 30)
+				inc.set_column(1, 1, 15)
+				inc.set_column(2, 2, 15)
+				# Expenses
+				exp = wb.add_worksheet("Expenses")
+				exp.write_row(0, 0, ["Name", "Category", "Amount", "Date"], fmt_hdr)
+				rowe = 1
+				for r in self.expenses:
+					exp.write_row(rowe, 0, [r.get("name", ""), r.get("category", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
+					rowe += 1
+				exp.set_column(0, 0, 30)
+				exp.set_column(1, 1, 20)
+				exp.set_column(2, 2, 15)
+				exp.set_column(3, 3, 15)
+				# Categories
+				cat = wb.add_worksheet("Categories")
+				cat.write_row(0, 0, ["Category", "Amount", "Percent"], fmt_hdr)
+				rowc = 1
+				for row in expenses_by_category(self.expenses):
+					cat.write_row(rowc, 0, [row["category"], row["amount"], row["percent"]])
+					rowc += 1
+				cat.set_column(0, 2, 20)
+				wb.close()
+			else:
+				# Build workbook with openpyxl
+				from openpyxl import Workbook
+				from openpyxl.utils import get_column_letter
+				from openpyxl.styles import Font, Alignment, PatternFill
+				wb = Workbook()
+				ws = wb.active
+				ws.title = "Summary"
+				ws.append(["Year", self.meta_year])
+				ws.append(["Month", self.meta_month])
+				ws.append([])
+				t = totals(self.incomes, self.expenses)
+				ws.append(["Income Total", t["income_total"]])
+				ws.append(["Expense Total", t["expense_total"]])
+				ws.append(["Profit", t["profit"]])
+				ws.append(["Profit Margin %", t["profit_margin"]])
+				for col in range(1, 3):
+					ws.column_dimensions[get_column_letter(col)].width = 20
+				for cell in ws[1]:
+					cell.font = Font(bold=True)
+				inc = wb.create_sheet("Incomes")
+				inc.append(["Name", "Amount", "Date"])
+				for c in inc[1]:
+					c.font = Font(bold=True)
+					c.fill = PatternFill("solid", fgColor="DDDDDD")
+					c.alignment = Alignment(horizontal="center")
+				for r in self.incomes:
+					inc.append([r.get("name", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
+				inc.column_dimensions['A'].width = 30
+				inc.column_dimensions['B'].width = 15
+				inc.column_dimensions['C'].width = 15
+				exp = wb.create_sheet("Expenses")
+				exp.append(["Name", "Category", "Amount", "Date"])
+				for c in exp[1]:
+					c.font = Font(bold=True)
+					c.fill = PatternFill("solid", fgColor="DDDDDD")
+					c.alignment = Alignment(horizontal="center")
+				for r in self.expenses:
+					exp.append([r.get("name", ""), r.get("category", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
+				exp.column_dimensions['A'].width = 30
+				exp.column_dimensions['B'].width = 20
+				exp.column_dimensions['C'].width = 15
+				exp.column_dimensions['D'].width = 15
+				cat = wb.create_sheet("Categories")
+				cat.append(["Category", "Amount", "Percent"])
+				for c in cat[1]:
+					c.font = Font(bold=True)
+					c.fill = PatternFill("solid", fgColor="DDDDDD")
+					c.alignment = Alignment(horizontal="center")
+				for row in expenses_by_category(self.expenses):
+					cat.append([row["category"], row["amount"], row["percent"]])
+				for col in ('A','B','C'):
+					cat.column_dimensions[col].width = 20
+				wb.save(path)
+			self.status_label.text = f"Exported: {path}"
 		except Exception as e:
-			print(f"Export failed: {e}")
+			self.status_label.text = f"Export failed: {e}"
+
+	def on_new(self, button):
+		# Reset to a new monthly report
+		now = datetime.now()
+		self.meta_year, self.meta_month = now.year, now.month
+		self.incomes = []
+		self.expenses = []
+		self.i_table.data.clear()
+		self.e_table.data.clear()
+		self.i_name.value = ""
+		self.i_amount.value = ""
+		self.e_name.value = ""
+		self.e_amount.value = ""
+		self.e_category.value = ""
+		self._sync_date_controls()
+		self.i_day.value = str(now.day).zfill(2)
+		self.e_day.value = str(now.day).zfill(2)
+		self.update_report()
+		self.status_label.text = "Started new monthly report"
 
 
 def main():

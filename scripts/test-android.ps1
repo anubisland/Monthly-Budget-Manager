@@ -51,11 +51,12 @@ if (-not $Apk) {
     Write-Host "==> Building Android APK via Briefcase"
     # Create the project if needed; ignore failure if tools like git are missing but project already exists
     try { & $Python -m briefcase create android -v --no-input } catch { Write-Warning "briefcase create failed; continuing if project already exists..." }
-    # Ensure Python sources and metadata are copied into the Gradle project
-    try { & $Python -m briefcase update android -v --no-input } catch { Write-Warning "briefcase update failed; continuing to build..." }
+    # Ensure Python sources and metadata are copied into the Gradle project; refresh requirements (-r)
+    try { & $Python -m briefcase update android -v --no-input -r } catch { Write-Warning "briefcase update failed; continuing to build..." }
 
     # Safety net: Ensure Material Components dependency is present in Gradle app module
     $gradleApp = Join-Path $PWD "build/budget_manager_mobile/android/gradle/app/build.gradle"
+    $gradleAppDir = Split-Path -Path $gradleApp -Parent
     if (Test-Path $gradleApp) {
         Remove-BomIfPresent -Path $gradleApp
         $gradleContent = Get-Content -Raw -Path $gradleApp
@@ -68,6 +69,20 @@ if (-not $Apk) {
             [System.IO.File]::WriteAllText($gradleApp, $patched, $utf8NoBom)
         }
         Remove-BomIfPresent -Path $gradleApp
+    }
+
+    # Fallback: Ensure Gradle-side Python requirements file exists where Chaquopy expects it
+    $reqPath = Join-Path $gradleAppDir "requirements.txt"
+    if (-not (Test-Path $reqPath)) {
+        Write-Host "==> Generating Gradle requirements.txt (fallback)"
+        $reqContent = @(
+            "toga-android==0.4.7",
+            "travertino==0.3.0",
+            "XlsxWriter==3.2.0"
+        ) -join [Environment]::NewLine
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($reqPath, $reqContent + [Environment]::NewLine, $utf8NoBom)
+        Remove-BomIfPresent -Path $reqPath
     }
 
     & $Python -m briefcase build android -v --no-input
@@ -100,7 +115,7 @@ if (-not $Apk) {
         }
 
         # Rebuild to pick up copied sources
-        & $Python -m briefcase build android -v --no-input
+    & $Python -m briefcase build android -v --no-input
         if ($LASTEXITCODE -ne 0) { throw "briefcase rebuild failed" }
         & $Python -m briefcase package android -v --no-input
         if ($LASTEXITCODE -ne 0) { throw "briefcase package failed" }
