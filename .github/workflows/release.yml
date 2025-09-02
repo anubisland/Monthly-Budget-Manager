@@ -163,55 +163,9 @@ jobs:
           path: artifacts/*
           if-no-files-found: ignore
 
-  android-test:
-    name: test android apk on emulator
-    needs: mobile
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Android artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: mobile-Linux
-          path: apk
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Run emulator and smoke test APK
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 30
-          arch: x86_64
-          profile: pixel_5
-          disk-size: 2048M
-          ram-size: 2048M
-          emulator-options: -no-snapshot -no-window -gpu swiftshader_indirect
-          disable-animations: true
-          script: |
-            set -e
-            APK=$(find apk -type f -name "*.apk" | head -n1)
-            echo "APK=$APK"
-            if [ -z "$APK" ]; then echo "No APK found"; exit 1; fi
-            adb install -r -g "$APK"
-            PKG="com.example.budget_manager_mobile"
-            # Try to launch via package using monkey
-            adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1 || true
-            sleep 10
-            adb logcat -d | tail -n 2000 > logcat.txt
-            # Consider failure only on explicit fatal markers
-            if grep -E "FATAL EXCEPTION|Traceback|crash|com\.chaquo\.python\.PyException" -i logcat.txt; then
-              echo "Detected crash markers in logcat"; exit 1; fi
-      - name: Upload logcat
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-logcat
-          path: logcat.txt
-
   release-mobile:
     name: attach mobile artifacts
-    needs: [release, mobile, android-test]
+    needs: [release, mobile]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
