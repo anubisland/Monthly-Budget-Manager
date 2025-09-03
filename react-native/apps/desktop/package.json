@@ -15,7 +15,8 @@
     "@monthly-budget/shared": "file:../../packages/shared",
     "react": "18.2.0",
     "react-native": "0.74.7",
-    "react-native-windows": "^0.74.46"
+    "react-native-windows": "^0.74.46",
+    "react-native-macos": "0.74.37"
   },
   "devDependencies": {
     "@babel/core": "^7.23.0",

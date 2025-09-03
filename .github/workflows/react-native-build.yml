@@ -206,28 +206,11 @@ jobs:
           if (-not (Test-Path windows)) {
             Write-Host "Windows project not found, initializing..."
             
-            # Install all required dependencies locally in the app directory
-            npm install @babel/core@^7.23.0 @babel/runtime@^7.23.0 @react-native/babel-preset@^0.74.0 @react-native/metro-config@^0.74.0 metro@^0.80.0 metro-resolver@^0.80.0 --save-dev --legacy-peer-deps
-            npm install react-native-windows@0.74 --save --legacy-peer-deps
+            # Force local installation of required packages for Windows init
+            npm install react-native@0.74.7 react-native-windows@0.74.46 --no-save --legacy-peer-deps
             
-            # Create a temporary npm config to disable workspace mode during init
-            $npmrcBackup = $null
-            if (Test-Path .npmrc) {
-              $npmrcBackup = Get-Content .npmrc -Raw
-            }
-            "workspaces=false" | Out-File -FilePath .npmrc -Encoding utf8
-            
-            try {
-              # Run windows init with disabled workspace mode
-              npx -y react-native-windows-init@latest --overwrite --no-telemetry
-            } finally {
-              # Restore original .npmrc or remove it
-              if ($npmrcBackup) {
-                $npmrcBackup | Out-File -FilePath .npmrc -Encoding utf8
-              } else {
-                Remove-Item .npmrc -ErrorAction SilentlyContinue
-              }
-            }
+            # Run windows init
+            npx -y react-native-windows-init@latest --overwrite --no-telemetry
             
             if (Test-Path windows) {
               Write-Host "Windows project created successfully"
@@ -241,14 +224,8 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            # Ensure all dependencies are installed locally
-            npm install --legacy-peer-deps
-            
-            # Make sure babel runtime is available
-            if (-not (Test-Path "node_modules/@babel/runtime")) {
-              Write-Host "Installing missing @babel/runtime..."
-              npm install @babel/runtime@^7.23.0 --save --legacy-peer-deps
-            }
+            # Ensure local react-native is available for Metro bundler
+            npm install react-native@0.74.7 --no-save --legacy-peer-deps
             
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
             if ($null -ne $sln) {
@@ -322,38 +299,11 @@ jobs:
           if [ ! -d macos ]; then
             echo "macOS project not found, initializing..."
             
-            # Install all required dependencies locally in the app directory
-            npm install @babel/core@^7.23.0 @babel/runtime@^7.23.0 @react-native/babel-preset@^0.74.0 @react-native/metro-config@^0.74.0 metro@^0.80.0 metro-resolver@^0.80.0 --save-dev --legacy-peer-deps
-            npm install react-native-macos@0.74 --save --legacy-peer-deps
+            # Force local installation of required packages for macOS init
+            npm install react-native@0.74.7 react-native-macos@0.74.37 --no-save --legacy-peer-deps
             
-            # Create a temporary npm config to disable workspace mode during init
-            if [ -f .npmrc ]; then
-              cp .npmrc .npmrc.backup
-            fi
-            echo "workspaces=false" > .npmrc
-            
-            # Run macOS init with disabled workspace mode
-            npx -y react-native-macos-init@latest --overwrite --no-telemetry || {
-              echo "First attempt failed, trying alternative approach..."
-              # Alternative: Create temp directory and run init there
-              TEMP_DIR=$(mktemp -d)
-              cd "$TEMP_DIR"
-              npm init -y
-              npm install react-native@0.74.7 react-native-macos@0.74 --legacy-peer-deps
-              npx -y react-native-macos-init --overwrite --no-telemetry
-              if [ -d macos ]; then
-                cp -r macos "$OLDPWD/"
-              fi
-              cd "$OLDPWD"
-              rm -rf "$TEMP_DIR"
-            }
-            
-            # Restore original .npmrc
-            if [ -f .npmrc.backup ]; then
-              mv .npmrc.backup .npmrc
-            else
-              rm -f .npmrc
-            fi
+            # Run macOS init
+            npx -y react-native-macos-init@latest --overwrite --no-telemetry
             
             if [ -d macos ]; then
               echo "macOS project created successfully"
@@ -366,6 +316,8 @@ jobs:
       - name: Install CocoaPods (macOS)
         run: |
           if [ -d macos ]; then
+            # Ensure local react-native-macos is available for pod install
+            npm install react-native-macos@0.74.37 --no-save --legacy-peer-deps
             cd macos
             pod install --silent || pod install
           else
