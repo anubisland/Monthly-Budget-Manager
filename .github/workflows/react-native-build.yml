@@ -171,202 +171,202 @@ jobs:
           path: build-diagnostics/**
           if-no-files-found: warn
 
-  windows:
-    name: Windows App
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: react-native/apps/desktop
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-        with:
-          vs-version: '[17.0,18.0)'
-          msbuild-architecture: x64
-      - name: Install monorepo dependencies (root)
-        working-directory: react-native
-        shell: pwsh
-        run: |
-          npm install --workspaces --include-workspace-root
-      - name: Install Node dependencies
-        shell: pwsh
-        run: |
-          if (Test-Path package.json) { npm install }
-      - name: MSBuild version
-        shell: pwsh
-        run: |
-          msbuild -version
-      - name: Initialize Windows project if missing
-        shell: pwsh
-        run: |
-          if (-not (Test-Path windows)) {
-            Write-Host "Windows project not found, initializing..."
+  # windows:
+  #   name: Windows App
+  #   runs-on: windows-latest
+  #   defaults:
+  #     run:
+  #       working-directory: react-native/apps/desktop
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #     - name: Setup MSBuild
+  #       uses: microsoft/setup-msbuild@v2
+  #       with:
+  #         vs-version: '[17.0,18.0)'
+  #         msbuild-architecture: x64
+  #     - name: Install monorepo dependencies (root)
+  #       working-directory: react-native
+  #       shell: pwsh
+  #       run: |
+  #         npm install --workspaces --include-workspace-root
+  #     - name: Install Node dependencies
+  #       shell: pwsh
+  #       run: |
+  #         if (Test-Path package.json) { npm install }
+  #     - name: MSBuild version
+  #       shell: pwsh
+  #       run: |
+  #         msbuild -version
+  #     - name: Initialize Windows project if missing
+  #       shell: pwsh
+  #       run: |
+  #         if (-not (Test-Path windows)) {
+  #           Write-Host "Windows project not found, initializing..."
             
-            # Force local installation of required packages for Windows init
-            npm install react-native@0.74.7 react-native-windows@0.74.46 --no-save --legacy-peer-deps
+  #           # Force local installation of required packages for Windows init
+  #           npm install react-native@0.74.7 react-native-windows@0.74.46 --no-save --legacy-peer-deps
             
-            # Run windows init
-            npx -y react-native-windows-init@latest --overwrite --no-telemetry
+  #           # Run windows init
+  #           npx -y react-native-windows-init@latest --overwrite --no-telemetry
             
-            if (Test-Path windows) {
-              Write-Host "Windows project created successfully"
-            } else {
-              Write-Host "Warning: Windows project directory not created"
-            }
-          } else {
-            Write-Host "Windows project already exists"
-          }
-      - name: Build Windows (Debug)
-        shell: pwsh
-        run: |
-          if (Test-Path windows) {
-            # Ensure local react-native is available for Metro bundler
-            npm install react-native@0.74.7 --no-save --legacy-peer-deps
+  #           if (Test-Path windows) {
+  #             Write-Host "Windows project created successfully"
+  #           } else {
+  #             Write-Host "Warning: Windows project directory not created"
+  #           }
+  #         } else {
+  #           Write-Host "Windows project already exists"
+  #         }
+  #     - name: Build Windows (Debug)
+  #       shell: pwsh
+  #       run: |
+  #         if (Test-Path windows) {
+  #           # Ensure local react-native is available for Metro bundler
+  #           npm install react-native@0.74.7 --no-save --legacy-peer-deps
             
-            $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
-            if ($null -ne $sln) {
-              Write-Host "Building solution: $($sln.FullName)"
-              # Try to restore NuGet packages first
-              nuget restore $sln.FullName -NonInteractive
-              msbuild $sln.FullName /p:Configuration=Debug /p:Platform=x64 /m /p:RestorePackagesConfig=true
-            } else {
-              Write-Host "No solution found under .\windows; skipping build"
-            }
-          } else {
-            Write-Host "Windows project not initialized; skipping"
-          }
-      - name: Package Windows (Release, msix if possible)
-        shell: pwsh
-        run: |
-          if (Test-Path windows) {
-            $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
-            if ($null -ne $sln) {
-              Write-Host "Packaging solution: $($sln.FullName)"
-              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m /p:RestorePackagesConfig=true
-            } else {
-              Write-Host "No solution found under .\windows; skipping packaging"
-            }
-          } else {
-            Write-Host "Windows project not initialized; skipping"
-          }
-      - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            react-native/apps/desktop/windows/**/AppPackages/**/*
-            react-native/apps/desktop/windows/**/Debug*/**/*
-          if-no-files-found: warn
-      - name: Create diagnostics
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path build-diagnostics | Out-Null
-          "Windows job summary" | Out-File -FilePath build-diagnostics/summary.txt -Encoding utf8
-          "Windows dir present: $((Test-Path windows) -as [string])" | Add-Content build-diagnostics/summary.txt
-          cmd /c ver | Add-Content build-diagnostics/summary.txt
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-diagnostics
-          path: build-diagnostics/**
-          if-no-files-found: warn
+  #           $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
+  #           if ($null -ne $sln) {
+  #             Write-Host "Building solution: $($sln.FullName)"
+  #             # Try to restore NuGet packages first
+  #             nuget restore $sln.FullName -NonInteractive
+  #             msbuild $sln.FullName /p:Configuration=Debug /p:Platform=x64 /m /p:RestorePackagesConfig=true
+  #           } else {
+  #             Write-Host "No solution found under .\windows; skipping build"
+  #           }
+  #         } else {
+  #           Write-Host "Windows project not initialized; skipping"
+  #         }
+  #     - name: Package Windows (Release, msix if possible)
+  #       shell: pwsh
+  #       run: |
+  #         if (Test-Path windows) {
+  #           $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
+  #           if ($null -ne $sln) {
+  #             Write-Host "Packaging solution: $($sln.FullName)"
+  #             msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m /p:RestorePackagesConfig=true
+  #           } else {
+  #             Write-Host "No solution found under .\windows; skipping packaging"
+  #           }
+  #         } else {
+  #           Write-Host "Windows project not initialized; skipping"
+  #         }
+  #     - name: Upload Windows artifacts
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: windows-build
+  #         path: |
+  #           react-native/apps/desktop/windows/**/AppPackages/**/*
+  #           react-native/apps/desktop/windows/**/Debug*/**/*
+  #         if-no-files-found: warn
+  #     - name: Create diagnostics
+  #       shell: pwsh
+  #       run: |
+  #         New-Item -ItemType Directory -Force -Path build-diagnostics | Out-Null
+  #         "Windows job summary" | Out-File -FilePath build-diagnostics/summary.txt -Encoding utf8
+  #         "Windows dir present: $((Test-Path windows) -as [string])" | Add-Content build-diagnostics/summary.txt
+  #         cmd /c ver | Add-Content build-diagnostics/summary.txt
+  #     - name: Upload diagnostics
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: windows-diagnostics
+  #         path: build-diagnostics/**
+  #         if-no-files-found: warn
 
-  macos:
-    name: macOS App
-    runs-on: macos-13
-    defaults:
-      run:
-        working-directory: react-native/apps/desktop
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Install monorepo dependencies (root)
-        working-directory: react-native
-        run: |
-          npm install --workspaces --include-workspace-root
-      - name: Install Node dependencies
-        run: |
-          if [ -f package.json ]; then npm install; fi
-      - name: Initialize macOS project if missing
-        run: |
-          if [ ! -d macos ]; then
-            echo "macOS project not found, initializing..."
+  # macos:
+  #   name: macOS App
+  #   runs-on: macos-13
+  #   defaults:
+  #     run:
+  #       working-directory: react-native/apps/desktop
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #     - name: Install monorepo dependencies (root)
+  #       working-directory: react-native
+  #       run: |
+  #         npm install --workspaces --include-workspace-root
+  #     - name: Install Node dependencies
+  #       run: |
+  #         if [ -f package.json ]; then npm install; fi
+  #     - name: Initialize macOS project if missing
+  #       run: |
+  #         if [ ! -d macos ]; then
+  #           echo "macOS project not found, initializing..."
             
-            # Force local installation of required packages for macOS init
-            npm install react-native@0.74.7 react-native-macos@0.74.37 --no-save --legacy-peer-deps
+  #           # Force local installation of required packages for macOS init
+  #           npm install react-native@0.74.7 react-native-macos@0.74.37 --no-save --legacy-peer-deps
             
-            # Run macOS init
-            npx -y react-native-macos-init@latest --overwrite --no-telemetry
+  #           # Run macOS init
+  #           npx -y react-native-macos-init@latest --overwrite --no-telemetry
             
-            if [ -d macos ]; then
-              echo "macOS project created successfully"
-            else
-              echo "Warning: macOS project directory not created"
-            fi
-          else
-            echo "macOS project already exists"
-          fi
-      - name: Install CocoaPods (macOS)
-        run: |
-          if [ -d macos ]; then
-            # Ensure local react-native-macos is available for pod install
-            npm install react-native-macos@0.74.37 --no-save --legacy-peer-deps
-            cd macos
-            pod install --silent || pod install
-          else
-            echo "macOS project not initialized; skipping"
-          fi
-      - name: Build macOS (Debug)
-        run: |
-          if [ -d macos ]; then
-            xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Debug -derivedDataPath build || true
-          else
-            echo "macOS project not initialized; skipping"
-          fi
-      - name: Build macOS (Release)
-        run: |
-          if [ -d macos ]; then
-            xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Release -derivedDataPath build || true
-          else
-            echo "macOS project not initialized; skipping"
-          fi
-      - name: Zip macOS .app products
-        run: |
-          mkdir -p build-zips
-          if compgen -G "build/Build/Products/Debug/*.app" > /dev/null; then
-            (cd build/Build/Products/Debug && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Debug-macos.zip" "$app" >/dev/null; done)
-          fi
-          if compgen -G "build/Build/Products/Release/*.app" > /dev/null; then
-            (cd build/Build/Products/Release && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Release-macos.zip" "$app" >/dev/null; done)
-          fi
-      - name: Upload macOS build products
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: |
-            react-native/apps/desktop/build
-            react-native/apps/desktop/build-zips/*.zip
-          if-no-files-found: warn
-      - name: Create diagnostics
-        run: |
-          mkdir -p build-diagnostics
-          echo "macOS job summary" > build-diagnostics/summary.txt
-          echo "macOS dir present: $([ -d macos ] && echo yes || echo no)" >> build-diagnostics/summary.txt
-          xcodebuild -version >> build-diagnostics/summary.txt || true
-      - name: Upload diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-diagnostics
-          path: build-diagnostics/**
-          if-no-files-found: warn
+  #           if [ -d macos ]; then
+  #             echo "macOS project created successfully"
+  #           else
+  #             echo "Warning: macOS project directory not created"
+  #           fi
+  #         else
+  #           echo "macOS project already exists"
+  #         fi
+  #     - name: Install CocoaPods (macOS)
+  #       run: |
+  #         if [ -d macos ]; then
+  #           # Ensure local react-native-macos is available for pod install
+  #           npm install react-native-macos@0.74.37 --no-save --legacy-peer-deps
+  #           cd macos
+  #           pod install --silent || pod install
+  #         else
+  #           echo "macOS project not initialized; skipping"
+  #         fi
+  #     - name: Build macOS (Debug)
+  #       run: |
+  #         if [ -d macos ]; then
+  #           xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Debug -derivedDataPath build || true
+  #         else
+  #           echo "macOS project not initialized; skipping"
+  #         fi
+  #     - name: Build macOS (Release)
+  #       run: |
+  #         if [ -d macos ]; then
+  #           xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Release -derivedDataPath build || true
+  #         else
+  #           echo "macOS project not initialized; skipping"
+  #         fi
+  #     - name: Zip macOS .app products
+  #       run: |
+  #         mkdir -p build-zips
+  #         if compgen -G "build/Build/Products/Debug/*.app" > /dev/null; then
+  #           (cd build/Build/Products/Debug && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Debug-macos.zip" "$app" >/dev/null; done)
+  #         fi
+  #         if compgen -G "build/Build/Products/Release/*.app" > /dev/null; then
+  #           (cd build/Build/Products/Release && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Release-macos.zip" "$app" >/dev/null; done)
+  #         fi
+  #     - name: Upload macOS build products
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: macos-build
+  #         path: |
+  #           react-native/apps/desktop/build
+  #           react-native/apps/desktop/build-zips/*.zip
+  #         if-no-files-found: warn
+  #     - name: Create diagnostics
+  #       run: |
+  #         mkdir -p build-diagnostics
+  #         echo "macOS job summary" > build-diagnostics/summary.txt
+  #         echo "macOS dir present: $([ -d macos ] && echo yes || echo no)" >> build-diagnostics/summary.txt
+  #         xcodebuild -version >> build-diagnostics/summary.txt || true
+  #     - name: Upload diagnostics
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: macos-diagnostics
+  #         path: build-diagnostics/**
+  #         if-no-files-found: warn
 
   release:
     name: Publish Release
