@@ -231,15 +231,10 @@ jobs:
       - name: Install monorepo dependencies (root)
         working-directory: react-native
         run: |
-            npm install --workspaces --include-workspace-root
-        - name: Install Node dependencies
-          run: |
-            if [ -f package.json ]; then npm install; fi
+          npm install --workspaces --include-workspace-root
       - name: Install Node dependencies
         run: |
-          if [ -f package.json ]; then
-            if [ -f package-lock.json ]; then npm ci; else npm install; fi
-          fi
+          if [ -f package.json ]; then npm install; fi
       - name: Install CocoaPods (macOS)
         run: |
           if [ -d macos ]; then
