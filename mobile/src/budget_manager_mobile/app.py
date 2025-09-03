@@ -25,80 +25,118 @@ class BudgetMobile(toga.App):
 		self.meta_year = today.year
 		self.meta_month = today.month
 
+		# Small layout helper for labeled rows
+		def form_row(label: str, widget: toga.Widget) -> toga.Box:
+			lbl = toga.Label(label, style=toga.style.Pack(width=110, padding_bottom=6))
+			box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
+			# Toga 0.5: update style using keyword args rather than passing a Pack instance
+			widget.style.update(flex=1)
+			box.add(lbl)
+			box.add(widget)
+			return box
+
 		# Income tab
-		self.i_name = toga.TextInput(placeholder="Name")
-		self.i_amount = toga.TextInput(placeholder="Amount")
-		self.i_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)])
-		self.i_today = toga.Button("Today", on_press=self.use_today_income_day)
-		self.i_add = toga.Button("Add", on_press=self.add_income)
-		self.i_table = toga.Table(headings=["Name", "Amount", "Date"], data=[])
-		income_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
-		for w in (self.i_name, self.i_amount, self.i_day, self.i_today, self.i_add, self.i_table):
-			income_box.add(w)
+		self.i_name = toga.TextInput(placeholder="e.g. Salary", style=toga.style.Pack())
+		self.i_amount = toga.TextInput(placeholder="e.g. 1200.00", style=toga.style.Pack())
+		self.i_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)], style=toga.style.Pack(width=120))
+		self.i_today = toga.Button("Today", on_press=self.use_today_income_day, style=toga.style.Pack(width=100))
+		row_date_income = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
+		row_date_income.add(toga.Label("Day", style=toga.style.Pack(width=110, padding_right=6)))
+		row_date_income.add(self.i_day)
+		row_date_income.add(self.i_today)
+		self.i_add = toga.Button("Add income", on_press=self.add_income, style=toga.style.Pack(padding_top=4, padding_bottom=8))
+		self.i_table = toga.Table(headings=["Name", "Amount", "Date"], data=[], style=toga.style.Pack(flex=1, height=300))
+		income_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
+		income_box.add(toga.Label("Income", style=toga.style.Pack(padding_bottom=8)))
+		income_box.add(form_row("Name", self.i_name))
+		income_box.add(form_row("Amount", self.i_amount))
+		income_box.add(row_date_income)
+		income_box.add(self.i_add)
+		income_box.add(self.i_table)
 
 		# Expenses tab
-		self.e_name = toga.TextInput(placeholder="Name")
-		self.e_category_select = toga.Selection(items=CATEGORIES)
-		self.e_category = toga.TextInput(placeholder="Category (custom)")
-		self.e_amount = toga.TextInput(placeholder="Amount")
-		self.e_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)])
-		self.e_today = toga.Button("Today", on_press=self.use_today_expense_day)
-		self.e_add = toga.Button("Add", on_press=self.add_expense)
-		self.e_table = toga.Table(headings=["Name", "Category", "Amount", "Date"], data=[])
-		expense_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
-		for w in (self.e_name, self.e_category_select, self.e_category, self.e_amount, self.e_day, self.e_today, self.e_add, self.e_table):
-			expense_box.add(w)
+		self.e_name = toga.TextInput(placeholder="e.g. Groceries", style=toga.style.Pack())
+		self.e_category_select = toga.Selection(items=CATEGORIES, style=toga.style.Pack())
+		self.e_category = toga.TextInput(placeholder="Custom category (optional)", style=toga.style.Pack())
+		self.e_amount = toga.TextInput(placeholder="e.g. 50.00", style=toga.style.Pack())
+		self.e_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)], style=toga.style.Pack(width=120))
+		self.e_today = toga.Button("Today", on_press=self.use_today_expense_day, style=toga.style.Pack(width=100))
+		row_date_expense = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
+		row_date_expense.add(toga.Label("Day", style=toga.style.Pack(width=110, padding_right=6)))
+		row_date_expense.add(self.e_day)
+		row_date_expense.add(self.e_today)
+		self.e_add = toga.Button("Add expense", on_press=self.add_expense, style=toga.style.Pack(padding_top=4, padding_bottom=8))
+		self.e_table = toga.Table(headings=["Name", "Category", "Amount", "Date"], data=[], style=toga.style.Pack(flex=1, height=300))
+		expense_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
+		expense_box.add(toga.Label("Expenses", style=toga.style.Pack(padding_bottom=8)))
+		expense_box.add(form_row("Name", self.e_name))
+		expense_box.add(form_row("Category", self.e_category_select))
+		expense_box.add(form_row("Custom", self.e_category))
+		expense_box.add(form_row("Amount", self.e_amount))
+		expense_box.add(row_date_expense)
+		expense_box.add(self.e_add)
+		expense_box.add(self.e_table)
 
 		# Report tab
 		# Date controls
-		self.year_input = toga.TextInput(placeholder="YYYY")
-		self.month_select = toga.Selection(items=[str(i).zfill(2) for i in range(1, 13)])
-		self.today_btn = toga.Button("Today", on_press=self.use_today)
+		self.year_input = toga.TextInput(placeholder="YYYY", style=toga.style.Pack())
+		self.month_select = toga.Selection(items=[str(i).zfill(2) for i in range(1, 13)], style=toga.style.Pack(width=120))
+		self.today_btn = toga.Button("Today", on_press=self.use_today, style=toga.style.Pack(width=100))
 
 		self.r_income_total = toga.Label("")
 		self.r_expense_total = toga.Label("")
 		self.r_profit = toga.Label("")
 		self.r_margin = toga.Label("")
-		self.r_categories = toga.Table(headings=["Category", "Amount", "Percent"], data=[])
-		# File actions
-		self.new_btn = toga.Button("New", on_press=self.on_new)
-		self.save_btn = toga.Button("Save", on_press=self.on_save)
-		self.open_btn = toga.Button("Open", on_press=self.on_open)
-		self.export_btn = toga.Button("Export", on_press=self.on_export)
+		self.r_categories = toga.Table(headings=["Category", "Amount", "Percent"], data=[], style=toga.style.Pack(flex=1, height=300))
 		self.status_label = toga.Label("")
 
-		report_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
+		report_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
 		for w in (
+			toga.Label("Report", style=toga.style.Pack(padding_bottom=8)),
 			toga.Label("Period (YYYY-MM)"),
-			self.year_input,
-			self.month_select,
-			self.today_btn,
-			toga.Label("Totals"),
+			# period row
+			toga.Box(children=[
+				self.year_input,
+				self.month_select,
+				self.today_btn,
+			], style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=8, alignment=toga.style.pack.LEFT)),
+			toga.Label("Totals", style=toga.style.Pack(padding_top=4)),
 			self.r_income_total,
 			self.r_expense_total,
 			self.r_profit,
 			self.r_margin,
-			toga.Label("Expense Categories"),
+			toga.Label("Expense Categories", style=toga.style.Pack(padding_top=6)),
 			self.r_categories,
-			toga.Box(children=[self.new_btn, self.save_btn, self.open_btn, self.export_btn]),
 			self.status_label,
 		):
 			report_box.add(w)
 
-		# Simple section switcher (avoids OptionContainer on Android)
+		# Content areas
 		self.income_box = income_box
 		self.expense_box = expense_box
 		self.report_box = report_box
-		self.section = toga.Selection(items=["Income", "Expenses", "Report"], on_select=self.on_section_change)
-		self.section.value = "Income"
-		self.content = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
+		self.content = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, flex=1))
 		self.content.add(self.income_box)
+
+		# Bottom navigation with icons
+		self.nav_income = toga.Button("💰 Income", on_press=lambda b: self.switch_section("Income"), style=toga.style.Pack(flex=1, padding=6))
+		self.nav_expenses = toga.Button("🧾 Expenses", on_press=lambda b: self.switch_section("Expenses"), style=toga.style.Pack(flex=1, padding=6))
+		self.nav_report = toga.Button("📊 Report", on_press=lambda b: self.switch_section("Report"), style=toga.style.Pack(flex=1, padding=6))
+		self.navbar = toga.Box(children=[self.nav_income, self.nav_expenses, self.nav_report], style=toga.style.Pack(direction=toga.style.pack.ROW, padding=(4, 8)))
+
 		root = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
-		root.add(self.section)
 		root.add(self.content)
+		root.add(self.navbar)
 
 		self.main_window = toga.MainWindow(title=self.formal_name)
 		self.main_window.content = root
+		# Overflow menu commands (3-dots)
+		self.cmd_new = toga.Command(self.on_new, text="New", tooltip="Start a new monthly report")
+		self.cmd_save = toga.Command(self.on_save, text="Save", tooltip="Save to JSON")
+		self.cmd_open = toga.Command(self.on_open, text="Open", tooltip="Open from JSON")
+		self.cmd_export = toga.Command(self.on_export, text="Export", tooltip="Export to Excel")
+		# Add to application commands so they appear in the 3-dots overflow menu (alongside About)
+		self.commands.add(self.cmd_new, self.cmd_save, self.cmd_open, self.cmd_export)
 		self.main_window.show()
 		# Initialize date controls
 		self._sync_date_controls()
@@ -107,6 +145,8 @@ class BudgetMobile(toga.App):
 		today_day = datetime.now().day
 		self.i_day.value = str(today_day).zfill(2)
 		self.e_day.value = str(today_day).zfill(2)
+		# Highlight Income tab by default
+		self._highlight_nav("Income")
 
 	# Actions
 	def _compose_date(self, day: int | None) -> str | None:
@@ -169,18 +209,23 @@ class BudgetMobile(toga.App):
 				row["category"], f"{row['amount']:.2f}", f"{row['percent']:.1f}%",
 			])
 
-	def on_section_change(self, widget):
-		# Swap displayed content based on selection
-		selected = widget.value
-		# Remove all existing children from content box
+	def _highlight_nav(self, section: str):
+		# Simple highlight: disable active button
+		self.nav_income.enabled = section != "Income"
+		self.nav_expenses.enabled = section != "Expenses"
+		self.nav_report.enabled = section != "Report"
+
+	def switch_section(self, section: str):
+		# Swap displayed content based on requested section
 		for child in list(self.content.children):
 			self.content.remove(child)
-		if selected == "Income":
+		if section == "Income":
 			self.content.add(self.income_box)
-		elif selected == "Expenses":
+		elif section == "Expenses":
 			self.content.add(self.expense_box)
 		else:
 			self.content.add(self.report_box)
+		self._highlight_nav(section)
 
 	# Date helpers
 	def _is_mobile(self) -> bool:
@@ -370,7 +415,7 @@ class BudgetMobile(toga.App):
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
-				import xlsxwriter
+				import xlsxwriter  # type: ignore
 				buffer = io.BytesIO()
 				wb = xlsxwriter.Workbook(buffer, {"in_memory": True})
 				fmt_bold = wb.add_format({"bold": True})
