@@ -184,7 +184,7 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
         with:
-          vs-version: '[17,18)'
+          vs-version: '17.*'
           msbuild-architecture: x64
       - name: Install monorepo dependencies (root)
         working-directory: react-native
@@ -204,13 +204,19 @@ jobs:
         run: |
           if (-not (Test-Path windows)) {
             npm install react-native-windows@0.74 --save
-            npx react-native-windows-init --overwrite --no-telemetry
+            $env:NPM_CONFIG_WORKSPACES = 'false'
+            npx -y react-native-windows-init --overwrite --no-telemetry
           }
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            msbuild .\windows\*.sln /p:Configuration=Debug /p:Platform=x64 /m
+            $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
+            if ($null -ne $sln) {
+              msbuild $sln.FullName /p:Configuration=Debug /p:Platform=x64 /m
+            } else {
+              Write-Host "No solution found under .\\windows; skipping build"
+            }
           } else {
             Write-Host "Windows project not initialized; skipping"
           }
@@ -218,7 +224,12 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            msbuild .\windows\*.sln /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
+            $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
+            if ($null -ne $sln) {
+              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
+            } else {
+              Write-Host "No solution found under .\\windows; skipping packaging"
+            }
           } else {
             Write-Host "Windows project not initialized; skipping"
           }
@@ -260,10 +271,6 @@ jobs:
         working-directory: react-native
         run: |
           npm install --workspaces --include-workspace-root
-      - name: Install monorepo dependencies (root)
-        working-directory: react-native
-        run: |
-          :
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then npm install; fi
@@ -271,7 +278,7 @@ jobs:
         run: |
           if [ ! -d macos ]; then
             npm install react-native-macos@0.74 --save --legacy-peer-deps
-            npx react-native-macos-init
+            NPM_CONFIG_WORKSPACES=false npx -y react-native-macos-init --overwrite --no-telemetry
           fi
       - name: Install CocoaPods (macOS)
         run: |
