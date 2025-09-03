@@ -27,9 +27,9 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install monorepo dependencies (root)
-        run: |
-          npm install
         working-directory: react-native
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then
@@ -112,6 +112,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install monorepo dependencies (root)
+        working-directory: react-native
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then
@@ -228,6 +232,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install monorepo dependencies (root)
+        working-directory: react-native
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then

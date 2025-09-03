@@ -1,23 +1,26 @@
 rootProject.name = 'TempBudgetApp'
 
 // Resolve native_modules.gradle for both local and monorepo-root node_modules
-def cliGradlePath = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-if (!cliGradlePath.exists()) {
-	// Fallback to monorepo root node_modules (../../.. from android)
-	def fallback = file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
-	if (fallback.exists()) {
-		cliGradlePath = fallback
-	}
+def cliCandidates = [
+	file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"),
+	file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"),
+	file("../../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+]
+def cliGradlePath = cliCandidates.find { it.exists() }
+if (cliGradlePath == null) {
+	throw new GradleException("native_modules.gradle not found in expected node_modules locations: " + cliCandidates)
 }
 apply from: cliGradlePath; applyNativeModulesSettingsGradle(settings)
 
 include ':app'
 
-def rnGradlePluginDir = file('../node_modules/@react-native/gradle-plugin')
-if (!rnGradlePluginDir.exists()) {
-	def fallbackRnPlugin = file('../../node_modules/@react-native/gradle-plugin')
-	if (fallbackRnPlugin.exists()) {
-		rnGradlePluginDir = fallbackRnPlugin
-	}
+def rnPluginCandidates = [
+	file('../node_modules/@react-native/gradle-plugin'),
+	file('../../node_modules/@react-native/gradle-plugin'),
+	file('../../../node_modules/@react-native/gradle-plugin')
+]
+def rnGradlePluginDir = rnPluginCandidates.find { it.exists() }
+if (rnGradlePluginDir == null) {
+	throw new GradleException("@react-native/gradle-plugin not found in expected node_modules locations: " + rnPluginCandidates)
 }
 includeBuild(rnGradlePluginDir)
