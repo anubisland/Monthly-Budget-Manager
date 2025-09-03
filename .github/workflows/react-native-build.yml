@@ -204,37 +204,18 @@ jobs:
         run: |
           if (-not (Test-Path windows)) {
             Write-Host "Windows project not found, initializing..."
-            # Create temporary package.json with react-native dependency for init
-            $tempDir = New-Item -ItemType Directory -Force -Path ../../../temp-windows-init
-            @{
-              name = "temp-init"
-              version = "1.0.0"
-              dependencies = @{
-                "react-native" = "0.74.7"
-              }
-            } | ConvertTo-Json | Out-File -FilePath "$tempDir/package.json" -Encoding utf8
             
-            # Copy current working directory's package.json as template
-            if (Test-Path "package.json") {
-              Copy-Item "package.json" "$tempDir/original-package.json"
-            }
+            # Install react-native-windows in current directory first
+            npm install react-native-windows@0.74 --save --legacy-peer-deps
             
-            Set-Location $tempDir
-            npm install
-            npm install react-native-windows@0.74 --save
+            # Run windows init directly in current directory
             npx -y react-native-windows-init --overwrite --no-telemetry
-            Set-Location ../react-native/apps/desktop
             
-            if (Test-Path "$tempDir/windows") {
-              Move-Item "$tempDir/windows" ./
+            if (Test-Path windows) {
               Write-Host "Windows project created successfully"
             } else {
               Write-Host "Warning: Windows project directory not created"
             }
-            
-            # Install react-native-windows in the main project
-            npm install react-native-windows@0.74 --save
-            Remove-Item -Recurse -Force $tempDir
           } else {
             Write-Host "Windows project already exists"
           }
@@ -242,10 +223,10 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            # Ensure react-native-windows is installed
+            # Ensure react-native-windows is installed and dependencies are resolved
             if (-not (Test-Path "node_modules/react-native-windows")) {
               Write-Host "Installing react-native-windows dependencies..."
-              npm install react-native-windows@0.74 --save
+              npm install react-native-windows@0.74 --save --legacy-peer-deps
             }
             
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
@@ -318,26 +299,21 @@ jobs:
       - name: Initialize macOS project if missing
         run: |
           if [ ! -d macos ]; then
+            echo "macOS project not found, initializing..."
+            
+            # Install react-native-macos in current directory first
             npm install react-native-macos@0.74 --save --legacy-peer-deps
-            # Create temporary package.json with react-native dependency for init
-            temp_dir=$(mktemp -d)
-            cat > "$temp_dir/package.json" << 'EOF'
-          {
-            "name": "temp-init",
-            "version": "1.0.0",
-            "dependencies": {
-              "react-native": "0.74.7"
-            }
-          }
-          EOF
-            cd "$temp_dir"
-            npm install
+            
+            # Run macOS init directly in current directory
             npx -y react-native-macos-init --overwrite --no-telemetry
-            cd - > /dev/null
-            if [ -d "$temp_dir/macos" ]; then
-              mv "$temp_dir/macos" ./
+            
+            if [ -d macos ]; then
+              echo "macOS project created successfully"
+            else
+              echo "Warning: macOS project directory not created"
             fi
-            rm -rf "$temp_dir"
+          else
+            echo "macOS project already exists"
           fi
       - name: Install CocoaPods (macOS)
         run: |
