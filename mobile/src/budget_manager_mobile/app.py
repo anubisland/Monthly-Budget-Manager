@@ -1,4 +1,5 @@
 import json
+import io
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -266,57 +267,63 @@ class BudgetMobile(toga.App):
 		base.mkdir(parents=True, exist_ok=True)
 		return base / filename
 
+	def _first_selection(self, sel):
+		"""Normalize dialog return to a single selection (str or Document-like).
+		Accepts str, list/tuple of items, or an object with open()/path attributes.
+		"""
+		if sel is None:
+			return None
+		if isinstance(sel, (list, tuple)):
+			return sel[0] if sel else None
+		return sel
+
 	async def on_save(self, button):
 		try:
 			# Use a native save dialog; require explicit selection
-			json_filter = getattr(toga, "FileDialogFilter", None)
-			filters = None
-			if json_filter is not None:
-				filters = [toga.FileDialogFilter("JSON", extensions=["json"])]
 			sel = await self.main_window.save_file_dialog(
 				"Save Budget JSON",
 				suggested_filename=self._default_filename("json"),
-				file_types=filters,
+				file_types=None,
 			)
-			path = None
-			if isinstance(sel, str) and sel:
-				path = sel
-			elif isinstance(sel, (list, tuple)) and sel:
-				path = sel[0]
-			if not path:
+			sel = self._first_selection(sel)
+			if not sel:
 				self.status_label.text = "Save canceled"
 				return
 			data = self._serialize()
-			with open(path, "w", encoding="utf-8") as f:
-				json.dump(data, f, ensure_ascii=False, indent=2)
-			self.status_label.text = f"Saved: {path}"
+			# If the selection is a Document-like object, use its open() method
+			if hasattr(sel, "open"):
+				with sel.open("w", encoding="utf-8") as f:
+					json.dump(data, f, ensure_ascii=False, indent=2)
+				self.status_label.text = "Saved"
+			else:
+				path = str(sel)
+				with open(path, "w", encoding="utf-8") as f:
+					json.dump(data, f, ensure_ascii=False, indent=2)
+				self.status_label.text = f"Saved: {path}"
 		except Exception as e:
 			self.status_label.text = f"Save failed: {e}"
 
 	async def on_open(self, button):
 		try:
 			# Use a native open dialog; require explicit selection
-			json_filter = getattr(toga, "FileDialogFilter", None)
-			filters = None
-			if json_filter is not None:
-				filters = [toga.FileDialogFilter("JSON", extensions=["json"])]
 			sel = await self.main_window.open_file_dialog(
 				"Open Budget JSON",
 				multiselect=False,
-				file_types=filters,
+				file_types=None,
 			)
-			path = None
-			if isinstance(sel, str) and sel:
-				path = sel
-			elif isinstance(sel, (list, tuple)) and sel:
-				path = sel[0]
-			if not path:
+			sel = self._first_selection(sel)
+			if not sel:
 				self.status_label.text = "Open canceled"
 				return
-			with open(path, "r", encoding="utf-8") as f:
-				data = json.load(f)
+			if hasattr(sel, "open"):
+				with sel.open("r", encoding="utf-8") as f:
+					data = json.load(f)
+			else:
+				path = str(sel)
+				with open(path, "r", encoding="utf-8") as f:
+					data = json.load(f)
 			self._deserialize(data)
-			self.status_label.text = f"Opened: {path}"
+			self.status_label.text = "Opened"
 		except FileNotFoundError:
 			self.status_label.text = "Open failed: file not found"
 		except Exception as e:
@@ -344,28 +351,21 @@ class BudgetMobile(toga.App):
 				return
 
 			# Ask user where to save; require explicit selection
-			xlsx_filter = getattr(toga, "FileDialogFilter", None)
-			filters = None
-			if xlsx_filter is not None:
-				filters = [toga.FileDialogFilter("Excel", extensions=["xlsx"])]
 			sel = await self.main_window.save_file_dialog(
 				"Export to Excel",
 				suggested_filename=self._default_filename("xlsx"),
-				file_types=filters,
+				file_types=None,
 			)
-			path = None
-			if isinstance(sel, str) and sel:
-				path = sel
-			elif isinstance(sel, (list, tuple)) and sel:
-				path = sel[0]
-			if not path:
+			sel = self._first_selection(sel)
+			if not sel:
 				self.status_label.text = "Export canceled"
 				return
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
 				import xlsxwriter
-				wb = xlsxwriter.Workbook(path)
+				buffer = io.BytesIO()
+				wb = xlsxwriter.Workbook(buffer, {"in_memory": True})
 				fmt_bold = wb.add_format({"bold": True})
 				fmt_hdr = wb.add_format({"bold": True, "bg_color": "#DDDDDD", "align": "center"})
 				# Summary
@@ -409,6 +409,7 @@ class BudgetMobile(toga.App):
 					rowc += 1
 				cat.set_column(0, 2, 20)
 				wb.close()
+				data_bytes = buffer.getvalue()
 			else:
 				# Build workbook with openpyxl
 				from openpyxl import Workbook
@@ -462,8 +463,20 @@ class BudgetMobile(toga.App):
 					cat.append([row["category"], row["amount"], row["percent"]])
 				for col in ('A','B','C'):
 					cat.column_dimensions[col].width = 20
-				wb.save(path)
-			self.status_label.text = f"Exported: {path}"
+				buffer = io.BytesIO()
+				wb.save(buffer)
+				data_bytes = buffer.getvalue()
+
+			# Write bytes to target selection
+			if hasattr(sel, "open"):
+				with sel.open("wb") as f:
+					f.write(data_bytes)
+				self.status_label.text = "Exported"
+			else:
+				path = str(sel)
+				with open(path, "wb") as f:
+					f.write(data_bytes)
+				self.status_label.text = f"Exported: {path}"
 		except Exception as e:
 			self.status_label.text = f"Export failed: {e}"
 
