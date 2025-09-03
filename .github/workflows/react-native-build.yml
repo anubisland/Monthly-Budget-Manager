@@ -26,11 +26,19 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Install monorepo dependencies (root)
+        run: |
+          npm install
+        working-directory: react-native
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then
             if [ -f package-lock.json ]; then npm ci; else npm install; fi
           fi
+      - name: Check RN CLI gradle script exists
+        run: |
+          ls -la node_modules/@react-native-community || true
+          test -f node_modules/@react-native-community/cli-platform-android/native_modules.gradle && echo "Found native_modules.gradle" || (echo "Missing native_modules.gradle" && ls -la node_modules/@react-native-community/cli-platform-android || true)
       - name: Make Gradle wrapper executable (Linux)
         run: |
           if [ -d android ] && [ -f android/gradlew ]; then
@@ -39,6 +47,9 @@ jobs:
       - name: Prepare Android
         run: |
           cd android || exit 0
+          if [ ! -f local.properties ] && [ -n "$ANDROID_SDK_ROOT" ]; then
+            echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+          fi
           chmod +x gradlew || true
           ./gradlew --no-daemon tasks || true
       - name: Build Debug APK

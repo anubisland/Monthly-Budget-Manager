@@ -12,8 +12,8 @@
   "dependencies": {
     "react": "18.2.0",
     "react-native": "0.74.0",
-    "@monthly-budget/shared": "*",
-    "@monthly-budget/adapters": "*"
+  "@monthly-budget/shared": "file:../../packages/shared",
+  "@monthly-budget/adapters": "file:../../packages/adapters"
   },
   "devDependencies": {
     "@types/react": "18.2.37",

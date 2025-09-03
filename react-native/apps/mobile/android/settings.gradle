@@ -1,4 +1,23 @@
 rootProject.name = 'TempBudgetApp'
-apply from: file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesSettingsGradle(settings)
+
+// Resolve native_modules.gradle for both local and monorepo-root node_modules
+def cliGradlePath = file("../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+if (!cliGradlePath.exists()) {
+	// Fallback to monorepo root node_modules (../../.. from android)
+	def fallback = file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle")
+	if (fallback.exists()) {
+		cliGradlePath = fallback
+	}
+}
+apply from: cliGradlePath; applyNativeModulesSettingsGradle(settings)
+
 include ':app'
-includeBuild('../node_modules/@react-native/gradle-plugin')
+
+def rnGradlePluginDir = file('../node_modules/@react-native/gradle-plugin')
+if (!rnGradlePluginDir.exists()) {
+	def fallbackRnPlugin = file('../../node_modules/@react-native/gradle-plugin')
+	if (fallbackRnPlugin.exists()) {
+		rnGradlePluginDir = fallbackRnPlugin
+	}
+}
+includeBuild(rnGradlePluginDir)
