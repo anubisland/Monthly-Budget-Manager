@@ -71,17 +71,19 @@ if (-not $Apk) {
         Remove-BomIfPresent -Path $gradleApp
     }
 
-    # Fallback: Write Gradle-side Python requirements file where Chaquopy expects it
+    # Fallback: Ensure Gradle-side Python requirements file exists where Chaquopy expects it
     $reqPath = Join-Path $gradleAppDir "requirements.txt"
-    Write-Host "==> Writing Gradle requirements.txt (fallback)"
-    $reqContent = @(
-        "toga-android==0.4.7",
-        "travertino==0.3.0",
-        "XlsxWriter==3.2.0"
-    ) -join [Environment]::NewLine
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllText($reqPath, $reqContent + [Environment]::NewLine, $utf8NoBom)
-    Remove-BomIfPresent -Path $reqPath
+    if (-not (Test-Path $reqPath)) {
+        Write-Host "==> Generating Gradle requirements.txt (fallback)"
+        $reqContent = @(
+            "toga-android==0.4.7",
+            "travertino==0.3.0",
+            "XlsxWriter==3.2.0"
+        ) -join [Environment]::NewLine
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($reqPath, $reqContent + [Environment]::NewLine, $utf8NoBom)
+        Remove-BomIfPresent -Path $reqPath
+    }
 
     & $Python -m briefcase build android -v --no-input
     if ($LASTEXITCODE -ne 0) { throw "briefcase build failed" }

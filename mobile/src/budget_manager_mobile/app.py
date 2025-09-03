@@ -277,13 +277,6 @@ class BudgetMobile(toga.App):
 			return sel[0] if sel else None
 		return sel
 
-	async def _confirm(self, title: str, message: str) -> bool:
-		try:
-			# Toga confirm dialog returns True/False
-			return await self.main_window.confirm_dialog(title, message)
-		except Exception:
-			return False
-
 	async def on_save(self, button):
 		try:
 			# Use a native save dialog; require explicit selection
@@ -294,8 +287,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				# Auto fallback to app storage default path
-				sel = str(self._safe_app_path(self._default_filename("json")))
+				self.status_label.text = "Save canceled"
+				return
 			data = self._serialize()
 			# If the selection is a Document-like object, use its open() method
 			if hasattr(sel, "open"):
@@ -320,8 +313,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				# Auto fallback to default file in app storage
-				sel = str(self._safe_app_path(self._default_filename("json")))
+				self.status_label.text = "Open canceled"
+				return
 			if hasattr(sel, "open"):
 				with sel.open("r", encoding="utf-8") as f:
 					data = json.load(f)
@@ -365,8 +358,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				# Auto fallback to app storage
-				sel = str(self._safe_app_path(self._default_filename("xlsx")))
+				self.status_label.text = "Export canceled"
+				return
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
@@ -474,13 +467,13 @@ class BudgetMobile(toga.App):
 				wb.save(buffer)
 				data_bytes = buffer.getvalue()
 
-			# Write bytes to target selection or fallback path
+			# Write bytes to target selection
 			if hasattr(sel, "open"):
 				with sel.open("wb") as f:
 					f.write(data_bytes)
 				self.status_label.text = "Exported"
 			else:
-				path = str(sel) if sel else str(self._safe_app_path(self._default_filename("xlsx")))
+				path = str(sel)
 				with open(path, "wb") as f:
 					f.write(data_bytes)
 				self.status_label.text = f"Exported: {path}"
