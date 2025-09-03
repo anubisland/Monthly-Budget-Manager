@@ -11,6 +11,7 @@ import {
   StatusBar,
 } from 'react-native';
 import { BudgetDoc, Income, Expense, totals, expensesByCategory } from '@monthly-budget/shared';
+import { ReactNativeAdapter } from './ReactNativeAdapter';
 
 export default function App() {
   const [budget, setBudget] = useState<BudgetDoc>({
@@ -25,9 +26,96 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'summary' | 'income' | 'expense'>('summary');
   const [newIncome, setNewIncome] = useState({ name: '', amount: '' });
   const [newExpense, setNewExpense] = useState({ name: '', category: '', amount: '' });
+  
+  const adapter = new ReactNativeAdapter();
+
+  // Load from storage on app start
+  useEffect(() => {
+    const loadStoredBudget = async () => {
+      try {
+        const stored = await adapter.loadFromStorage();
+        if (stored) {
+          setBudget(stored);
+        }
+      } catch (error) {
+        console.error('Failed to load stored budget:', error);
+      }
+    };
+    
+    loadStoredBudget();
+  }, []);
+
+  // Auto-save to storage when budget changes
+  useEffect(() => {
+    const saveToStorage = async () => {
+      try {
+        await adapter.saveToStorage(budget);
+      } catch (error) {
+        console.error('Failed to auto-save budget:', error);
+      }
+    };
+    
+    saveToStorage();
+  }, [budget]);
 
   const stats = totals(budget.incomes, budget.expenses);
   const categoryStats = expensesByCategory(budget.expenses);
+
+  // File operations
+  const createNewBudget = () => {
+    Alert.alert(
+      'Create New Budget',
+      'This will clear all current data. Are you sure?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create New',
+          style: 'destructive',
+          onPress: () => {
+            setBudget({
+              meta: {
+                year: new Date().getFullYear(),
+                month: new Date().getMonth() + 1,
+              },
+              incomes: [],
+              expenses: [],
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const openBudget = async () => {
+    try {
+      const loadedBudget = await adapter.openJSON();
+      if (loadedBudget) {
+        setBudget(loadedBudget);
+        Alert.alert('Success', 'Budget loaded successfully!');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open budget file');
+    }
+  };
+
+  const saveBudget = async () => {
+    try {
+      await adapter.saveJSON(budget);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save budget file');
+    }
+  };
+
+  const exportBudget = async () => {
+    try {
+      await adapter.exportXLSX(budget);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export budget file');
+    }
+  };
 
   const addIncome = () => {
     if (!newIncome.name.trim() || !newIncome.amount.trim()) {
@@ -246,6 +334,25 @@ export default function App() {
       
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Monthly Budget Manager</Text>
+        
+        {/* File Operations Row */}
+        <View style={styles.fileOperationsContainer}>
+          <TouchableOpacity style={styles.fileButton} onPress={createNewBudget}>
+            <Text style={styles.fileButtonText}>New</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={openBudget}>
+            <Text style={styles.fileButtonText}>Open</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={saveBudget}>
+            <Text style={styles.fileButtonText}>Save</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={exportBudget}>
+            <Text style={styles.fileButtonText}>Export</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
@@ -472,6 +579,27 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#fff',
     fontSize: 12,
+    fontWeight: '600',
+  },
+  fileOperationsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  fileButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  fileButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
