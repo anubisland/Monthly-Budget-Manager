@@ -294,8 +294,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				self.status_label.text = "Save canceled"
-				return
+				# Auto fallback to app storage default path
+				sel = str(self._safe_app_path(self._default_filename("json")))
 			data = self._serialize()
 			# If the selection is a Document-like object, use its open() method
 			if hasattr(sel, "open"):
@@ -320,8 +320,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				self.status_label.text = "Open canceled"
-				return
+				# Auto fallback to default file in app storage
+				sel = str(self._safe_app_path(self._default_filename("json")))
 			if hasattr(sel, "open"):
 				with sel.open("r", encoding="utf-8") as f:
 					data = json.load(f)
@@ -365,8 +365,8 @@ class BudgetMobile(toga.App):
 			)
 			sel = self._first_selection(sel)
 			if not sel:
-				self.status_label.text = "Export canceled"
-				return
+				# Auto fallback to app storage
+				sel = str(self._safe_app_path(self._default_filename("xlsx")))
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
