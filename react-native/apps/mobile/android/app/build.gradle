@@ -2,6 +2,14 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
+// Resolve node_modules directory for monorepo or app-local installs
+def nodeModulesCandidates = [
+    file("../../node_modules"),
+    file("../node_modules"),
+    file("../../../../node_modules")
+]
+def rnNodeModulesDir = nodeModulesCandidates.find { it.exists() }
+
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
@@ -10,10 +18,11 @@ react {
     /* Folders */
     //   The root of your project, i.e. where "package.json" lives. Default is '..'
     // root = file("../")
-    //   The folder where the react-native NPM package is. Default is ../node_modules/react-native
-    // reactNativeDir = file("../node_modules/react-native")
-    //   The folder where the react-native Codegen package is. Default is ../node_modules/@react-native/codegen
-    // codegenDir = file("../node_modules/@react-native/codegen")
+    //   The folder where the react-native NPM package is.
+    if (rnNodeModulesDir != null) {
+        reactNativeDir = new File(rnNodeModulesDir, "react-native")
+        codegenDir = new File(rnNodeModulesDir, "@react-native/codegen")
+    }
     //   The cli.js file which is the React Native CLI entrypoint. Default is ../node_modules/react-native/cli.js
     // cliFile = file("../node_modules/react-native/cli.js")
 
@@ -115,4 +124,11 @@ dependencies {
     }
 }
 
-apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+if (rnNodeModulesDir == null) {
+    throw new GradleException("Could not locate node_modules directory. Checked: ${nodeModulesCandidates}")
+}
+def nativeModulesGradle = new File(rnNodeModulesDir, "@react-native-community/cli-platform-android/native_modules.gradle")
+if (!nativeModulesGradle.exists()) {
+    throw new GradleException("native_modules.gradle not found at ${nativeModulesGradle}. Ensure @react-native-community/cli-platform-android is installed at the workspace root.")
+}
+apply from: nativeModulesGradle; applyNativeModulesAppBuildGradle(project)

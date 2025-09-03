@@ -49,6 +49,7 @@ jobs:
             echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
           fi
           chmod +x gradlew || true
+          ./gradlew --no-daemon -q :app:dependencies || true
           ./gradlew --no-daemon tasks || true
       - name: Build Debug APK
         run: |
