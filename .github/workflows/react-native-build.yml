@@ -51,6 +51,14 @@ jobs:
           chmod +x gradlew || true
           ./gradlew --no-daemon -q :app:dependencies || true
           ./gradlew --no-daemon tasks || true
+      - name: Generate Android debug keystore (CI)
+        run: |
+          if [ -d android/app ]; then
+            cd android/app
+            if [ ! -f debug.keystore ]; then
+              keytool -genkeypair -noprompt -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+            fi
+          fi
       - name: Build Debug APK
         run: |
           if [ -d android ]; then
@@ -114,12 +122,10 @@ jobs:
       - name: Install monorepo dependencies (root)
         working-directory: react-native
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          npm install --workspaces --include-workspace-root
       - name: Install Node dependencies
         run: |
-          if [ -f package.json ]; then
-            if [ -f package-lock.json ]; then npm ci; else npm install; fi
-          fi
+          if [ -f package.json ]; then npm install; fi
       - name: Install CocoaPods
         run: |
           if [ -d ios ]; then
