@@ -60,10 +60,20 @@ react-native/**/node_modules/
 react-native/**/.expo/
 react-native/**/.turbo/
 react-native/**/.cache/
+react-native/**/.metro-cache/
+react-native/**/.watchman/**
 react-native/**/.gradle/
 react-native/**/.watchmanconfig
 react-native/**/coverage/
 react-native/**/dist/
+react-native/**/build/
+
+# Node logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Android (RN)
 react-native/**/android/.gradle/
@@ -73,6 +83,9 @@ react-native/**/android/build/
 react-native/**/android/local.properties
 react-native/**/android/app/release/
 react-native/**/android/app/debug/
+react-native/**/android/captures/
+react-native/**/android/.externalNativeBuild/
+react-native/**/android/app/*.keystore
 
 # iOS (RN)
 react-native/**/ios/Pods/
@@ -81,6 +94,7 @@ react-native/**/ios/*.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
 react-native/**/ios/DerivedData/
 react-native/**/ios/*.xcuserstate
 react-native/**/ios/*.xcuserdata/
+react-native/**/ios/**/xcuserdata/
 
 # Windows (RNW)
 react-native/**/windows/**/Debug*/
@@ -96,6 +110,7 @@ react-native/**/windows/packages/
 react-native/**/macos/Pods/
 react-native/**/macos/build/
 react-native/**/macos/DerivedData/
+react-native/**/macos/**/xcuserdata/
 
 # Bundled artifacts
 react-native/**/*.apk
@@ -104,3 +119,6 @@ react-native/**/*.ipa
 react-native/**/*.app
 react-native/**/*.msix
 react-native/**/*.msixbundle
+
+# Temporary RN bootstraps
+react-native/apps/**/TempBudgetApp/
