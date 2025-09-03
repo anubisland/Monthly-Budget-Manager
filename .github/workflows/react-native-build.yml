@@ -296,14 +296,14 @@ jobs:
             # Create temporary package.json with react-native dependency for init
             temp_dir=$(mktemp -d)
             cat > "$temp_dir/package.json" << EOF
-{
-  "name": "temp-init",
-  "version": "1.0.0",
-  "dependencies": {
-    "react-native": "0.74.7"
-  }
-}
-EOF
+            {
+              "name": "temp-init",
+              "version": "1.0.0",
+              "dependencies": {
+                "react-native": "0.74.7"
+              }
+            }
+            EOF
             cd "$temp_dir"
             npm install
             npx -y react-native-macos-init --overwrite --no-telemetry
