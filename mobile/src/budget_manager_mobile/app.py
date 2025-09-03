@@ -413,14 +413,15 @@ class BudgetMobile(toga.App):
 	async def on_save(self, button):
 		try:
 			# Use a native save dialog; require explicit selection
-			sel = await self._save_json_dialog(
+			sel = await self.main_window.save_file_dialog(
 				"Save Budget JSON",
-				suggested=self._default_filename("json"),
+				suggested_filename=self._default_filename("json"),
+				file_types=None,
 			)
 			sel = self._first_selection(sel)
-			if self._is_canceled(sel):
-				self.status_label.text = "Save canceled"
-				return
+			if not sel:
+				# Auto fallback to app storage default path
+				sel = str(self._safe_app_path(self._default_filename("json")))
 			data = self._serialize()
 			# If the selection is a Document-like object, use its open() method
 			if hasattr(sel, "open"):
@@ -428,7 +429,7 @@ class BudgetMobile(toga.App):
 					json.dump(data, f, ensure_ascii=False, indent=2)
 				self.status_label.text = "Saved"
 			else:
-				path = self._ensure_ext(str(sel), ".json")
+				path = str(sel)
 				with open(path, "w", encoding="utf-8") as f:
 					json.dump(data, f, ensure_ascii=False, indent=2)
 				self.status_label.text = f"Saved: {path}"
@@ -438,11 +439,15 @@ class BudgetMobile(toga.App):
 	async def on_open(self, button):
 		try:
 			# Use a native open dialog; require explicit selection
-			sel = await self._open_json_dialog("Open Budget JSON")
+			sel = await self.main_window.open_file_dialog(
+				"Open Budget JSON",
+				multiselect=False,
+				file_types=None,
+			)
 			sel = self._first_selection(sel)
-			if self._is_canceled(sel):
-				self.status_label.text = "Open canceled"
-				return
+			if not sel:
+				# Auto fallback to default file in app storage
+				sel = str(self._safe_app_path(self._default_filename("json")))
 			if hasattr(sel, "open"):
 				with sel.open("r", encoding="utf-8") as f:
 					data = json.load(f)
@@ -479,14 +484,15 @@ class BudgetMobile(toga.App):
 				return
 
 			# Ask user where to save; require explicit selection
-			sel = await self._save_xlsx_dialog(
+			sel = await self.main_window.save_file_dialog(
 				"Export to Excel",
-				suggested=self._default_filename("xlsx"),
+				suggested_filename=self._default_filename("xlsx"),
+				file_types=None,
 			)
 			sel = self._first_selection(sel)
-			if self._is_canceled(sel):
-				self.status_label.text = "Export canceled"
-				return
+			if not sel:
+				# Auto fallback to app storage
+				sel = str(self._safe_app_path(self._default_filename("xlsx")))
 
 			if engine == "xlsxwriter":
 				# Build workbook with XlsxWriter
@@ -600,7 +606,7 @@ class BudgetMobile(toga.App):
 					f.write(data_bytes)
 				self.status_label.text = "Exported"
 			else:
-				path = self._ensure_ext(str(sel) if sel else str(self._safe_app_path(self._default_filename("xlsx"))), ".xlsx")
+				path = str(sel) if sel else str(self._safe_app_path(self._default_filename("xlsx")))
 				with open(path, "wb") as f:
 					f.write(data_bytes)
 				self.status_label.text = f"Exported: {path}"
