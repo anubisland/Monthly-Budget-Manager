@@ -68,6 +68,18 @@ jobs:
           path: |
             react-native/apps/mobile/android/app/build/outputs/bundle/release/**/*.aab
           if-no-files-found: warn
+      - name: Create diagnostics
+        run: |
+          mkdir -p build-diagnostics
+          echo "Android job summary" > build-diagnostics/summary.txt
+          echo "Android dir present: $([ -d android ] && echo yes || echo no)" >> build-diagnostics/summary.txt
+          echo "Gradle cache: $HOME/.gradle" >> build-diagnostics/summary.txt
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-diagnostics
+          path: build-diagnostics/**
+          if-no-files-found: warn
 
   ios:
     name: iOS Archive
@@ -115,6 +127,18 @@ jobs:
           path: |
             react-native/apps/mobile/build
           if-no-files-found: warn
+      - name: Create diagnostics
+        run: |
+          mkdir -p build-diagnostics
+          echo "iOS job summary" > build-diagnostics/summary.txt
+          echo "iOS dir present: $([ -d ios ] && echo yes || echo no)" >> build-diagnostics/summary.txt
+          xcodebuild -version >> build-diagnostics/summary.txt || true
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-diagnostics
+          path: build-diagnostics/**
+          if-no-files-found: warn
 
   windows:
     name: Windows App
@@ -154,6 +178,19 @@ jobs:
           path: |
             react-native/apps/desktop/windows/**/AppPackages/**/*
             react-native/apps/desktop/windows/**/Debug*/**/*
+          if-no-files-found: warn
+      - name: Create diagnostics
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build-diagnostics | Out-Null
+          "Windows job summary" | Out-File -FilePath build-diagnostics/summary.txt -Encoding utf8
+          "Windows dir present: $((Test-Path windows) -as [string])" | Add-Content build-diagnostics/summary.txt
+          cmd /c ver | Add-Content build-diagnostics/summary.txt
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-diagnostics
+          path: build-diagnostics/**
           if-no-files-found: warn
 
   macos:
@@ -211,6 +248,18 @@ jobs:
             react-native/apps/desktop/build
             react-native/apps/desktop/build-zips/*.zip
           if-no-files-found: warn
+      - name: Create diagnostics
+        run: |
+          mkdir -p build-diagnostics
+          echo "macOS job summary" > build-diagnostics/summary.txt
+          echo "macOS dir present: $([ -d macos ] && echo yes || echo no)" >> build-diagnostics/summary.txt
+          xcodebuild -version >> build-diagnostics/summary.txt || true
+      - name: Upload diagnostics
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-diagnostics
+          path: build-diagnostics/**
+          if-no-files-found: warn
 
   release:
     name: Publish Release
@@ -248,8 +297,17 @@ jobs:
             (cd artifacts && zip -r ../release-assets/macos-build.zip macos-build >/dev/null)
           fi
           ls -al release-assets || true
+      - name: Check for assets
+        id: check
+        run: |
+          COUNT=$(ls -1 release-assets | wc -l | tr -d ' ')
+          echo "found=$COUNT" >> $GITHUB_OUTPUT
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No build assets found; skipping release."
+          fi
 
       - name: Create GitHub Release
+        if: steps.check.outputs.found != '0'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: rn-${{ github.run_number }}
