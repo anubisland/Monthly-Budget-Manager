@@ -43,6 +43,14 @@ jobs:
           else
             echo "Android project not initialized; skipping"
           fi
+      - name: Build Release APK/AAB
+        run: |
+          if [ -d android ]; then
+            cd android
+            ./gradlew --no-daemon assembleRelease bundleRelease
+          else
+            echo "Android project not initialized; skipping"
+          fi
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
@@ -50,6 +58,15 @@ jobs:
           name: android-apk
           path: |
             react-native/apps/mobile/android/app/build/outputs/apk/debug/**/*.apk
+            react-native/apps/mobile/android/app/build/outputs/apk/release/**/*.apk
+          if-no-files-found: warn
+      - name: Upload AAB
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: |
+            react-native/apps/mobile/android/app/build/outputs/bundle/release/**/*.aab
           if-no-files-found: warn
 
   ios:
@@ -76,10 +93,18 @@ jobs:
           else
             echo "iOS project not initialized; skipping"
           fi
-      - name: Build iOS (Debug)
+      - name: Build iOS (Debug simulator)
         run: |
           if [ -d ios ]; then
             xcodebuild -workspace ios/*.xcworkspace -scheme mobile -configuration Debug -sdk iphonesimulator -derivedDataPath build || true
+          else
+            echo "iOS project not initialized; skipping"
+          fi
+      - name: Build iOS (Release device archive)
+        run: |
+          if [ -d ios ]; then
+            # Note: Code signing is required for real .ipa export; we create an .xcarchive artifact only
+            xcodebuild -workspace ios/*.xcworkspace -scheme mobile -configuration Release -sdk iphoneos -derivedDataPath build -archivePath build/App.xcarchive archive || true
           else
             echo "iOS project not initialized; skipping"
           fi
@@ -106,11 +131,19 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path package.json) { npm ci 2>$null; if ($LASTEXITCODE -ne 0) { npm install } }
-      - name: Build Windows
+      - name: Build Windows (Debug)
         shell: pwsh
         run: |
           if (Test-Path windows) {
             msbuild .\windows\*.sln /p:Configuration=Debug /m
+          } else {
+            Write-Host "Windows project not initialized; skipping"
+          }
+      - name: Package Windows (Release, msix if possible)
+        shell: pwsh
+        run: |
+          if (Test-Path windows) {
+            msbuild .\windows\*.sln /p:Configuration=Release /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
           } else {
             Write-Host "Windows project not initialized; skipping"
           }
@@ -139,6 +172,14 @@ jobs:
           if [ -f package.json ]; then
             npm ci || npm install
           fi
+      - name: Install CocoaPods (macOS)
+        run: |
+          if [ -d macos ]; then
+            cd macos
+            pod install --silent || pod install
+          else
+            echo "macOS project not initialized; skipping"
+          fi
       - name: Build macOS (Debug)
         run: |
           if [ -d macos ]; then
@@ -146,12 +187,29 @@ jobs:
           else
             echo "macOS project not initialized; skipping"
           fi
+      - name: Build macOS (Release)
+        run: |
+          if [ -d macos ]; then
+            xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Release -derivedDataPath build || true
+          else
+            echo "macOS project not initialized; skipping"
+          fi
+      - name: Zip macOS .app products
+        run: |
+          mkdir -p build-zips
+          if compgen -G "build/Build/Products/Debug/*.app" > /dev/null; then
+            (cd build/Build/Products/Debug && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Debug-macos.zip" "$app" >/dev/null; done)
+          fi
+          if compgen -G "build/Build/Products/Release/*.app" > /dev/null; then
+            (cd build/Build/Products/Release && for app in *.app; do zip -r "../../../../build-zips/${app%.app}-Release-macos.zip" "$app" >/dev/null; done)
+          fi
       - name: Upload macOS build products
         uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: |
             react-native/apps/desktop/build
+            react-native/apps/desktop/build-zips/*.zip
           if-no-files-found: warn
 
   release:
