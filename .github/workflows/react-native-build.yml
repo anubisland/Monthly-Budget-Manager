@@ -31,14 +31,21 @@ jobs:
           if [ -f package.json ]; then
             if [ -f package-lock.json ]; then npm ci; else npm install; fi
           fi
+      - name: Make Gradle wrapper executable (Linux)
+        run: |
+          if [ -d android ] && [ -f android/gradlew ]; then
+            chmod +x android/gradlew
+          fi
       - name: Prepare Android
         run: |
           cd android || exit 0
+          chmod +x gradlew || true
           ./gradlew --no-daemon tasks || true
       - name: Build Debug APK
         run: |
           if [ -d android ]; then
             cd android
+            chmod +x gradlew || true
             ./gradlew --no-daemon assembleDebug
           else
             echo "Android project not initialized; skipping"
@@ -47,6 +54,7 @@ jobs:
         run: |
           if [ -d android ]; then
             cd android
+            chmod +x gradlew || true
             ./gradlew --no-daemon assembleRelease bundleRelease
           else
             echo "Android project not initialized; skipping"
