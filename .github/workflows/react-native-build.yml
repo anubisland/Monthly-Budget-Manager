@@ -203,7 +203,7 @@ jobs:
         shell: pwsh
         run: |
           if (-not (Test-Path windows)) {
-            npm install react-native-windows@0.74 --save
+            Write-Host "Windows project not found, initializing..."
             # Create temporary package.json with react-native dependency for init
             $tempDir = New-Item -ItemType Directory -Force -Path ../../../temp-windows-init
             @{
@@ -213,24 +213,49 @@ jobs:
                 "react-native" = "0.74.7"
               }
             } | ConvertTo-Json | Out-File -FilePath "$tempDir/package.json" -Encoding utf8
+            
+            # Copy current working directory's package.json as template
+            if (Test-Path "package.json") {
+              Copy-Item "package.json" "$tempDir/original-package.json"
+            }
+            
             Set-Location $tempDir
             npm install
+            npm install react-native-windows@0.74 --save
             npx -y react-native-windows-init --overwrite --no-telemetry
             Set-Location ../react-native/apps/desktop
-            if (Test-Path $tempDir/windows) {
-              Move-Item $tempDir/windows ./
+            
+            if (Test-Path "$tempDir/windows") {
+              Move-Item "$tempDir/windows" ./
+              Write-Host "Windows project created successfully"
+            } else {
+              Write-Host "Warning: Windows project directory not created"
             }
+            
+            # Install react-native-windows in the main project
+            npm install react-native-windows@0.74 --save
             Remove-Item -Recurse -Force $tempDir
+          } else {
+            Write-Host "Windows project already exists"
           }
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
           if (Test-Path windows) {
+            # Ensure react-native-windows is installed
+            if (-not (Test-Path "node_modules/react-native-windows")) {
+              Write-Host "Installing react-native-windows dependencies..."
+              npm install react-native-windows@0.74 --save
+            }
+            
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
             if ($null -ne $sln) {
-              msbuild $sln.FullName /p:Configuration=Debug /p:Platform=x64 /m
+              Write-Host "Building solution: $($sln.FullName)"
+              # Try to restore NuGet packages first
+              nuget restore $sln.FullName -NonInteractive
+              msbuild $sln.FullName /p:Configuration=Debug /p:Platform=x64 /m /p:RestorePackagesConfig=true
             } else {
-              Write-Host "No solution found under .\\windows; skipping build"
+              Write-Host "No solution found under .\windows; skipping build"
             }
           } else {
             Write-Host "Windows project not initialized; skipping"
@@ -241,9 +266,10 @@ jobs:
           if (Test-Path windows) {
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
             if ($null -ne $sln) {
-              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
+              Write-Host "Packaging solution: $($sln.FullName)"
+              msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m /p:RestorePackagesConfig=true
             } else {
-              Write-Host "No solution found under .\\windows; skipping packaging"
+              Write-Host "No solution found under .\windows; skipping packaging"
             }
           } else {
             Write-Host "Windows project not initialized; skipping"
@@ -295,15 +321,15 @@ jobs:
             npm install react-native-macos@0.74 --save --legacy-peer-deps
             # Create temporary package.json with react-native dependency for init
             temp_dir=$(mktemp -d)
-            cat > "$temp_dir/package.json" << EOF
-            {
-              "name": "temp-init",
-              "version": "1.0.0",
-              "dependencies": {
-                "react-native": "0.74.7"
-              }
+            cat > "$temp_dir/package.json" << 'EOF'
+          {
+            "name": "temp-init",
+            "version": "1.0.0",
+            "dependencies": {
+              "react-native": "0.74.7"
             }
-            EOF
+          }
+          EOF
             cd "$temp_dir"
             npm install
             npx -y react-native-macos-init --overwrite --no-telemetry
