@@ -1,0 +1,13 @@
+{
+  "name": "monthly-budget-react",
+  "private": true,
+  "version": "0.1.0",
+  "description": "React Native monorepo for Monthly Budget Manager (Android, iOS, Windows, macOS)",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

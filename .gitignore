@@ -54,3 +54,53 @@ artifacts/
 
 # Misc
 .python-version
+
+# React Native / Node
+react-native/**/node_modules/
+react-native/**/.expo/
+react-native/**/.turbo/
+react-native/**/.cache/
+react-native/**/.gradle/
+react-native/**/.watchmanconfig
+react-native/**/coverage/
+react-native/**/dist/
+
+# Android (RN)
+react-native/**/android/.gradle/
+react-native/**/android/.cxx/
+react-native/**/android/app/build/
+react-native/**/android/build/
+react-native/**/android/local.properties
+react-native/**/android/app/release/
+react-native/**/android/app/debug/
+
+# iOS (RN)
+react-native/**/ios/Pods/
+react-native/**/ios/build/
+react-native/**/ios/*.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings
+react-native/**/ios/DerivedData/
+react-native/**/ios/*.xcuserstate
+react-native/**/ios/*.xcuserdata/
+
+# Windows (RNW)
+react-native/**/windows/**/Debug*/
+react-native/**/windows/**/Release*/
+react-native/**/windows/**/Generated Files*/
+react-native/**/windows/**/x64/
+react-native/**/windows/**/x86/
+react-native/**/windows/**/ARM*/
+react-native/**/windows/Generated Files/
+react-native/**/windows/packages/
+
+# macOS (RN macOS)
+react-native/**/macos/Pods/
+react-native/**/macos/build/
+react-native/**/macos/DerivedData/
+
+# Bundled artifacts
+react-native/**/*.apk
+react-native/**/*.aab
+react-native/**/*.ipa
+react-native/**/*.app
+react-native/**/*.msix
+react-native/**/*.msixbundle

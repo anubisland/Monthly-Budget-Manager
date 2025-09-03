@@ -1,0 +1,152 @@
+name: React Native Builds (Android/iOS/Windows/macOS)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native/apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install Node dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          fi
+      - name: Prepare Android
+        run: |
+          cd android || exit 0
+          ./gradlew --no-daemon tasks || true
+      - name: Build Debug APK
+        run: |
+          if [ -d android ]; then
+            cd android
+            ./gradlew --no-daemon assembleDebug
+          else
+            echo "Android project not initialized; skipping"
+          fi
+      - name: Upload APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: |
+            react-native/apps/mobile/android/app/build/outputs/apk/debug/**/*.apk
+          if-no-files-found: warn
+
+  ios:
+    name: iOS Archive
+    runs-on: macos-13
+    defaults:
+      run:
+        working-directory: react-native/apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Node dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          fi
+      - name: Install CocoaPods
+        run: |
+          if [ -d ios ]; then
+            cd ios
+            pod install --silent || pod install
+          else
+            echo "iOS project not initialized; skipping"
+          fi
+      - name: Build iOS (Debug)
+        run: |
+          if [ -d ios ]; then
+            xcodebuild -workspace ios/*.xcworkspace -scheme mobile -configuration Debug -sdk iphonesimulator -derivedDataPath build || true
+          else
+            echo "iOS project not initialized; skipping"
+          fi
+      - name: Upload iOS build products
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build
+          path: |
+            react-native/apps/mobile/build
+          if-no-files-found: warn
+
+  windows:
+    name: Windows App
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: react-native/apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Node dependencies
+        shell: pwsh
+        run: |
+          if (Test-Path package.json) { npm ci 2>$null; if ($LASTEXITCODE -ne 0) { npm install } }
+      - name: Build Windows
+        shell: pwsh
+        run: |
+          if (Test-Path windows) {
+            msbuild .\windows\*.sln /p:Configuration=Debug /m
+          } else {
+            Write-Host "Windows project not initialized; skipping"
+          }
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            react-native/apps/desktop/windows/**/AppPackages/**/*
+            react-native/apps/desktop/windows/**/Debug*/**/*
+          if-no-files-found: warn
+
+  macos:
+    name: macOS App
+    runs-on: macos-13
+    defaults:
+      run:
+        working-directory: react-native/apps/desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install Node dependencies
+        run: |
+          if [ -f package.json ]; then
+            npm ci || npm install
+          fi
+      - name: Build macOS (Debug)
+        run: |
+          if [ -d macos ]; then
+            xcodebuild -workspace macos/*.xcworkspace -scheme desktop -configuration Debug -derivedDataPath build || true
+          else
+            echo "macOS project not initialized; skipping"
+          fi
+      - name: Upload macOS build products
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            react-native/apps/desktop/build
+          if-no-files-found: warn
