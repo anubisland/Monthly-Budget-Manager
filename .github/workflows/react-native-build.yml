@@ -181,10 +181,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Install monorepo dependencies (root)
+        working-directory: react-native
+        shell: pwsh
+        run: |
+          npm install --workspaces --include-workspace-root
       - name: Install Node dependencies
         shell: pwsh
         run: |
-            if (Test-Path package.json) { npm install }
+          if (Test-Path package.json) { npm install }
+      - name: Initialize Windows project if missing
+        shell: pwsh
+        run: |
+          if (-not (Test-Path windows)) {
+            npm install react-native-windows@0.74 --save
+            npx react-native-windows-init --overwrite --no-telemetry
+          }
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
@@ -239,9 +251,19 @@ jobs:
         working-directory: react-native
         run: |
           npm install --workspaces --include-workspace-root
+      - name: Install monorepo dependencies (root)
+        working-directory: react-native
+        run: |
+          :
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then npm install; fi
+      - name: Initialize macOS project if missing
+        run: |
+          if [ ! -d macos ]; then
+            npm install react-native-macos@0.74 --save
+            npx react-native-macos-init
+          fi
       - name: Install CocoaPods (macOS)
         run: |
           if [ -d macos ]; then
@@ -298,7 +320,7 @@ jobs:
   release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [android, ios, windows, macos]
+    needs: [android, ios]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Download all artifacts

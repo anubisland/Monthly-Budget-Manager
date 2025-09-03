@@ -4,16 +4,16 @@
   "version": "0.1.0",
   "main": "index.js",
   "scripts": {
-    "windows": "echo Add react-native-windows and run windows app",
-    "macos": "echo Add react-native-macos and run mac app",
+  "windows": "echo Add react-native-windows and run windows app",
+  "macos": "echo Add react-native-macos and run mac app",
     "start": "react-native start",
     "clean": "rimraf node_modules"
   },
   "dependencies": {
     "react": "18.2.0",
     "react-native": "0.74.0",
-    "@monthly-budget/shared": "*",
-    "@monthly-budget/adapters": "*"
+  "@monthly-budget/shared": "file:../../packages/shared",
+  "@monthly-budget/adapters": "file:../../packages/adapters"
   },
   "devDependencies": {
     "@types/react": "18.2.37",
