@@ -67,6 +67,7 @@ react-native/**/.watchmanconfig
 react-native/**/coverage/
 react-native/**/dist/
 react-native/**/build/
+react-native/**/bundle.js
 
 # Node logs
 npm-debug.log*
@@ -120,5 +121,6 @@ react-native/**/*.app
 react-native/**/*.msix
 react-native/**/*.msixbundle
 
-# Temporary RN bootstraps
-react-native/apps/**/TempBudgetApp/
+# Temporary RN bootstraps build files, but allow source files
+react-native/apps/**/TempBudgetApp/build/
+react-native/apps/**/TempBudgetApp/DerivedData/
