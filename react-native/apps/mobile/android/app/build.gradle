@@ -55,7 +55,12 @@ react {
 
     /* Hermes Commands */
     //   The hermes compiler command to run. By default it is 'hermesc'
-    // hermesCommand = "$rootDir/my-custom-hermesc/bin/hermesc"
+    //   Set explicit path to hermesc for monorepo setup
+    if (rnNodeModulesDir != null) {
+        def hermesPlatform = System.getProperty("os.name").toLowerCase().contains("windows") ? "win64-bin" : 
+                             System.getProperty("os.name").toLowerCase().contains("mac") ? "osx-bin" : "linux64-bin"
+        hermesCommand = new File(rnNodeModulesDir, "react-native/sdks/hermesc/${hermesPlatform}/hermesc").absolutePath
+    }
     //
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]

@@ -10,11 +10,12 @@
     "clean": "rimraf node_modules"
   },
   "dependencies": {
+    "@babel/runtime": "^7.23.0",
+    "@monthly-budget/adapters": "file:../../packages/adapters",
+    "@monthly-budget/shared": "file:../../packages/shared",
     "react": "18.2.0",
     "react-native": "0.74.7",
-    "@monthly-budget/shared": "file:../../packages/shared",
-    "@monthly-budget/adapters": "file:../../packages/adapters",
-    "@babel/runtime": "^7.23.0"
+    "react-native-windows": "^0.74.46"
   },
   "devDependencies": {
     "@types/react": "18.2.37",

@@ -204,8 +204,23 @@ jobs:
         run: |
           if (-not (Test-Path windows)) {
             npm install react-native-windows@0.74 --save
-            $env:NPM_CONFIG_WORKSPACES = 'false'
+            # Create temporary package.json with react-native dependency for init
+            $tempDir = New-Item -ItemType Directory -Force -Path ../../../temp-windows-init
+            @{
+              name = "temp-init"
+              version = "1.0.0"
+              dependencies = @{
+                "react-native" = "0.74.7"
+              }
+            } | ConvertTo-Json | Out-File -FilePath "$tempDir/package.json" -Encoding utf8
+            Set-Location $tempDir
+            npm install
             npx -y react-native-windows-init --overwrite --no-telemetry
+            Set-Location ../react-native/apps/desktop
+            if (Test-Path $tempDir/windows) {
+              Move-Item $tempDir/windows ./
+            }
+            Remove-Item -Recurse -Force $tempDir
           }
       - name: Build Windows (Debug)
         shell: pwsh
@@ -278,8 +293,25 @@ jobs:
         run: |
           if [ ! -d macos ]; then
             npm install react-native-macos@0.74 --save --legacy-peer-deps
-            # Use environment variable instead of NPM_CONFIG_WORKSPACES flag
-            env NPM_CONFIG_WORKSPACES=false npx -y react-native-macos-init --overwrite --no-telemetry
+            # Create temporary package.json with react-native dependency for init
+            temp_dir=$(mktemp -d)
+            cat > "$temp_dir/package.json" << EOF
+{
+  "name": "temp-init",
+  "version": "1.0.0",
+  "dependencies": {
+    "react-native": "0.74.7"
+  }
+}
+EOF
+            cd "$temp_dir"
+            npm install
+            npx -y react-native-macos-init --overwrite --no-telemetry
+            cd - > /dev/null
+            if [ -d "$temp_dir/macos" ]; then
+              mv "$temp_dir/macos" ./
+            fi
+            rm -rf "$temp_dir"
           fi
       - name: Install CocoaPods (macOS)
         run: |
