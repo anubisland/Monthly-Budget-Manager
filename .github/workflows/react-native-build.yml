@@ -29,7 +29,10 @@ jobs:
       - name: Install monorepo dependencies (root)
         working-directory: react-native
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+            npm install --workspaces --include-workspace-root
+        - name: Install Node dependencies
+          run: |
+            if [ -f package.json ]; then npm install; fi
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then
@@ -179,9 +182,7 @@ jobs:
       - name: Install Node dependencies
         shell: pwsh
         run: |
-          if (Test-Path package.json) {
-            if (Test-Path package-lock.json) { npm ci } else { npm install }
-          }
+            if (Test-Path package.json) { npm install }
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
@@ -235,7 +236,10 @@ jobs:
       - name: Install monorepo dependencies (root)
         working-directory: react-native
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+            npm install --workspaces --include-workspace-root
+        - name: Install Node dependencies
+          run: |
+            if [ -f package.json ]; then npm install; fi
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then
