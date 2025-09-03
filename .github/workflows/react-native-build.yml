@@ -181,6 +181,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          vs-version: '[17,18)'
+          msbuild-architecture: x64
       - name: Install monorepo dependencies (root)
         working-directory: react-native
         shell: pwsh
@@ -190,6 +195,10 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path package.json) { npm install }
+      - name: MSBuild version
+        shell: pwsh
+        run: |
+          msbuild -version
       - name: Initialize Windows project if missing
         shell: pwsh
         run: |
@@ -201,7 +210,7 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            msbuild .\windows\*.sln /p:Configuration=Debug /m
+            msbuild .\windows\*.sln /p:Configuration=Debug /p:Platform=x64 /m
           } else {
             Write-Host "Windows project not initialized; skipping"
           }
@@ -209,7 +218,7 @@ jobs:
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            msbuild .\windows\*.sln /p:Configuration=Release /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
+            msbuild .\windows\*.sln /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m
           } else {
             Write-Host "Windows project not initialized; skipping"
           }
@@ -261,7 +270,7 @@ jobs:
       - name: Initialize macOS project if missing
         run: |
           if [ ! -d macos ]; then
-            npm install react-native-macos@0.74 --save
+            npm install react-native-macos@0.74 --save --legacy-peer-deps
             npx react-native-macos-init
           fi
       - name: Install CocoaPods (macOS)
