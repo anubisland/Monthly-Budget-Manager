@@ -89,9 +89,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.tempbudgetapp"
+    namespace "com.monthlybudget.manager"
     defaultConfig {
-        applicationId "com.tempbudgetapp"
+        applicationId "com.monthlybudget.manager"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

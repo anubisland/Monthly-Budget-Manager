@@ -34,6 +34,11 @@ jobs:
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then npm install; fi
+      - name: Build shared packages
+        working-directory: react-native
+        run: |
+          npm run build -w @monthly-budget/shared
+          npm run build -w @monthly-budget/adapters
       - name: Check RN CLI gradle script exists
         run: |
           ls -la node_modules/@react-native-community || true
@@ -127,6 +132,11 @@ jobs:
       - name: Install Node dependencies
         run: |
           if [ -f package.json ]; then npm install; fi
+      - name: Build shared packages
+        working-directory: react-native
+        run: |
+          npm run build -w @monthly-budget/shared
+          npm run build -w @monthly-budget/adapters
       - name: Install CocoaPods
         run: |
           if [ -d ios ]; then
