@@ -16,6 +16,7 @@ import {
 import { BudgetDoc, Income, Expense, totals, expensesByCategory, serialize, deserialize } from '@monthly-budget/shared';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { ReactNativeAdapter } from './ReactNativeAdapter';
 
 // Predefined expense categories from Python GUI
 const EXPENSE_CATEGORIES = [
@@ -61,6 +62,37 @@ export default function App() {
   const [newExpense, setNewExpense] = useState({ name: '', category: '', amount: '', day: '' });
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showMonthYearPicker, setShowMonthYearPicker] = useState(false);
+  
+  const adapter = new ReactNativeAdapter();
+
+  // Load from storage on app start
+  useEffect(() => {
+    const loadStoredBudget = async () => {
+      try {
+        const stored = await adapter.loadFromStorage();
+        if (stored) {
+          setBudget(stored);
+        }
+      } catch (error) {
+        console.error('Failed to load stored budget:', error);
+      }
+    };
+    
+    loadStoredBudget();
+  }, []);
+
+  // Auto-save to storage when budget changes
+  useEffect(() => {
+    const saveToStorage = async () => {
+      try {
+        await adapter.saveToStorage(budget);
+      } catch (error) {
+        console.error('Failed to auto-save budget:', error);
+      }
+    };
+    
+    saveToStorage();
+  }, [budget]);
 
   const stats = totals(budget.incomes, budget.expenses);
   const categoryStats = expensesByCategory(budget.expenses);
@@ -110,7 +142,19 @@ export default function App() {
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Clear', 
+          text: 'Clear',
+  // File operations
+  const createNewBudget = () => {
+    Alert.alert(
+      'Create New Budget',
+      'This will clear all current data. Are you sure?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create New',
           style: 'destructive',
           onPress: () => {
             setBudget({
@@ -122,6 +166,7 @@ export default function App() {
               expenses: [],
             });
           }
+        },
         },
       ]
     );
@@ -146,6 +191,33 @@ export default function App() {
       incomes: [...prev.incomes, ...sampleIncomes],
       expenses: [...prev.expenses, ...sampleExpenses],
     }));
+
+  const openBudget = async () => {
+    try {
+      const loadedBudget = await adapter.openJSON();
+      if (loadedBudget) {
+        setBudget(loadedBudget);
+        Alert.alert('Success', 'Budget loaded successfully!');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open budget file');
+    }
+  };
+
+  const saveBudget = async () => {
+    try {
+      await adapter.saveJSON(budget);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save budget file');
+    }
+  };
+
+  const exportBudget = async () => {
+    try {
+      await adapter.exportXLSX(budget);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export budget file');
+    }
   };
 
   const addIncome = () => {
@@ -619,6 +691,25 @@ export default function App() {
       
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Monthly Budget Manager</Text>
+        
+        {/* File Operations Row */}
+        <View style={styles.fileOperationsContainer}>
+          <TouchableOpacity style={styles.fileButton} onPress={createNewBudget}>
+            <Text style={styles.fileButtonText}>New</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={openBudget}>
+            <Text style={styles.fileButtonText}>Open</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={saveBudget}>
+            <Text style={styles.fileButtonText}>Save</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.fileButton} onPress={exportBudget}>
+            <Text style={styles.fileButtonText}>Export</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.tabContainer}>
@@ -1015,6 +1106,127 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   clearButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    margin: 20,
+    borderRadius: 8,
+    padding: 20,
+    maxHeight: '80%',
+    width: '90%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#212529',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  sectionSubtitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#495057',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  categoryOption: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  categoryOptionText: {
+    fontSize: 16,
+    color: '#212529',
+  },
+  monthYearOption: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e9ecef',
+  },
+  monthYearOptionText: {
+    fontSize: 16,
+    color: '#212529',
+  },
+  selectedOption: {
+    backgroundColor: '#e3f2fd',
+  },
+  selectedOptionText: {
+    color: '#007bff',
+    fontWeight: '600',
+  },
+  cancelButton: {
+    backgroundColor: '#6c757d',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dataManagementContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  lastSavedText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  sampleButton: {
+    backgroundColor: '#28a745',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sampleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearButton: {
+    backgroundColor: '#dc3545',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  fileOperationsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  fileButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  fileButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
