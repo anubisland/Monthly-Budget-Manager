@@ -309,16 +309,47 @@ jobs:
           if [ ! -d macos ]; then
             echo "macOS project not found, initializing..."
             
-            # Create a completely isolated temporary directory outside the workspace
-            TEMP_INIT_DIR="/tmp/macos-init-$(date +%s)-$$"
+            # Create a completely isolated temporary directory with its own npm environment
+            TEMP_INIT_DIR="/tmp/macos-init-clean-$(date +%s)-$$"
             mkdir -p "$TEMP_INIT_DIR"
-            echo "Using isolated directory: $TEMP_INIT_DIR"
+            echo "Using completely isolated directory: $TEMP_INIT_DIR"
             
             # Store current directory for later
             ORIGINAL_DIR="$PWD"
             
             # Navigate to isolated directory
             cd "$TEMP_INIT_DIR"
+            
+            # Create a completely clean npm environment with its own prefix
+            export NPM_CONFIG_PREFIX="$TEMP_INIT_DIR/.npm-global"
+            export NPM_CONFIG_CACHE="$TEMP_INIT_DIR/.npm-cache"
+            export NPM_CONFIG_USERCONFIG="$TEMP_INIT_DIR/.npmrc-clean"
+            export NPM_CONFIG_GLOBALCONFIG="$TEMP_INIT_DIR/.npmrc-global"
+            export PATH="$NPM_CONFIG_PREFIX/bin:$PATH"
+            
+            # Create clean npm configuration files that completely disable workspaces
+            cat > "$NPM_CONFIG_USERCONFIG" << 'EOF'
+          workspaces=false
+          include-workspace-root=false
+          enable-pre-post-scripts=false
+          fund=false
+          audit=false
+          update-notifier=false
+          EOF
+            
+            cat > "$NPM_CONFIG_GLOBALCONFIG" << 'EOF'
+          workspaces=false
+          include-workspace-root=false
+          enable-pre-post-scripts=false
+          fund=false
+          audit=false
+          update-notifier=false
+          EOF
+            
+            # Set npm environment variables to completely disable workspace functionality
+            export NPM_CONFIG_WORKSPACES=false
+            export NPM_CONFIG_INCLUDE_WORKSPACE_ROOT=false
+            export NPM_CONFIG_WORKSPACE=
             
             # Create a minimal package.json without any workspace configuration
             cat > package.json << 'EOF'
@@ -330,41 +361,43 @@ jobs:
           }
           EOF
             
-            # Create .npmrc to explicitly disable workspace functionality
-            cat > .npmrc << 'EOF'
-          workspaces=false
-          include-workspace-root=false
-          enable-pre-post-scripts=false
-          fund=false
-          audit=false
-          EOF
+            # Test that npm is working without workspace detection
+            echo "Testing npm configuration..."
+            npm config get registry
             
-            # Set npm config to disable workspaces for this session
-            export NPM_CONFIG_WORKSPACES=false
-            export NPM_CONFIG_INCLUDE_WORKSPACE_ROOT=false
-            
-            # Install required packages without workspace detection
+            # Install required packages using explicit no-workspace flags
             echo "Installing react-native packages..."
-            npm install react-native@0.74.7 react-native-macos@0.74.37 --no-workspaces --legacy-peer-deps
+            npm install react-native@0.74.7 react-native-macos@0.74.37 --legacy-peer-deps --no-workspaces --ignore-workspace-root-check
             
-            # Copy essential files from original project (excluding workspace configs)
+            # Copy essential files from original project (excluding any workspace configs)
             echo "Copying project files..."
             cp "$ORIGINAL_DIR/index.js" . 2>/dev/null || echo "console.log('Desktop app');" > index.js
             cp "$ORIGINAL_DIR/app.json" . 2>/dev/null || echo '{"name":"desktop","displayName":"Desktop"}' > app.json
-            cp -r "$ORIGINAL_DIR/src" . 2>/dev/null || mkdir -p src
+            if [ -d "$ORIGINAL_DIR/src" ]; then
+              cp -r "$ORIGINAL_DIR/src" .
+            else
+              mkdir -p src
+            fi
             
-            # Initialize macOS project in the isolated environment
+            # Initialize macOS project in the completely clean environment
             echo "Initializing macOS project..."
             npx -y react-native-macos-init@latest --overwrite --no-telemetry
             
-            # Copy the generated macos directory back to the original location
+            # Verify the macOS project was created
             if [ -d macos ]; then
               echo "macOS project created successfully"
+              echo "Contents of macos directory:"
+              ls -la macos/
+              
+              # Copy the generated macos directory back to the original location
               cp -r macos "$ORIGINAL_DIR/"
               echo "macOS project copied back to original location"
             else
               echo "Error: macOS project directory not created"
+              echo "Current directory contents:"
               ls -la
+              echo "Checking for any macos-related directories:"
+              find . -name "*macos*" -type d 2>/dev/null || true
             fi
             
             # Return to original directory and cleanup
