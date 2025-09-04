@@ -13,8 +13,9 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { BudgetDoc, Income, Expense, totals, expensesByCategory } from '@monthly-budget/shared';
+import { BudgetDoc, Income, Expense, totals, expensesByCategory, serialize, deserialize } from '@monthly-budget/shared';
 import { BarChart, PieChart } from 'react-native-chart-kit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Predefined expense categories from Python GUI
 const EXPENSE_CATEGORIES = [
@@ -63,6 +64,89 @@ export default function App() {
 
   const stats = totals(budget.incomes, budget.expenses);
   const categoryStats = expensesByCategory(budget.expenses);
+
+  // Load budget data on app start
+  useEffect(() => {
+    loadBudgetData();
+  }, []);
+
+  // Save budget data whenever it changes
+  useEffect(() => {
+    saveBudgetData();
+  }, [budget]);
+
+  const saveBudgetData = async () => {
+    try {
+      const updatedBudget = {
+        ...budget,
+        meta: {
+          ...budget.meta,
+          saved_at: new Date().toISOString(),
+        },
+      };
+      const jsonData = serialize(updatedBudget);
+      await AsyncStorage.setItem('budget_data', jsonData);
+    } catch (error) {
+      console.error('Failed to save budget data:', error);
+    }
+  };
+
+  const loadBudgetData = async () => {
+    try {
+      const jsonData = await AsyncStorage.getItem('budget_data');
+      if (jsonData) {
+        const loadedBudget = deserialize(jsonData);
+        setBudget(loadedBudget);
+      }
+    } catch (error) {
+      console.error('Failed to load budget data:', error);
+    }
+  };
+
+  const clearAllData = () => {
+    Alert.alert(
+      'Clear All Data',
+      'Are you sure you want to clear all income and expense data? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear', 
+          style: 'destructive',
+          onPress: () => {
+            setBudget({
+              meta: {
+                year: new Date().getFullYear(),
+                month: new Date().getMonth() + 1,
+              },
+              incomes: [],
+              expenses: [],
+            });
+          }
+        },
+      ]
+    );
+  };
+
+  const addSampleData = () => {
+    const sampleIncomes: Income[] = [
+      { name: 'Salary', amount: 5000, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-01` },
+      { name: 'Freelance', amount: 1500, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-15` },
+    ];
+
+    const sampleExpenses: Expense[] = [
+      { name: 'Rent', category: 'Rent', amount: 1200, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-01` },
+      { name: 'Groceries', category: 'Food', amount: 400, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-03` },
+      { name: 'Gas Bill', category: 'Fuel', amount: 80, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-05` },
+      { name: 'Internet', category: 'Internet', amount: 60, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-10` },
+      { name: 'Movies', category: 'Entertainment', amount: 25, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-12` },
+    ];
+
+    setBudget(prev => ({
+      ...prev,
+      incomes: [...prev.incomes, ...sampleIncomes],
+      expenses: [...prev.expenses, ...sampleExpenses],
+    }));
+  };
 
   const addIncome = () => {
     if (!newIncome.name.trim() || !newIncome.amount.trim()) {
@@ -386,6 +470,22 @@ export default function App() {
             ))}
           </>
         )}
+
+        {/* Data Management Section */}
+        <Text style={styles.sectionTitle}>Data Management</Text>
+        <View style={styles.dataManagementContainer}>
+          {budget.meta.saved_at && (
+            <Text style={styles.lastSavedText}>
+              Last saved: {new Date(budget.meta.saved_at).toLocaleString()}
+            </Text>
+          )}
+          <TouchableOpacity style={styles.sampleButton} onPress={addSampleData}>
+            <Text style={styles.sampleButtonText}>Add Sample Data</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.clearButton} onPress={clearAllData}>
+            <Text style={styles.clearButtonText}>Clear All Data</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     );
   };
@@ -877,6 +977,46 @@ const styles = StyleSheet.create({
   cancelButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  dataManagementContainer: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  lastSavedText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  sampleButton: {
+    backgroundColor: '#28a745',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sampleButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  clearButton: {
+    backgroundColor: '#dc3545',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
