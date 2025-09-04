@@ -376,7 +376,7 @@ jobs:
   release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: [android, ios, windows, macos]
+    needs: [android, ios]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Download all artifacts
