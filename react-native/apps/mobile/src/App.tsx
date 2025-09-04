@@ -520,7 +520,7 @@ export default function App() {
         {/* Expense Categories Pie Chart */}
         {categoryStats.length > 0 && (
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Expense Categories</Text>
+            <Text style={styles.chartTitle}>Expense Categories (Pie Chart)</Text>
             <PieChart
               data={categoryStats.map((cat, index) => ({
                 name: cat.category,
@@ -543,6 +543,49 @@ export default function App() {
               paddingLeft="15"
               style={styles.chart}
             />
+          </View>
+        )}
+
+        {/* Expense Categories Bar Chart */}
+        {categoryStats.length > 0 && (
+          <View style={styles.chartContainer}>
+            <Text style={styles.chartTitle}>Expense Categories (Bar Chart)</Text>
+            <BarChart
+              data={{
+                labels: categoryStats.slice(0, 8).map(cat => 
+                  cat.category.length > 8 ? cat.category.substring(0, 8) + '...' : cat.category
+                ),
+                datasets: [{
+                  data: categoryStats.slice(0, 8).map(cat => cat.amount)
+                }]
+              }}
+              width={screenWidth - 32}
+              height={280}
+              yAxisLabel="$"
+              yAxisSuffix=""
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(220, 53, 69, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
+                style: {
+                  borderRadius: 8
+                },
+                propsForLabels: {
+                  fontSize: 10
+                }
+              }}
+              style={styles.chart}
+              showValuesOnTopOfBars
+              fromZero
+            />
+            {categoryStats.length > 8 && (
+              <Text style={styles.chartNote}>
+                Showing top 8 categories. See full breakdown below.
+              </Text>
+            )}
           </View>
         )}
 
@@ -887,6 +930,13 @@ const styles = StyleSheet.create({
   },
   chart: {
     borderRadius: 8,
+  },
+  chartNote: {
+    fontSize: 12,
+    color: '#6c757d',
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   categoryCard: {
     backgroundColor: '#fff',
