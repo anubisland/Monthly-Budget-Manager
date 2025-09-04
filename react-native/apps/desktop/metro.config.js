@@ -18,6 +18,18 @@ const config = {
       path.resolve(__dirname, 'node_modules'),
       path.resolve(__dirname, '../../node_modules'), // monorepo root node_modules
     ],
+    alias: {
+      // Ensure babel runtime is resolved properly
+      '@babel/runtime': path.resolve(__dirname, 'node_modules/@babel/runtime'),
+    },
+  },
+  transformer: {
+    getTransformOptions: async () => ({
+      transform: {
+        experimentalImportSupport: false,
+        inlineRequires: false,
+      },
+    }),
   },
 };
 
