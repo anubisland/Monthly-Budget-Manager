@@ -65,6 +65,9 @@ export default function App() {
   
   const adapter = new ReactNativeAdapter();
 
+  const stats = totals(budget.incomes, budget.expenses);
+  const categoryStats = expensesByCategory(budget.expenses);
+
   // Load from storage on app start
   useEffect(() => {
     const loadStoredBudget = async () => {
@@ -94,15 +97,12 @@ export default function App() {
     saveToStorage();
   }, [budget]);
 
-  const stats = totals(budget.incomes, budget.expenses);
-  const categoryStats = expensesByCategory(budget.expenses);
-
-  // Load budget data on app start
+  // Load budget data on app start (legacy method for enhanced features)
   useEffect(() => {
     loadBudgetData();
   }, []);
 
-  // Save budget data whenever it changes
+  // Save budget data whenever it changes (legacy method for enhanced features)
   useEffect(() => {
     saveBudgetData();
   }, [budget]);
@@ -142,19 +142,7 @@ export default function App() {
       [
         { text: 'Cancel', style: 'cancel' },
         { 
-          text: 'Clear',
-  // File operations
-  const createNewBudget = () => {
-    Alert.alert(
-      'Create New Budget',
-      'This will clear all current data. Are you sure?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Create New',
+          text: 'Clear', 
           style: 'destructive',
           onPress: () => {
             setBudget({
@@ -166,7 +154,6 @@ export default function App() {
               expenses: [],
             });
           }
-        },
         },
       ]
     );
@@ -191,6 +178,35 @@ export default function App() {
       incomes: [...prev.incomes, ...sampleIncomes],
       expenses: [...prev.expenses, ...sampleExpenses],
     }));
+  };
+
+  // File operations
+  const createNewBudget = () => {
+    Alert.alert(
+      'Create New Budget',
+      'This will clear all current data. Are you sure?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Create New',
+          style: 'destructive',
+          onPress: () => {
+            setBudget({
+              meta: {
+                year: new Date().getFullYear(),
+                month: new Date().getMonth() + 1,
+              },
+              incomes: [],
+              expenses: [],
+            });
+          },
+        },
+      ]
+    );
+  };
 
   const openBudget = async () => {
     try {
@@ -1109,106 +1125,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    margin: 20,
-    borderRadius: 8,
-    padding: 20,
-    maxHeight: '80%',
-    width: '90%',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#212529',
-    marginBottom: 16,
-    textAlign: 'center',
-  },
-  sectionSubtitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#495057',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  categoryOption: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  categoryOptionText: {
-    fontSize: 16,
-    color: '#212529',
-  },
-  monthYearOption: {
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  monthYearOptionText: {
-    fontSize: 16,
-    color: '#212529',
-  },
-  selectedOption: {
-    backgroundColor: '#e3f2fd',
-  },
-  selectedOptionText: {
-    color: '#007bff',
-    fontWeight: '600',
-  },
-  cancelButton: {
-    backgroundColor: '#6c757d',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  cancelButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  dataManagementContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  lastSavedText: {
-    fontSize: 12,
-    color: '#6c757d',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  sampleButton: {
-    backgroundColor: '#28a745',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sampleButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  clearButton: {
-    backgroundColor: '#dc3545',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
   },
   fileOperationsContainer: {
     flexDirection: 'row',
