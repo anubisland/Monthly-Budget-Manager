@@ -312,11 +312,15 @@ jobs:
             # Force local installation of required packages for macOS init
             npm install react-native@0.74.7 react-native-macos@0.74.37 --no-save --legacy-peer-deps
             
-            # Temporarily create a simple .npmrc to avoid workspace issues
-            echo "enable-pre-post-scripts=false" > .npmrc
+            # Create comprehensive .npmrc to disable workspace functionality during init
+            cat > .npmrc << 'EOF'
+          enable-pre-post-scripts=false
+          workspaces=false
+          include-workspace-root=false
+          EOF
             
-            # Run macOS init
-            npx -y react-native-macos-init@latest --overwrite --no-telemetry
+            # Run macOS init with isolated npm configuration
+            NPM_CONFIG_WORKSPACES=false NPM_CONFIG_INCLUDE_WORKSPACE_ROOT=false npx -y react-native-macos-init@latest --overwrite --no-telemetry
             
             # Remove the temporary .npmrc
             rm -f .npmrc
