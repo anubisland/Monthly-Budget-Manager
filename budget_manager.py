@@ -26,13 +26,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import date as _date
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from datetime import date as _date
 
 
 @dataclass
@@ -312,7 +311,10 @@ def _is_valid_ymd(s: str) -> bool:
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Manage monthly income and expenses and compute percentage breakdowns.")
-    p.add_argument("--input", type=str, help="Path to CSV file to import (type,name,category,amount). If omitted, runs interactive mode.")
+    p.add_argument(
+        "--input", type=str,
+        help="Path to CSV file to import (type,name,category,amount). If omitted, runs interactive mode.",
+    )
     p.add_argument("--month", type=str, help="Month label for the report, e.g., 2025-08.")
     p.add_argument("--json", action="store_true", help="Output JSON instead of a human-readable table.")
     p.add_argument("--save-json", type=str, help="Optional path to save the JSON report.")
