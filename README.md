@@ -1,79 +1,205 @@
 # Monthly Budget Manager
-======================
 
-A simple Python tool (CLI and GUI) to track monthly income and expenses and compute percentage breakdowns and profit margin.
+[![Python CI](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/python-ci.yml/badge.svg)](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/python-ci.yml)
+[![Release Build](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/release.yml/badge.svg)](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/release.yml)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](mobile/LICENSE)
 
-Features
-- Interactive entry of incomes and expenses
-- Import from CSV (type,name,category,amount[,date]) — date supports YYYY-MM or YYYY-MM-DD
-- GUI input accepts day-only (DD) and normalizes using the Month field (or today's month)
-- Dates display in the table as "31 (Sun)" when a full YYYY-MM-DD is known
-- Totals, category breakdowns, percent of income/expenses, and profit margin
-- Optional JSON output and save-to-file
-- Charts on the Report tab: bar chart (Income vs Expenses) and pie chart (Expense Categories)
-- Export to Excel (.xlsx) with three sheets: Income, Expenses, and Report (requires openpyxl)
-- Keyboard shortcuts: Ctrl+O (Open), Ctrl+S (Save), F5 (Refresh Report); Enter to add, Esc to clear in form fields
-- Remembers your last selected Month between runs
+A cross-platform personal finance tool for tracking monthly income and expenses with category breakdowns, charts, and export options.
 
-Quick start (Windows PowerShell)
-1) Interactive mode:
-```
-python .\budget_manager.py
+Available as:
+- **CLI** — pure stdlib, zero external deps, scriptable and automation-friendly
+- **Desktop GUI** — Tkinter app with charts and Excel/CSV export
+- **Mobile** — Android/iOS via BeeWare Briefcase + Toga
+- **React Native** — Android/iOS/Windows/macOS via the `react-native/` workspace
+
+---
+
+## Features
+
+- Add income and expenses interactively or import from CSV
+- Category breakdowns: amount, % of income, % of expenses
+- Profit margin calculation
+- JSON output for pipelines and automation
+- GUI with live charts (bar: income vs expenses; pie: expense categories)
+- Export to Excel (`.xlsx`) with formatted tables and embedded charts
+- Calendar date picker and category picker in GUI
+- Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` save, `F5` refresh report
+- Preferences: remembers last selected month between sessions
+- Mobile app (Android/iOS) via BeeWare Briefcase
+- React Native desktop and mobile apps
+
+---
+
+## Requirements
+
+| Component | Requirement |
+|-----------|-------------|
+| CLI (`budget_manager.py`) | Python 3.10+, no external deps |
+| GUI (`budget_manager_gui.py`) | Python 3.10+, `openpyxl` |
+| Mobile | Python 3.10+, `briefcase` |
+| React Native | Node 20+ |
+
+Install Python dependencies:
+
+```bash
+pip install -r requirements.txt
 ```
 
-2) From CSV and print a report:
-```
-python .\budget_manager.py --input .\examples\sample.csv --month 2025-08
+---
+
+## Quick Start
+
+### CLI — Interactive
+
+```bash
+python budget_manager.py
 ```
 
-3) JSON output (for automation/pipelines):
-```
-python .\budget_manager.py --input .\examples\sample.csv --json --save-json .\report.json
+Enter incomes and expenses when prompted. Leave the name blank to stop each section.
+
+### CLI — From CSV
+
+```bash
+python budget_manager.py --input examples/sample.csv --month 2025-08
 ```
 
-Graphical app (GUI)
-```
-python .\budget_manager_gui.py
-```
-- Add incomes and expenses in their tabs
-- Set Month (YYYY-MM) in the toolbar; each entry can also have a full date (YYYY-MM or YYYY-MM-DD)
-- You can also enter just the day (DD). It will be saved as YYYY-MM-DD using the Month field or today's month.
-- Use Open/Save CSV to import/export data
-- Switch to the Report tab for totals and percentage breakdowns
-	- The Report tab also shows charts: a bar chart comparing Income vs Expenses, and a pie chart of Expense Categories.
-	- Charts redraw responsively when you resize the window; pie slices ≥5% show labels.
-- Export Excel from the toolbar for a multi-sheet workbook; or export JSON from the File menu for a structured report
- - Save CSV adds a 'date' column (YYYY-MM) per row for round-trip
+### CLI — JSON output (for automation)
 
-GUI tips
-- Date picker: use the “Pick…” button beside the date fields to choose from a mini calendar. “Today” fills today’s date quickly.
-- Day-only input: entering DD auto-expands to YYYY-MM-DD using the Month field (or today’s month when Month is empty).
-- Expense categories: click “Pick…” beside Category to choose common categories (Food, Rent, Fuel, Electricity, etc.).
-- Month inference: when opening a CSV, the app infers the Month field from the most common months in the entries.
-- Keyboard: Ctrl+O to open CSV, Ctrl+S to save CSV, F5 to refresh report; press Enter to add a row and Esc to clear the form.
-- Preferences: the app remembers your last selected Month in a simple preferences file in your home folder.
-
-CSV format
+```bash
+python budget_manager.py --input examples/sample.csv --json --save-json report.json
 ```
+
+### Desktop GUI
+
+```bash
+python budget_manager_gui.py
+```
+
+- Use the **Income** and **Expenses** tabs to add entries
+- Set the **Month** field (YYYY-MM) in the toolbar
+- Open the **Report** tab for totals, charts, and category breakdown
+- **Export Excel** from the toolbar; **Export JSON** from the File menu
+- **Open/Save CSV** to import or back up data
+
+---
+
+## CSV Format
+
+```csv
 type,name,category,amount,date
 income,Salary,,5000,2025-08-01
 expense,Rent,Housing,1500,2025-08-03
 expense,Groceries,Food,400,2025-08
 ```
 
-Notes
-- Amounts must be non-negative; invalid numbers are treated as 0.
-- If income is 0, percentages relative to income are reported as 0 to avoid division by zero.
-- Category is optional for income rows and defaults to "Uncategorized" for expenses when omitted.
-- The optional 'date' column accepts YYYY-MM or YYYY-MM-DD. If omitted, data still loads; the GUI includes it when saving.
-- In the GUI, entering only DD will be normalized to a full date for storage; tables show day as "DD (Weekday)".
- - Excel export uses openpyxl; if you run outside the provided venv, install with: `pip install openpyxl`
+- `type`: `income` or `expense`
+- `category`: optional for income; defaults to `Uncategorized` for expenses
+- `amount`: non-negative number; invalid values default to 0
+- `date`: `YYYY-MM` or `YYYY-MM-DD` (optional)
+- Alternatively use separate `year`, `month`, `day` columns instead of `date`
 
-## Mobile (Android/iOS)
+---
 
-The mobile app is built with BeeWare Briefcase and Toga.
+## Repository Layout
 
-Compatibility notes:
-- We pin Toga 0.4.7 and Travertino 0.3.0 to match API expectations on mobile.
-- After changing `mobile/pyproject.toml`, re-run the Android build so Gradle picks up dependency changes.
+```
+Monthly-Budget-Manager/
+├── budget_manager.py        # Core library + CLI (pure stdlib)
+├── budget_manager_gui.py    # Tkinter GUI (requires openpyxl)
+├── requirements.txt         # Runtime Python dependencies
+├── examples/
+│   └── sample.csv           # Example CSV file
+├── tests/
+│   └── test_budget_manager.py  # pytest unit tests (≥80% coverage)
+├── mobile/                  # BeeWare Briefcase mobile app
+│   ├── pyproject.toml
+│   └── src/budget_manager_mobile/
+├── react-native/            # React Native monorepo (Android/iOS/Windows/macOS)
+│   ├── apps/
+│   │   ├── mobile/          # React Native mobile app
+│   │   └── desktop/         # React Native Windows/macOS app
+│   └── packages/
+│       ├── shared/          # Shared business logic (TypeScript)
+│       └── adapters/        # Platform adapters
+└── .github/workflows/
+    ├── python-ci.yml        # Python lint + test (runs on every PR/push)
+    ├── release.yml          # Desktop + mobile build and GitHub Release
+    └── react-native-build.yml  # React Native build (Android/iOS/Win/macOS)
+```
 
+---
+
+## Running Tests
+
+```bash
+# Install dev dependencies
+pip install pytest pytest-cov ruff
+
+# Run tests with coverage report
+pytest tests/ --cov=budget_manager --cov-report=term-missing -v
+
+# Lint
+ruff check budget_manager.py
+```
+
+The CI workflow enforces ≥80% line coverage on Python 3.10, 3.11, and 3.12.
+
+---
+
+## Mobile (BeeWare)
+
+The mobile app lives in `mobile/` and is built with Briefcase.
+
+```bash
+cd mobile
+pip install briefcase
+
+# Android
+briefcase create android
+briefcase build android
+briefcase run android
+
+# iOS (macOS only)
+briefcase create iOS
+briefcase build iOS
+briefcase run iOS
+```
+
+**Compatibility notes:**
+- Pins Toga 0.4.7 and Travertino 0.3.0 for stable mobile API
+- Re-run `briefcase create` after changing `mobile/pyproject.toml`
+
+---
+
+## React Native
+
+The `react-native/` workspace is an npm monorepo. See [`react-native/README.md`](react-native/README.md) for full setup instructions.
+
+```bash
+cd react-native
+npm install --workspaces --include-workspace-root
+npm run build -w @monthly-budget/shared
+npm run build -w @monthly-budget/adapters
+```
+
+---
+
+## Contributing
+
+1. Fork the repo and create a feature branch
+2. Make your changes in `budget_manager.py` (core) or `budget_manager_gui.py` (GUI)
+3. Add or update tests in `tests/test_budget_manager.py`
+4. Ensure all tests pass and coverage stays at ≥80%:
+   ```bash
+   pytest tests/ --cov=budget_manager --cov-fail-under=80
+   ```
+5. Open a pull request — the CI workflow will run automatically
+
+Bug reports and feature requests are welcome via [GitHub Issues](https://github.com/anubisland/Monthly-Budget-Manager/issues).
+
+---
+
+## License
+
+MIT — see [`mobile/LICENSE`](mobile/LICENSE).
