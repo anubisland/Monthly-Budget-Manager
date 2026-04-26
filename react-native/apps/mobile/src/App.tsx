@@ -339,9 +339,9 @@ export default function App() {
   };
 
   const renderCategoryPicker = () => (
-    <Modal visible={showCategoryPicker} transparent animationType="slide">
+    <Modal visible={showCategoryPicker} transparent animationType="slide" accessibilityViewIsModal={true}>
       <View style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+        <View style={styles.modalContent} accessibilityLabel="Select expense category dialog">
           <Text style={styles.modalTitle}>Select Category</Text>
           <FlatList
             data={EXPENSE_CATEGORIES}
@@ -350,6 +350,9 @@ export default function App() {
               <TouchableOpacity
                 style={styles.categoryOption}
                 onPress={() => selectCategory(item)}
+                accessibilityRole="button"
+                accessibilityLabel={`Select category: ${item}`}
+                accessibilityState={{ selected: newExpense.category === item }}
               >
                 <Text style={styles.categoryOptionText}>{item}</Text>
               </TouchableOpacity>
@@ -358,6 +361,8 @@ export default function App() {
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={() => setShowCategoryPicker(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel category selection"
           >
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
@@ -374,9 +379,9 @@ export default function App() {
     const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 
     return (
-      <Modal visible={showMonthYearPicker} transparent animationType="slide">
+      <Modal visible={showMonthYearPicker} transparent animationType="slide" accessibilityViewIsModal={true}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={styles.modalContent} accessibilityLabel="Select month and year dialog">
             <Text style={styles.modalTitle}>Select Month & Year</Text>
             <Text style={styles.sectionSubtitle}>Month</Text>
             <FlatList
@@ -389,6 +394,9 @@ export default function App() {
                     budget.meta.month === index + 1 && styles.selectedOption
                   ]}
                   onPress={() => updateMonthYear(budget.meta.year, index + 1)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item}
+                  accessibilityState={{ selected: budget.meta.month === index + 1 }}
                 >
                   <Text style={[
                     styles.monthYearOptionText,
@@ -409,6 +417,9 @@ export default function App() {
                     budget.meta.year === item && styles.selectedOption
                   ]}
                   onPress={() => updateMonthYear(item, budget.meta.month)}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.toString()}
+                  accessibilityState={{ selected: budget.meta.year === item }}
                 >
                   <Text style={[
                     styles.monthYearOptionText,
@@ -421,6 +432,8 @@ export default function App() {
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => setShowMonthYearPicker(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel month and year selection"
             >
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
@@ -438,42 +451,44 @@ export default function App() {
         <Text style={styles.sectionTitle}>Budget Summary</Text>
         
         {/* Month/Year Selector */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.monthYearSelector}
           onPress={() => setShowMonthYearPicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Selected month: ${new Date(budget.meta.year, budget.meta.month - 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}. Tap to change`}
         >
           <Text style={styles.monthTitle}>
-            {new Date(budget.meta.year, budget.meta.month - 1).toLocaleDateString('en-US', { 
-              month: 'long', 
-              year: 'numeric' 
+            {new Date(budget.meta.year, budget.meta.month - 1).toLocaleDateString('en-US', {
+              month: 'long',
+              year: 'numeric'
             })}
           </Text>
           <Text style={styles.changeText}>Tap to change</Text>
         </TouchableOpacity>
         
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
+          <View style={styles.statCard} accessible={true} accessibilityLabel={`Total Income: $${stats.income_total.toFixed(2)}`}>
             <Text style={styles.statLabel}>Total Income</Text>
             <Text style={[styles.statValue, styles.incomeColor]}>
               ${stats.income_total.toFixed(2)}
             </Text>
           </View>
-          
-          <View style={styles.statCard}>
+
+          <View style={styles.statCard} accessible={true} accessibilityLabel={`Total Expenses: $${stats.expense_total.toFixed(2)}`}>
             <Text style={styles.statLabel}>Total Expenses</Text>
             <Text style={[styles.statValue, styles.expenseColor]}>
               ${stats.expense_total.toFixed(2)}
             </Text>
           </View>
-          
-          <View style={styles.statCard}>
+
+          <View style={styles.statCard} accessible={true} accessibilityLabel={`Profit/Loss: $${stats.profit.toFixed(2)}, ${stats.profit >= 0 ? 'profit' : 'loss'}`}>
             <Text style={styles.statLabel}>Profit/Loss</Text>
             <Text style={[styles.statValue, stats.profit >= 0 ? styles.profitColor : styles.lossColor]}>
               ${stats.profit.toFixed(2)}
             </Text>
           </View>
-          
-          <View style={styles.statCard}>
+
+          <View style={styles.statCard} accessible={true} accessibilityLabel={`Profit Margin: ${stats.profit_margin.toFixed(1)} percent, ${stats.profit_margin >= 0 ? 'positive' : 'negative'}`}>
             <Text style={styles.statLabel}>Profit Margin</Text>
             <Text style={[styles.statValue, stats.profit_margin >= 0 ? styles.profitColor : styles.lossColor]}>
               {stats.profit_margin.toFixed(1)}%
@@ -485,7 +500,11 @@ export default function App() {
         <Text style={styles.sectionTitle}>Charts</Text>
         
         {/* Income vs Expenses Bar Chart */}
-        <View style={styles.chartContainer}>
+        <View
+          style={styles.chartContainer}
+          accessible={true}
+          accessibilityLabel={`Bar chart: Income vs Expenses. Income $${stats.income_total.toFixed(2)}, Expenses $${stats.expense_total.toFixed(2)}`}
+        >
           <Text style={styles.chartTitle}>Income vs Expenses</Text>
           <BarChart
             data={{
@@ -505,21 +524,32 @@ export default function App() {
               decimalPlaces: 0,
               color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
               labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
-              style: {
-                borderRadius: 8
-              },
-              propsForLabels: {
-                fontSize: 12
-              }
+              style: { borderRadius: 8 },
+              propsForLabels: { fontSize: 12 }
             }}
             style={styles.chart}
             showValuesOnTopOfBars
           />
+          {/* Accessible text alternative for screen readers */}
+          <View style={styles.chartDataTable} accessibilityRole="summary">
+            <View style={styles.chartDataRow}>
+              <Text style={styles.chartDataLabel}>Income</Text>
+              <Text style={styles.chartDataValue}>${stats.income_total.toFixed(2)}</Text>
+            </View>
+            <View style={styles.chartDataRow}>
+              <Text style={styles.chartDataLabel}>Expenses</Text>
+              <Text style={styles.chartDataValue}>${stats.expense_total.toFixed(2)}</Text>
+            </View>
+          </View>
         </View>
 
         {/* Expense Categories Pie Chart */}
         {categoryStats.length > 0 && (
-          <View style={styles.chartContainer}>
+          <View
+            style={styles.chartContainer}
+            accessible={true}
+            accessibilityLabel={`Pie chart: Expense Categories. ${categoryStats.map(c => `${c.category} $${c.amount.toFixed(2)} (${c.percent.toFixed(1)}%)`).join(', ')}`}
+          >
             <Text style={styles.chartTitle}>Expense Categories (Pie Chart)</Text>
             <PieChart
               data={categoryStats.map((cat, index) => ({
@@ -543,16 +573,29 @@ export default function App() {
               paddingLeft="15"
               style={styles.chart}
             />
+            {/* Accessible text alternative for screen readers */}
+            <View style={styles.chartDataTable} accessibilityRole="summary">
+              {categoryStats.map((cat, i) => (
+                <View key={i} style={styles.chartDataRow}>
+                  <Text style={styles.chartDataLabel}>{cat.category}</Text>
+                  <Text style={styles.chartDataValue}>${cat.amount.toFixed(2)} ({cat.percent.toFixed(1)}%)</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
         {/* Expense Categories Bar Chart */}
         {categoryStats.length > 0 && (
-          <View style={styles.chartContainer}>
+          <View
+            style={styles.chartContainer}
+            accessible={true}
+            accessibilityLabel={`Bar chart: Top expense categories. ${categoryStats.slice(0, 8).map(c => `${c.category} $${c.amount.toFixed(2)}`).join(', ')}${categoryStats.length > 8 ? '. Plus more categories below.' : ''}`}
+          >
             <Text style={styles.chartTitle}>Expense Categories (Bar Chart)</Text>
             <BarChart
               data={{
-                labels: categoryStats.slice(0, 8).map(cat => 
+                labels: categoryStats.slice(0, 8).map(cat =>
                   cat.category.length > 8 ? cat.category.substring(0, 8) + '...' : cat.category
                 ),
                 datasets: [{
@@ -570,12 +613,8 @@ export default function App() {
                 decimalPlaces: 0,
                 color: (opacity = 1) => `rgba(220, 53, 69, ${opacity})`,
                 labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
-                style: {
-                  borderRadius: 8
-                },
-                propsForLabels: {
-                  fontSize: 10
-                }
+                style: { borderRadius: 8 },
+                propsForLabels: { fontSize: 10 }
               }}
               style={styles.chart}
               showValuesOnTopOfBars
@@ -586,6 +625,15 @@ export default function App() {
                 Showing top 8 categories. See full breakdown below.
               </Text>
             )}
+            {/* Accessible text alternative for screen readers */}
+            <View style={styles.chartDataTable} accessibilityRole="summary">
+              {categoryStats.slice(0, 8).map((cat, i) => (
+                <View key={i} style={styles.chartDataRow}>
+                  <Text style={styles.chartDataLabel}>{cat.category}</Text>
+                  <Text style={styles.chartDataValue}>${cat.amount.toFixed(2)}</Text>
+                </View>
+              ))}
+            </View>
           </View>
         )}
 
@@ -593,7 +641,12 @@ export default function App() {
           <>
             <Text style={styles.sectionTitle}>Expenses by Category</Text>
             {categoryStats.map((cat, index) => (
-              <View key={index} style={styles.categoryCard}>
+              <View
+                key={index}
+                style={styles.categoryCard}
+                accessible={true}
+                accessibilityLabel={`${cat.category}: $${cat.amount.toFixed(2)}, ${cat.percent.toFixed(1)} percent of expenses`}
+              >
                 <Text style={styles.categoryName}>{cat.category}</Text>
                 <Text style={styles.categoryAmount}>${cat.amount.toFixed(2)}</Text>
                 <Text style={styles.categoryPercent}>{cat.percent.toFixed(1)}%</Text>
@@ -610,10 +663,10 @@ export default function App() {
               Last saved: {new Date(budget.meta.saved_at).toLocaleString()}
             </Text>
           )}
-          <TouchableOpacity style={styles.sampleButton} onPress={addSampleData}>
+          <TouchableOpacity style={styles.sampleButton} onPress={addSampleData} accessibilityRole="button" accessibilityLabel="Add sample data">
             <Text style={styles.sampleButtonText}>Add Sample Data</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.clearButton} onPress={clearAllData}>
+          <TouchableOpacity style={styles.clearButton} onPress={clearAllData} accessibilityRole="button" accessibilityLabel="Clear all data" accessibilityHint="Permanently removes all income and expense entries. This cannot be undone.">
             <Text style={styles.clearButtonText}>Clear All Data</Text>
           </TouchableOpacity>
         </View>
@@ -629,12 +682,14 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Income name (e.g., Salary)"
+          accessibilityLabel="Income name"
           value={newIncome.name}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, name: text }))}
         />
         <TextInput
           style={styles.input}
           placeholder="Amount"
+          accessibilityLabel="Income amount in dollars"
           value={newIncome.amount}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, amount: text }))}
           keyboardType="numeric"
@@ -642,11 +697,12 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Day of month (1-31, optional)"
+          accessibilityLabel="Day of month, optional, 1 to 31"
           value={newIncome.day}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, day: text }))}
           keyboardType="numeric"
         />
-        <TouchableOpacity style={styles.addButton} onPress={addIncome}>
+        <TouchableOpacity style={styles.addButton} onPress={addIncome} accessibilityRole="button" accessibilityLabel="Add income entry">
           <Text style={styles.addButtonText}>Add Income</Text>
         </TouchableOpacity>
       </View>
@@ -663,9 +719,12 @@ export default function App() {
               </Text>
             )}
           </View>
-          <TouchableOpacity 
-            style={styles.deleteButton} 
+          <TouchableOpacity
+            style={styles.deleteButton}
             onPress={() => deleteIncome(index)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete income: ${income.name}, $${income.amount.toFixed(2)}`}
+            accessibilityHint="Permanently removes this income entry"
           >
             <Text style={styles.deleteButtonText}>Delete</Text>
           </TouchableOpacity>
@@ -682,28 +741,33 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Expense name"
+          accessibilityLabel="Expense name"
           value={newExpense.name}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, name: text }))}
         />
-        
+
         <View style={styles.categoryInputContainer}>
           <TextInput
             style={[styles.input, styles.categoryInput]}
             placeholder="Category"
+            accessibilityLabel="Expense category"
             value={newExpense.category}
             onChangeText={(text) => setNewExpense(prev => ({ ...prev, category: text }))}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.pickButton}
             onPress={() => setShowCategoryPicker(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Pick category from list"
           >
             <Text style={styles.pickButtonText}>Pick</Text>
           </TouchableOpacity>
         </View>
-        
+
         <TextInput
           style={styles.input}
           placeholder="Amount"
+          accessibilityLabel="Expense amount in dollars"
           value={newExpense.amount}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, amount: text }))}
           keyboardType="numeric"
@@ -711,11 +775,12 @@ export default function App() {
         <TextInput
           style={styles.input}
           placeholder="Day of month (1-31, optional)"
+          accessibilityLabel="Day of month, optional, 1 to 31"
           value={newExpense.day}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, day: text }))}
           keyboardType="numeric"
         />
-        <TouchableOpacity style={styles.addButton} onPress={addExpense}>
+        <TouchableOpacity style={styles.addButton} onPress={addExpense} accessibilityRole="button" accessibilityLabel="Add expense entry">
           <Text style={styles.addButtonText}>Add Expense</Text>
         </TouchableOpacity>
       </View>
@@ -733,9 +798,12 @@ export default function App() {
               </Text>
             )}
           </View>
-          <TouchableOpacity 
-            style={styles.deleteButton} 
+          <TouchableOpacity
+            style={styles.deleteButton}
             onPress={() => deleteExpense(index)}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete expense: ${expense.name}, $${expense.amount.toFixed(2)}`}
+            accessibilityHint="Permanently removes this expense entry"
           >
             <Text style={styles.deleteButtonText}>Delete</Text>
           </TouchableOpacity>
@@ -753,25 +821,25 @@ export default function App() {
         
         {/* File Operations Row */}
         <View style={styles.fileOperationsContainer}>
-          <TouchableOpacity style={styles.fileButton} onPress={createNewBudget}>
+          <TouchableOpacity style={styles.fileButton} onPress={createNewBudget} accessibilityRole="button" accessibilityLabel="New budget" accessibilityHint="Creates a new empty budget, clearing current data">
             <Text style={styles.fileButtonText}>New</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.fileButton} onPress={openBudget}>
+
+          <TouchableOpacity style={styles.fileButton} onPress={openBudget} accessibilityRole="button" accessibilityLabel="Open budget file">
             <Text style={styles.fileButtonText}>Open</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.fileButton} onPress={saveBudget}>
+
+          <TouchableOpacity style={styles.fileButton} onPress={saveBudget} accessibilityRole="button" accessibilityLabel="Save budget to file">
             <Text style={styles.fileButtonText}>Save</Text>
           </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.fileButton} onPress={exportBudget}>
+
+          <TouchableOpacity style={styles.fileButton} onPress={exportBudget} accessibilityRole="button" accessibilityLabel="Export budget as spreadsheet">
             <Text style={styles.fileButtonText}>Export</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <View style={styles.tabContainer}>
+      <View style={styles.tabContainer} accessibilityRole="tablist" accessibilityLabel="Main navigation">
         {[
           { key: 'summary', label: 'Summary' },
           { key: 'income', label: 'Income' },
@@ -781,6 +849,9 @@ export default function App() {
             key={tab.key}
             style={[styles.tab, activeTab === tab.key && styles.activeTab]}
             onPress={() => setActiveTab(tab.key as any)}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: activeTab === tab.key }}
           >
             <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
               {tab.label}
@@ -1196,5 +1267,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  chartDataTable: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+    paddingTop: 8,
+  },
+  chartDataRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f3f4',
+  },
+  chartDataLabel: {
+    fontSize: 13,
+    color: '#495057',
+    flex: 1,
+  },
+  chartDataValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#212529',
   },
 });
