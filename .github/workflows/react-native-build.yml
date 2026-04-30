@@ -232,13 +232,19 @@ jobs:
           } else {
             Write-Host "Windows project already exists"
           }
+      - name: Restore metro.config.js after Windows init
+        shell: pwsh
+        run: |
+          # react-native-windows-init --overwrite replaces metro.config.js with a bare default
+          # that lacks nodeModulesPaths for the monorepo root. Release builds run Metro bundler
+          # to produce the JS bundle; the bare default cannot resolve react-native from the
+          # monorepo root node_modules. Restore the committed monorepo-aware config.
+          git -C $env:GITHUB_WORKSPACE checkout HEAD -- react-native/apps/desktop/metro.config.js
+          Write-Host "metro.config.js restored from git"
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
           if (Test-Path windows) {
-            # Ensure local react-native and babel runtime are available for Metro bundler
-            npm install react-native@0.74.7 @babel/runtime@^7.23.0 --no-save --legacy-peer-deps
-            
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
             if ($null -ne $sln) {
               Write-Host "Building solution: $($sln.FullName)"
@@ -262,9 +268,6 @@ jobs:
             $sln = Get-ChildItem -Path .\windows -Filter *.sln -File -Recurse | Select-Object -First 1
             if ($null -ne $sln) {
               Write-Host "Packaging solution: $($sln.FullName)"
-              # Re-install react-native so Metro bundler can resolve it during the Release JS bundle step.
-              # Release builds run `react-native bundle` via MSBuild; Debug skips this (uses dev server).
-              npm install react-native@0.74.7 @babel/runtime@^7.23.0 --no-save --legacy-peer-deps
               $availableSDK = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\Include" | Sort-Object Name -Descending | Select-Object -First 1 -ExpandProperty Name
               msbuild $sln.FullName /p:Configuration=Release /p:Platform=x64 /p:AppxBundle=Always /p:UapAppxPackageBuildMode=SideloadOnly /m /p:RestorePackagesConfig=true /p:WindowsTargetPlatformVersion=$availableSDK
             } else {
