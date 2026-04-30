@@ -70,7 +70,7 @@ jobs:
           if [ -d android ]; then
             cd android
             chmod +x gradlew || true
-            ./gradlew --no-daemon assembleDebug
+            ./gradlew --no-daemon assembleDebug -PreactNativeArchitectures=arm64-v8a
           else
             echo "Android project not initialized; skipping"
           fi
@@ -79,7 +79,7 @@ jobs:
           if [ -d android ]; then
             cd android
             chmod +x gradlew || true
-            ./gradlew --no-daemon assembleRelease bundleRelease
+            ./gradlew --no-daemon assembleRelease bundleRelease -PreactNativeArchitectures=arm64-v8a
           else
             echo "Android project not initialized; skipping"
           fi
