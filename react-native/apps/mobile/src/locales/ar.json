@@ -1,0 +1,130 @@
+{
+  "appTitle": "مدير الميزانية الشهرية",
+
+  "nav": {
+    "summary": "ملخص",
+    "income": "الدخل",
+    "expenses": "المصروفات"
+  },
+
+  "header": {
+    "new": "جديد",
+    "open": "فتح",
+    "save": "حفظ",
+    "export": "تصدير"
+  },
+
+  "summary": {
+    "title": "ملخص الميزانية",
+    "tapToChange": "اضغط للتغيير",
+    "totalIncome": "إجمالي الدخل",
+    "totalExpenses": "إجمالي المصروفات",
+    "profitLoss": "الربح/الخسارة",
+    "profitMargin": "هامش الربح",
+    "charts": "الرسوم البيانية",
+    "chartIncomeVsExpenses": "الدخل مقابل المصروفات",
+    "chartLabelIncome": "الدخل",
+    "chartLabelExpenses": "المصروفات",
+    "chartExpensePie": "فئات المصروفات (مخطط دائري)",
+    "chartExpenseBar": "فئات المصروفات (مخطط شريطي)",
+    "chartTopNote": "عرض أعلى ٨ فئات. انظر التفاصيل الكاملة أدناه.",
+    "expensesByCategory": "المصروفات حسب الفئة",
+    "dataManagement": "إدارة البيانات",
+    "lastSaved": "آخر حفظ:",
+    "addSampleData": "إضافة بيانات تجريبية",
+    "clearAllData": "مسح جميع البيانات"
+  },
+
+  "income": {
+    "title": "إدارة الدخل",
+    "namePlaceholder": "اسم الدخل (مثال: الراتب)",
+    "amountPlaceholder": "المبلغ",
+    "dayPlaceholder": "يوم الشهر (١-٣١، اختياري)",
+    "addButton": "إضافة دخل",
+    "listTitle": "الدخل الحالي"
+  },
+
+  "expense": {
+    "title": "إدارة المصروفات",
+    "namePlaceholder": "اسم المصروف",
+    "categoryPlaceholder": "الفئة",
+    "amountPlaceholder": "المبلغ",
+    "dayPlaceholder": "يوم الشهر (١-٣١، اختياري)",
+    "pickButton": "اختر",
+    "addButton": "إضافة مصروف",
+    "listTitle": "المصروفات الحالية"
+  },
+
+  "common": {
+    "delete": "حذف",
+    "cancel": "إلغاء"
+  },
+
+  "modal": {
+    "selectCategory": "اختر الفئة",
+    "selectMonthYear": "اختر الشهر والسنة",
+    "month": "الشهر",
+    "year": "السنة"
+  },
+
+  "alert": {
+    "clearAllTitle": "مسح جميع البيانات",
+    "clearAllMessage": "هل أنت متأكد من مسح جميع بيانات الدخل والمصروفات؟ لا يمكن التراجع عن هذا.",
+    "clearButton": "مسح",
+    "newBudgetTitle": "إنشاء ميزانية جديدة",
+    "newBudgetMessage": "سيتم مسح جميع البيانات الحالية. هل أنت متأكد؟",
+    "newButton": "إنشاء جديد",
+    "errorTitle": "خطأ",
+    "successTitle": "نجاح",
+    "fillAllFields": "يرجى ملء جميع الحقول المطلوبة",
+    "validAmount": "يرجى إدخال مبلغ صحيح",
+    "loadSuccess": "تم تحميل الميزانية بنجاح!",
+    "openError": "فشل في فتح ملف الميزانية",
+    "saveError": "فشل في حفظ ملف الميزانية",
+    "exportError": "فشل في تصدير ملف الميزانية"
+  },
+
+  "months": {
+    "1": "يناير",
+    "2": "فبراير",
+    "3": "مارس",
+    "4": "أبريل",
+    "5": "مايو",
+    "6": "يونيو",
+    "7": "يوليو",
+    "8": "أغسطس",
+    "9": "سبتمبر",
+    "10": "أكتوبر",
+    "11": "نوفمبر",
+    "12": "ديسمبر"
+  },
+
+  "weekdays": {
+    "Sun": "أحد",
+    "Mon": "إثن",
+    "Tue": "ثلا",
+    "Wed": "أرب",
+    "Thu": "خمي",
+    "Fri": "جمع",
+    "Sat": "سبت"
+  },
+
+  "categories": {
+    "Food": "طعام",
+    "Rent": "إيجار",
+    "Fuel": "وقود",
+    "Electricity": "كهرباء",
+    "Internet": "إنترنت",
+    "Water": "ماء",
+    "Transport": "مواصلات",
+    "Healthcare": "رعاية صحية",
+    "Entertainment": "ترفيه",
+    "Education": "تعليم",
+    "Clothing": "ملابس",
+    "Savings": "مدخرات",
+    "Debt": "ديون",
+    "Subscriptions": "اشتراكات",
+    "Gifts": "هدايا",
+    "Misc": "متنوعات"
+  }
+}
