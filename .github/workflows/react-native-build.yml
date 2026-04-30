@@ -241,6 +241,15 @@ jobs:
           # monorepo root node_modules. Restore the committed monorepo-aware config.
           git -C $env:GITHUB_WORKSPACE checkout HEAD -- react-native/apps/desktop/metro.config.js
           Write-Host "metro.config.js restored from git"
+      - name: Build shared packages (required for Release Metro bundle)
+        shell: pwsh
+        working-directory: react-native
+        run: |
+          # @monthly-budget/shared and @monthly-budget/adapters must be compiled to dist/
+          # before Metro bundles the Release JS. Debug builds skip Metro bundling (connect
+          # to dev server at runtime), so this step was not needed until Release bundling worked.
+          npm run build -w @monthly-budget/shared
+          npm run build -w @monthly-budget/adapters
       - name: Build Windows (Debug)
         shell: pwsh
         run: |
