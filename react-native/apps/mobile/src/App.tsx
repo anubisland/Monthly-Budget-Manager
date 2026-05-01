@@ -58,12 +58,15 @@ export default function App() {
       try {
         const stored = await adapter.loadFromStorage();
         if (stored) setBudget(stored);
-      } catch {}
+      } catch (e) { console.error('[BudgetApp] loadFromStorage failed', e); }
     })();
   }, []);
 
   useEffect(() => {
-    (async () => { try { await adapter.saveToStorage(budget); } catch {} })();
+    (async () => {
+      try { await adapter.saveToStorage(budget); }
+      catch (e) { console.error('[BudgetApp] saveToStorage failed', e); }
+    })();
   }, [budget]);
 
   useEffect(() => { loadBudgetData(); }, []);
@@ -73,14 +76,14 @@ export default function App() {
     try {
       const updated = { ...budget, meta: { ...budget.meta, saved_at: new Date().toISOString() } };
       await AsyncStorage.setItem('budget_data', serialize(updated));
-    } catch {}
+    } catch (e) { console.error('[BudgetApp] saveBudgetData failed', e); }
   };
 
   const loadBudgetData = async () => {
     try {
       const raw = await AsyncStorage.getItem('budget_data');
       if (raw) setBudget(deserialize(raw));
-    } catch {}
+    } catch (e) { console.error('[BudgetApp] loadBudgetData failed', e); }
   };
 
   const formatDateDisplay = (dateStr: string): string => {
@@ -133,17 +136,17 @@ export default function App() {
     try {
       const loaded = await adapter.openJSON();
       if (loaded) { setBudget(loaded); Alert.alert(t('alert.successTitle'), t('alert.loadSuccess')); }
-    } catch { Alert.alert(t('alert.errorTitle'), t('alert.openError')); }
+    } catch (e) { console.error('[BudgetApp] openBudget failed', e); Alert.alert(t('alert.errorTitle'), t('alert.openError')); }
   };
 
   const saveBudget = async () => {
     try { await adapter.saveJSON(budget); }
-    catch { Alert.alert(t('alert.errorTitle'), t('alert.saveError')); }
+    catch (e) { console.error('[BudgetApp] saveBudget failed', e); Alert.alert(t('alert.errorTitle'), t('alert.saveError')); }
   };
 
   const exportBudget = async () => {
     try { await adapter.exportXLSX(budget); }
-    catch { Alert.alert(t('alert.errorTitle'), t('alert.exportError')); }
+    catch (e) { console.error('[BudgetApp] exportBudget failed', e); Alert.alert(t('alert.errorTitle'), t('alert.exportError')); }
   };
 
   const addIncome = () => {
@@ -394,7 +397,7 @@ export default function App() {
             style={[styles.input, styles.categoryInput, { textAlign, writingDirection }]}
             placeholder={t('expense.categoryPlaceholder')}
             value={newExpense.category ? t(`categories.${newExpense.category}`, newExpense.category) : ''}
-            onChangeText={(v) => setNewExpense(p => ({ ...p, category: v }))}
+            editable={false}
           />
           <TouchableOpacity style={styles.pickButton} onPress={() => setShowCategoryPicker(true)}>
             <Text style={styles.pickButtonText}>{t('expense.pickButton')}</Text>

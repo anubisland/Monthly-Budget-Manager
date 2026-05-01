@@ -51,6 +51,10 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   }, [language]);
 
+  // Block render until stored preference is resolved so there's no flash of
+  // English text / LTR layout on an Arabic-persisted restart.
+  if (isLoading) return null;
+
   return (
     <LanguageContext.Provider
       value={{
