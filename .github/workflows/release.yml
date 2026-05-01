@@ -2,11 +2,14 @@ name: build-and-release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "v*.*.*"
   workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual release'
+        required: false
+        default: 'Manual release trigger'
 
 permissions:
   contents: write
@@ -182,3 +185,12 @@ jobs:
           files: |
             artifacts/*.apk
             artifacts/BudgetManager-iOS-Xcode.zip
+
+  notify:
+    name: release notification
+    needs: release
+    uses: anubisland/.github/.github/workflows/reusable-release-notify.yml@main
+    with:
+      release-tag: ${{ needs.release.outputs.tag }}
+      release-name: Budget Manager ${{ needs.release.outputs.tag }}
+    secrets: inherit
