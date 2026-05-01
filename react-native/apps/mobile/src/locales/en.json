@@ -1,0 +1,130 @@
+{
+  "appTitle": "Monthly Budget Manager",
+
+  "nav": {
+    "summary": "Summary",
+    "income": "Income",
+    "expenses": "Expenses"
+  },
+
+  "header": {
+    "new": "New",
+    "open": "Open",
+    "save": "Save",
+    "export": "Export"
+  },
+
+  "summary": {
+    "title": "Budget Summary",
+    "tapToChange": "Tap to change",
+    "totalIncome": "Total Income",
+    "totalExpenses": "Total Expenses",
+    "profitLoss": "Profit/Loss",
+    "profitMargin": "Profit Margin",
+    "charts": "Charts",
+    "chartIncomeVsExpenses": "Income vs Expenses",
+    "chartLabelIncome": "Income",
+    "chartLabelExpenses": "Expenses",
+    "chartExpensePie": "Expense Categories (Pie Chart)",
+    "chartExpenseBar": "Expense Categories (Bar Chart)",
+    "chartTopNote": "Showing top 8 categories. See full breakdown below.",
+    "expensesByCategory": "Expenses by Category",
+    "dataManagement": "Data Management",
+    "lastSaved": "Last saved:",
+    "addSampleData": "Add Sample Data",
+    "clearAllData": "Clear All Data"
+  },
+
+  "income": {
+    "title": "Income Management",
+    "namePlaceholder": "Income name (e.g., Salary)",
+    "amountPlaceholder": "Amount",
+    "dayPlaceholder": "Day of month (1-31, optional)",
+    "addButton": "Add Income",
+    "listTitle": "Current Incomes"
+  },
+
+  "expense": {
+    "title": "Expense Management",
+    "namePlaceholder": "Expense name",
+    "categoryPlaceholder": "Category",
+    "amountPlaceholder": "Amount",
+    "dayPlaceholder": "Day of month (1-31, optional)",
+    "pickButton": "Pick",
+    "addButton": "Add Expense",
+    "listTitle": "Current Expenses"
+  },
+
+  "common": {
+    "delete": "Delete",
+    "cancel": "Cancel"
+  },
+
+  "modal": {
+    "selectCategory": "Select Category",
+    "selectMonthYear": "Select Month & Year",
+    "month": "Month",
+    "year": "Year"
+  },
+
+  "alert": {
+    "clearAllTitle": "Clear All Data",
+    "clearAllMessage": "Are you sure you want to clear all income and expense data? This cannot be undone.",
+    "clearButton": "Clear",
+    "newBudgetTitle": "Create New Budget",
+    "newBudgetMessage": "This will clear all current data. Are you sure?",
+    "newButton": "Create New",
+    "errorTitle": "Error",
+    "successTitle": "Success",
+    "fillAllFields": "Please fill in all required fields",
+    "validAmount": "Please enter a valid amount",
+    "loadSuccess": "Budget loaded successfully!",
+    "openError": "Failed to open budget file",
+    "saveError": "Failed to save budget file",
+    "exportError": "Failed to export budget file"
+  },
+
+  "months": {
+    "1": "January",
+    "2": "February",
+    "3": "March",
+    "4": "April",
+    "5": "May",
+    "6": "June",
+    "7": "July",
+    "8": "August",
+    "9": "September",
+    "10": "October",
+    "11": "November",
+    "12": "December"
+  },
+
+  "weekdays": {
+    "Sun": "Sun",
+    "Mon": "Mon",
+    "Tue": "Tue",
+    "Wed": "Wed",
+    "Thu": "Thu",
+    "Fri": "Fri",
+    "Sat": "Sat"
+  },
+
+  "categories": {
+    "Food": "Food",
+    "Rent": "Rent",
+    "Fuel": "Fuel",
+    "Electricity": "Electricity",
+    "Internet": "Internet",
+    "Water": "Water",
+    "Transport": "Transport",
+    "Healthcare": "Healthcare",
+    "Entertainment": "Entertainment",
+    "Education": "Education",
+    "Clothing": "Clothing",
+    "Savings": "Savings",
+    "Debt": "Debt",
+    "Subscriptions": "Subscriptions",
+    "Gifts": "Gifts",
+    "Misc": "Misc"
+  }
+}
