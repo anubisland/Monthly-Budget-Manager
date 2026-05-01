@@ -1,0 +1,67 @@
+name: React Native Accessibility Tests
+
+# Runs the @testing-library/react-native a11y suite on every PR and push
+# that touches the mobile app source or the test files.
+# Fails the build if any WCAG-equivalent React Native a11y property is missing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'react-native/apps/mobile/src/**'
+      - 'react-native/apps/mobile/__tests__/**'
+      - 'react-native/apps/mobile/package.json'
+      - 'react-native/packages/**'
+      - '.github/workflows/react-native-a11y.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'react-native/apps/mobile/src/**'
+      - 'react-native/apps/mobile/__tests__/**'
+      - 'react-native/apps/mobile/package.json'
+      - 'react-native/packages/**'
+      - '.github/workflows/react-native-a11y.yml'
+  workflow_dispatch:
+
+jobs:
+  a11y:
+    name: RN – accessibility checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: react-native/package-lock.json
+
+      - name: Install monorepo dependencies
+        run: npm install --workspaces --include-workspace-root
+
+      - name: Build shared packages
+        run: |
+          npm run build -w @monthly-budget/shared
+          npm run build -w @monthly-budget/adapters
+
+      - name: Install mobile app dependencies
+        working-directory: react-native/apps/mobile
+        run: npm install
+
+      - name: Run accessibility tests
+        working-directory: react-native/apps/mobile
+        run: npx jest --testPathPattern=a11y --ci
+
+      - name: Upload test results on failure
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: rn-a11y-test-results
+          path: react-native/apps/mobile/jest-results.json
+          retention-days: 7
