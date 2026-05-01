@@ -75,6 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.prep.outputs.tag }}
+      name: ${{ steps.prep.outputs.name }}
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -84,28 +85,33 @@ jobs:
         id: prep
         shell: bash
         run: |
-          DATE=$(date +'%Y%m%d-%H%M')
-          SHORT_SHA=${GITHUB_SHA::7}
-          echo "tag=v${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
-          echo "name=Budget Manager ${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            echo "name=Budget Manager ${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          else
+            DATE=$(date +'%Y%m%d-%H%M')
+            SHORT_SHA=${GITHUB_SHA::7}
+            echo "tag=v${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+            echo "name=Budget Manager ${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
+          fi
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.prep.outputs.tag }}
           name: ${{ steps.prep.outputs.name }}
           body: |
-            Automated build from main: ${{ github.sha }}
+            Automated build from ${{ github.ref_name }}: ${{ github.sha }}
 
-            - Windows: BudgetManager-windows-${{ runner.arch }}.zip
-            - Linux: BudgetManager-linux-${{ runner.arch }}.tar.gz
-            - macOS: BudgetManager-macos-${{ runner.arch }}.zip
+            ### Artifacts
+            - Windows: BudgetManager-windows-X64.zip
+            - Linux: BudgetManager-linux-X64.tar.gz
+            - macOS: BudgetManager-macos-ARM64.zip (Apple Silicon) / BudgetManager-macos-X64.zip (Intel)
 
-            Notes:
-            - macOS builds are unsigned; you may need to allow them in System Settings > Privacy & Security (Open Anyway).
-            - On Linux, extract the tar.gz and run `chmod +x BudgetManager` before launching.
+            > macOS builds are unsigned; allow them in System Settings > Privacy & Security (Open Anyway).
+            > On Linux, extract the tar.gz and run `chmod +x BudgetManager` before launching.
           generate_release_notes: true
           draft: false
-          prerelease: true
+          prerelease: ${{ github.ref_type != 'tag' }}
           files: |
             artifacts/BudgetManager-*
 
@@ -192,5 +198,5 @@ jobs:
     uses: anubisland/.github/.github/workflows/reusable-release-notify.yml@main
     with:
       release-tag: ${{ needs.release.outputs.tag }}
-      release-name: Budget Manager ${{ needs.release.outputs.tag }}
+      release-name: ${{ needs.release.outputs.name }}
     secrets: inherit
