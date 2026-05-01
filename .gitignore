@@ -57,6 +57,8 @@ artifacts/
 
 # React Native / Node
 react-native/**/node_modules/
+web/node_modules/
+web/coverage/
 react-native/**/.expo/
 react-native/**/.turbo/
 react-native/**/.cache/

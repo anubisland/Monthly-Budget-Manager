@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Budget Manager</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --font-en: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            --font-ar: 'Cairo', sans-serif;
+        }
+
+        body {
+            font-family: var(--font-en);
+        }
+
+        html.lang-ar body {
+            font-family: var(--font-ar);
+            font-size: 0.95em;
+            line-height: 1.8;
+            letter-spacing: 0;
+        }
+
+        /* Language toggle pill */
+        #langToggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 72px;
+            height: 32px;
+            min-width: 44px;
+            min-height: 44px;
+            padding: 6px;
+            box-sizing: content-box;
+            border: 1.5px solid #d1d5db;
+            border-radius: 9999px;
+            background: #fff;
+            cursor: pointer;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        #langToggle:hover { border-color: #3b82f6; }
+
+        #langToggle:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
+            border-color: #3b82f6;
+        }
+
+        .lang-toggle-inner {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .lang-label-en, .lang-label-ar {
+            font-size: 0.8125rem;
+            transition: color 0.15s, font-weight 0.15s;
+        }
+
+        .lang-label-ar { font-family: var(--font-ar); }
+        .lang-divider { color: #9ca3af; font-size: 0.75rem; }
+
+        /* Tab active state */
+        .tab-btn.active {
+            border-bottom: 2px solid #2563eb;
+            color: #2563eb;
+            font-weight: 600;
+        }
+
+        /* RTL-aware Tailwind physical class overrides */
+        [dir="rtl"] .space-x-4 > * + * {
+            margin-inline-start: 1rem;
+            margin-inline-end: 0;
+        }
+
+        [dir="rtl"] .space-x-2 > * + * {
+            margin-inline-start: 0.5rem;
+            margin-inline-end: 0;
+        }
+
+        [dir="rtl"] .mr-2 {
+            margin-inline-end: 0.5rem;
+            margin-inline-start: 0;
+            margin-right: 0;
+        }
+
+        [dir="rtl"] .ml-2 {
+            margin-inline-start: 0.5rem;
+            margin-inline-end: 0;
+            margin-left: 0;
+        }
+
+        [dir="rtl"] .mr-3 {
+            margin-inline-end: 0.75rem;
+            margin-inline-start: 0;
+            margin-right: 0;
+        }
+
+        [dir="rtl"] .ml-3 {
+            margin-inline-start: 0.75rem;
+            margin-inline-end: 0;
+            margin-left: 0;
+        }
+
+        [dir="rtl"] .text-right { text-align: start; }
+        [dir="rtl"] .text-left { text-align: end; }
+
+        /* Positive net */
+        .net-positive { color: #16a34a; }
+        .net-negative { color: #dc2626; }
+
+        /* Status bar */
+        #statusBar { font-size: 0.875rem; color: #6b7280; }
+
+        /* Canvas chart container */
+        .chart-canvas { display: block; width: 100%; }
+
+        /* Scrollable table wrapper */
+        .table-wrapper { overflow-x: auto; }
+    </style>
+
+    <!-- Apply stored language BEFORE body renders to avoid flash of wrong direction -->
+    <script src="i18n.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+    <div class="container mx-auto px-4 py-6 max-w-5xl">
+
+        <!-- Header -->
+        <div class="bg-white rounded-lg shadow-sm p-5 mb-4">
+            <div class="flex justify-between items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-800" data-i18n="app.title">Monthly Budget Manager</h1>
+                    <p class="text-sm text-gray-500 mt-1" data-i18n="app.tagline">Track your monthly income and expenses</p>
+                </div>
+                <!-- Language Toggle -->
+                <button
+                    id="langToggle"
+                    role="switch"
+                    aria-checked="false"
+                    aria-label="Switch to Arabic / التحويل إلى العربية"
+                    onclick="toggleLanguage()"
+                    title="Switch language / تغيير اللغة"
+                >
+                    <span class="lang-toggle-inner">
+                        <span class="lang-label-en" style="font-weight: 700; color: #1d4ed8;">EN</span>
+                        <span class="lang-divider">|</span>
+                        <span class="lang-label-ar" style="font-weight: 400; color: #6b7280;">عر</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm font-medium text-gray-700 whitespace-nowrap" for="monthInput" data-i18n="toolbar.month">Month (YYYY-MM)</label>
+                    <input
+                        type="month"
+                        id="monthInput"
+                        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        data-i18n-title="form.monthPlaceholder"
+                        title="YYYY-MM"
+                    >
+                </div>
+                <button onclick="newBudget()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-i18n="toolbar.newBudget">New Budget</button>
+                <label class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition cursor-pointer" data-i18n="toolbar.importCsv">
+                    Import CSV
+                    <input type="file" id="csvImport" accept=".csv" class="hidden" onchange="importCsv(event)">
+                </label>
+                <button onclick="exportCsv()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportCsv">Export CSV</button>
+                <button onclick="exportJson()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportJson">Export JSON</button>
+            </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="bg-white rounded-lg shadow-sm mb-4">
+            <div class="border-b border-gray-200">
+                <div class="flex">
+                    <button class="tab-btn active px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="income" onclick="switchTab('income')" data-i18n="tab.income">Income</button>
+                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="expenses" onclick="switchTab('expenses')" data-i18n="tab.expenses">Expenses</button>
+                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="report" onclick="switchTab('report')" data-i18n="tab.report">Report</button>
+                </div>
+            </div>
+
+            <!-- Income Tab -->
+            <div id="tab-income" class="tab-content p-5">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="income.addTitle">Add Income</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.name">Name</label>
+                        <input type="text" id="incomeName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            data-i18n-placeholder="form.namePlaceholder" placeholder="e.g. Salary">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.amount">Amount</label>
+                        <input type="number" id="incomeAmount" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            data-i18n-placeholder="form.amountPlaceholder" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.date">Date</label>
+                        <input type="date" id="incomeDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addIncome()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-i18n="income.addBtn">Add Income</button>
+                    </div>
+                </div>
+
+                <div id="incomeTableWrapper" class="table-wrapper">
+                    <table class="w-full text-sm" id="incomeTable">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-gray-600">
+                                <th class="py-2 text-start font-medium" data-i18n="income.table.name">Name</th>
+                                <th class="py-2 text-end font-medium" data-i18n="income.table.amount">Amount</th>
+                                <th class="py-2 text-center font-medium" data-i18n="income.table.date">Date</th>
+                                <th class="py-2 text-center font-medium" data-i18n="income.table.remove">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="incomeTableBody"></tbody>
+                    </table>
+                    <p id="incomeEmpty" class="text-center text-gray-400 py-6" data-i18n="income.noEntries">No income entries yet</p>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button onclick="clearAll('income')" class="text-sm text-red-600 hover:underline" data-i18n="income.clearAll">Clear All</button>
+                </div>
+            </div>
+
+            <!-- Expenses Tab -->
+            <div id="tab-expenses" class="tab-content p-5 hidden">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="expense.addTitle">Add Expense</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-5">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.name">Name</label>
+                        <input type="text" id="expenseName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            data-i18n-placeholder="form.expenseNamePlaceholder" placeholder="e.g. Rent">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.category">Category</label>
+                        <select id="expenseCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="" data-i18n-option="cat.selectCategory">Select category</option>
+                            <option value="Food" data-i18n-option="cat.food">Food</option>
+                            <option value="Rent" data-i18n-option="cat.rent">Rent</option>
+                            <option value="Fuel" data-i18n-option="cat.fuel">Fuel</option>
+                            <option value="Electricity" data-i18n-option="cat.electricity">Electricity</option>
+                            <option value="Internet" data-i18n-option="cat.internet">Internet</option>
+                            <option value="Water" data-i18n-option="cat.water">Water</option>
+                            <option value="Transport" data-i18n-option="cat.transport">Transport</option>
+                            <option value="Healthcare" data-i18n-option="cat.healthcare">Healthcare</option>
+                            <option value="Entertainment" data-i18n-option="cat.entertainment">Entertainment</option>
+                            <option value="Education" data-i18n-option="cat.education">Education</option>
+                            <option value="Clothing" data-i18n-option="cat.clothing">Clothing</option>
+                            <option value="Savings" data-i18n-option="cat.savings">Savings</option>
+                            <option value="Debt" data-i18n-option="cat.debt">Debt</option>
+                            <option value="Subscriptions" data-i18n-option="cat.subscriptions">Subscriptions</option>
+                            <option value="Gifts" data-i18n-option="cat.gifts">Gifts</option>
+                            <option value="Misc" data-i18n-option="cat.misc">Misc</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.amount">Amount</label>
+                        <input type="number" id="expenseAmount" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            data-i18n-placeholder="form.amountPlaceholder" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.date">Date</label>
+                        <input type="date" id="expenseDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="addExpense()" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition" data-i18n="expense.addBtn">Add Expense</button>
+                    </div>
+                </div>
+
+                <div id="expenseTableWrapper" class="table-wrapper">
+                    <table class="w-full text-sm" id="expenseTable">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-gray-600">
+                                <th class="py-2 text-start font-medium" data-i18n="expense.table.name">Name</th>
+                                <th class="py-2 text-start font-medium" data-i18n="expense.table.category">Category</th>
+                                <th class="py-2 text-end font-medium" data-i18n="expense.table.amount">Amount</th>
+                                <th class="py-2 text-center font-medium" data-i18n="expense.table.date">Date</th>
+                                <th class="py-2 text-center font-medium" data-i18n="expense.table.remove">Remove</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expenseTableBody"></tbody>
+                    </table>
+                    <p id="expenseEmpty" class="text-center text-gray-400 py-6" data-i18n="expense.noEntries">No expense entries yet</p>
+                </div>
+
+                <div class="flex gap-2 mt-4">
+                    <button onclick="clearAll('expenses')" class="text-sm text-red-600 hover:underline" data-i18n="expense.clearAll">Clear All</button>
+                </div>
+            </div>
+
+            <!-- Report Tab -->
+            <div id="tab-report" class="tab-content p-5 hidden">
+
+                <!-- Summary cards -->
+                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="report.summary">Summary</h2>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-green-50 rounded-lg p-4">
+                        <p class="text-xs text-green-700 font-medium mb-1" data-i18n="report.totalIncome">Total Income</p>
+                        <p id="reportTotalIncome" class="text-xl font-bold text-green-700">$0.00</p>
+                    </div>
+                    <div class="bg-red-50 rounded-lg p-4">
+                        <p class="text-xs text-red-700 font-medium mb-1" data-i18n="report.totalExpenses">Total Expenses</p>
+                        <p id="reportTotalExpenses" class="text-xl font-bold text-red-700">$0.00</p>
+                    </div>
+                    <div class="bg-blue-50 rounded-lg p-4">
+                        <p class="text-xs text-blue-700 font-medium mb-1" data-i18n="report.net">Net (Profit)</p>
+                        <p id="reportNet" class="text-xl font-bold text-blue-700">$0.00</p>
+                    </div>
+                    <div class="bg-purple-50 rounded-lg p-4">
+                        <p class="text-xs text-purple-700 font-medium mb-1" data-i18n="report.margin">Profit Margin</p>
+                        <p id="reportMargin" class="text-xl font-bold text-purple-700">0.00%</p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <p class="text-sm font-medium text-gray-700 mb-2" data-i18n="report.chart.incomeVsExpenses">Income vs Expenses</p>
+                        <canvas id="barChart" class="chart-canvas" width="400" height="220" style="border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;"></canvas>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-gray-700 mb-2" data-i18n="report.chart.expenseCategories">Expense Categories</p>
+                        <canvas id="pieChart" class="chart-canvas" width="400" height="220" style="border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;"></canvas>
+                    </div>
+                </div>
+
+                <!-- Breakdown table -->
+                <h3 class="text-sm font-semibold text-gray-700 mb-3" data-i18n="report.breakdownTitle">Expense Breakdown by Category</h3>
+                <div class="table-wrapper">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-200 text-gray-600">
+                                <th class="py-2 text-start font-medium" data-i18n="report.breakdown.category">Category</th>
+                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.amount">Amount</th>
+                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.pctIncome">% of Income</th>
+                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.pctExpenses">% of Expenses</th>
+                            </tr>
+                        </thead>
+                        <tbody id="breakdownTableBody"></tbody>
+                    </table>
+                    <p id="reportEmpty" class="text-center text-gray-400 py-6" data-i18n="report.noData">Add income or expenses to see your report</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status bar -->
+        <div class="bg-white rounded-lg shadow-sm px-4 py-2">
+            <p id="statusBar" class="text-sm text-gray-500" data-i18n="status.ready">Ready</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

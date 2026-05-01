@@ -1,0 +1,18 @@
+{
+  "name": "monthly-budget-manager-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Monthly Budget Manager - Web App",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "test:watch": "jest --watch"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
