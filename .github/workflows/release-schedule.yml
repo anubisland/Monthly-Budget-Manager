@@ -5,44 +5,9 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  actions: write
-
 jobs:
-  check-and-release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check days since last release
-        id: check
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          LAST_RELEASE=$(gh release list -R ${{ github.repository }} -L 1 \
-            --json createdAt --jq '.[0].createdAt // empty' 2>/dev/null || true)
-
-          if [ -z "$LAST_RELEASE" ]; then
-            echo "No previous release found — triggering first release"
-            echo "should_release=true" >> $GITHUB_OUTPUT
-          else
-            NOW=$(date +%s)
-            LAST=$(date -d "$LAST_RELEASE" +%s 2>/dev/null || echo 0)
-            DAYS_SINCE=$(( (NOW - LAST) / 86400 ))
-            echo "Days since last release: $DAYS_SINCE"
-            if [ "$DAYS_SINCE" -ge 2 ]; then
-              echo "should_release=true" >> $GITHUB_OUTPUT
-            else
-              echo "should_release=false" >> $GITHUB_OUTPUT
-              echo "Last release was ${DAYS_SINCE} day(s) ago — skipping"
-            fi
-          fi
-
-      - name: Trigger release workflow
-        if: steps.check.outputs.should_release == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run release.yml \
-            -R ${{ github.repository }} \
-            -f reason="Scheduled 2-day cadence release"
-          echo "Release workflow triggered"
+  scheduled-check:
+    uses: anubisland/.github/.github/workflows/reusable-release-schedule.yml@main
+    with:
+      cadence-days: 2
+    secrets: inherit
