@@ -1,0 +1,333 @@
+name: Release Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-gates-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Gate 1: Unit Tests ──────────────────────────────────────────────
+  unit-tests:
+    name: "Gate: Unit Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov ruff
+      - name: Run unit tests with coverage
+        run: |
+          pytest tests/ \
+            --cov=budget_manager \
+            --cov-report=term-missing \
+            --cov-fail-under=80 \
+            -v
+
+  # ── Gate 2: Integration Tests ───────────────────────────────────────
+  integration-tests:
+    name: "Gate: Integration Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run integration tests
+        run: |
+          if [ -d "tests/integration" ]; then
+            pytest tests/integration/ -v
+          elif ls tests/*integration* 1>/dev/null 2>&1; then
+            pytest tests/ -k integration -v
+          else
+            echo "::notice::No integration tests found. Add tests to tests/integration/"
+          fi
+
+  # ── Gate 3: E2E Smoke ───────────────────────────────────────────────
+  e2e-smoke:
+    name: "Gate: E2E Smoke"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Python import smoke test
+        run: |
+          python -c "import budget_manager; print('budget_manager imported OK')"
+      - name: CLI smoke test
+        run: |
+          python budget_manager.py --help 2>/dev/null || python -c "
+          import budget_manager
+          print('Module loaded successfully')
+          " || echo "::warning::CLI smoke test could not run"
+
+  # ── Gate 4: Accessibility Checks ────────────────────────────────────
+  accessibility:
+    name: "Gate: Accessibility"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check GUI accessibility patterns
+        run: |
+          echo "=== Accessibility Audit (Python GUI) ==="
+          if [ -f budget_manager_gui.py ]; then
+            SMALL_FONT=$(grep -n "font.*size\|font=.*['\"].*[0-9]" budget_manager_gui.py -i | head -10 || true)
+            if [ -n "$SMALL_FONT" ]; then
+              echo "::notice::Font definitions — verify minimum 12pt for readability:"
+              echo "$SMALL_FONT"
+            fi
+
+            KEYBOARD=$(grep -n "bind\|accelerator\|shortcut\|hotkey" budget_manager_gui.py -i | wc -l || true)
+            echo "Keyboard binding references: $KEYBOARD"
+            if [ "$KEYBOARD" -eq 0 ]; then
+              echo "::notice::No keyboard shortcuts detected. Add keyboard navigation for accessibility."
+            fi
+          fi
+
+          if [ -d "react-native" ] || [ -d "mobile" ]; then
+            echo "--- Mobile accessibility ---"
+            MISSING=$(grep -rn "TouchableOpacity\|Pressable\|Button" mobile/ react-native/ --include="*.tsx" --include="*.jsx" 2>/dev/null \
+              | grep -v "accessibilityLabel\|accessible" | wc -l || true)
+            echo "Mobile interactive elements without a11y labels: $MISSING"
+          fi
+
+  # ── Gate 5: Security / Dependency Scan ──────────────────────────────
+  security-scan:
+    name: "Gate: Security Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pip-audit safety bandit
+      - name: pip-audit (vulnerability scan)
+        run: pip-audit 2>&1 || echo "::warning::pip-audit found vulnerabilities"
+      - name: Bandit (static security analysis)
+        run: |
+          bandit -r budget_manager.py budget_manager_gui.py -f txt 2>&1 || echo "::warning::Bandit found security issues"
+      - name: Check for insecure patterns
+        run: |
+          EVAL=$(grep -rn "eval(\|exec(" *.py --include="*.py" | grep -v "_test.py\|test_" | head -5 || true)
+          if [ -n "$EVAL" ]; then
+            echo "::warning::eval/exec usage found:"
+            echo "$EVAL"
+          fi
+
+  # ── Gate 6: Secret Scan ─────────────────────────────────────────────
+  secret-scan:
+    name: "Gate: Secret Scan"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks
+        # gitleaks-action@v2 requires a paid licence for org repos. The gitleaks
+        # CLI itself is open-source (MIT) — invoke the binary directly so this
+        # gate works without additional licensing.
+        env:
+          GITLEAKS_VERSION: 8.21.2
+        run: |
+          set -euo pipefail
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
+            | tar -xz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Run gitleaks
+        run: gitleaks detect --source . --no-banner --redact --verbose --exit-code 1
+      - name: Scan for hardcoded secrets
+        if: always()
+        run: |
+          FOUND=0
+          for pattern in "AKIA[0-9A-Z]{16}" "sk_live_" "password\s*=\s*['\"]" "api_key\s*=\s*['\"]" "secret\s*=\s*['\"]"; do
+            MATCHES=$(grep -rn "$pattern" . --include="*.py" --include="*.json" --include="*.cfg" --include="*.ini" 2>/dev/null \
+              | grep -v ".git\|node_modules\|__pycache__" | head -5 || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::error::Potential secret matching: $pattern"
+              echo "$MATCHES"
+              FOUND=$((FOUND + 1))
+            fi
+          done
+          if [ $FOUND -gt 0 ]; then
+            echo "::error::$FOUND secret pattern(s) detected"
+            exit 1
+          fi
+
+  # ── Gate 7: Privacy Checklist ───────────────────────────────────────
+  privacy-checklist:
+    name: "Gate: Privacy Checklist"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Privacy pattern audit
+        run: |
+          echo "=== Privacy Checklist ==="
+          WARNINGS=0
+
+          PII_LOG=$(grep -rn "print(\|logging\.\|logger\." . --include="*.py" \
+            | grep -iE "email|password|ssn|phone|salary|income|bank|account" \
+            | grep -v "_test.py\|test_" | head -10 || true)
+          if [ -n "$PII_LOG" ]; then
+            echo "::warning::Possible PII/financial data in logging:"
+            echo "$PII_LOG"
+            WARNINGS=$((WARNINGS + 1))
+          fi
+
+          FINANCE_LOG=$(grep -rn "print(\|logging" . --include="*.py" \
+            | grep -iE "balance|transaction|amount|budget" | grep -v "_test" | wc -l || true)
+          if [ "$FINANCE_LOG" -gt 5 ]; then
+            echo "::notice::$FINANCE_LOG financial data logging statements. Verify no sensitive amounts are exposed in production logs."
+          fi
+
+          echo "Privacy warnings: $WARNINGS"
+
+  # ── Gate 8: Performance Smoke ───────────────────────────────────────
+  performance-smoke:
+    name: "Gate: Performance Smoke"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Import time benchmark
+        run: |
+          python -c "
+          import time
+          start = time.time()
+          import budget_manager
+          elapsed = time.time() - start
+          print(f'Module import time: {elapsed:.3f}s')
+          if elapsed > 5:
+              print('::warning::Module import takes over 5 seconds')
+          "
+      - name: Dependency weight check
+        run: |
+          DEP_COUNT=$(grep -c "^[a-zA-Z]" requirements.txt || echo 0)
+          echo "Direct dependencies: $DEP_COUNT"
+          INSTALLED=$(pip list --format=columns | tail -n +3 | wc -l)
+          echo "Total installed packages: $INSTALLED"
+          if [ "$INSTALLED" -gt 100 ]; then
+            echo "::warning::High transitive dependency count ($INSTALLED)."
+          fi
+
+  # ── Gate 9: Changelog / Version / Rollback ──────────────────────────
+  changelog-version:
+    name: "Gate: Changelog & Version"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check CHANGELOG exists
+        run: |
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::warning::No CHANGELOG.md found. Create one to track release notes."
+          else
+            echo "CHANGELOG.md exists"
+          fi
+      - name: Verify version on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Tag version: $TAG_VERSION"
+
+          CODE_VERSION=$(grep -oP "__version__\s*=\s*['\"](\K[^'\"]+)" budget_manager.py 2>/dev/null || echo "none")
+          if [ "$CODE_VERSION" != "none" ]; then
+            echo "Code version: $CODE_VERSION"
+            if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+              echo "::error::Tag version ($TAG_VERSION) does not match code version ($CODE_VERSION)"
+              exit 1
+            fi
+          else
+            echo "::notice::No __version__ found in budget_manager.py"
+          fi
+
+          if [ -f CHANGELOG.md ] && ! grep -q "\[$TAG_VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md missing entry for $TAG_VERSION"
+            exit 1
+          fi
+
+  # ── Auto-create issue on gate failure ───────────────────────────────
+  create-fix-ticket:
+    name: "Create fix ticket on failure"
+    needs: [unit-tests, integration-tests, e2e-smoke, accessibility, security-scan, secret-scan, privacy-checklist, performance-smoke, changelog-version]
+    if: failure()
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Create GitHub Issue for failing gates
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+            });
+
+            const failed = run.data.jobs
+              .filter(j => j.conclusion === 'failure')
+              .map(j => `- **${j.name}**: [logs](${j.html_url})`);
+
+            if (failed.length === 0) return;
+
+            const title = `[Release Gate Failure] ${failed.length} gate(s) failed on ${context.ref}`;
+            const body = [
+              `## Release Gate Failure Report`,
+              ``,
+              `**Branch/Tag:** \`${context.ref}\``,
+              `**Commit:** \`${context.sha.slice(0,7)}\``,
+              `**Run:** [#${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              ``,
+              `### Failed Gates`,
+              ...failed,
+              ``,
+              `### Required Action`,
+              `Fix the failing gates before release. Each gate must pass for release approval.`,
+              ``,
+              `---`,
+              `*Auto-generated by release-gates workflow*`
+            ].join('\n');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['release-gate-failure', 'bug']
+            });
