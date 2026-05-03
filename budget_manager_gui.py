@@ -8,24 +8,24 @@ Run: python budget_manager_gui.py
 """
 from __future__ import annotations
 
+import calendar as _cal
 import csv
+import datetime as _dt
 import json
+import math as _math
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
-import datetime as _dt
-import calendar as _cal
-import math as _math
+from tkinter import filedialog, messagebox, ttk
+
 from openpyxl import Workbook
-from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment, Font, numbers
-from openpyxl.chart import BarChart, Reference, PieChart
-from openpyxl.chart.series import DataPoint
+from openpyxl.chart import BarChart, PieChart, Reference
 from openpyxl.chart.label import DataLabelList
+from openpyxl.chart.series import DataPoint
 from openpyxl.formatting.rule import CellIsRule
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side, numbers
+from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from openpyxl.styles import PatternFill, Border, Side
 
 from budget_manager import BudgetMonth, read_csv
 
@@ -555,7 +555,7 @@ class BudgetApp(tk.Tk):
                     self._format_day_display(ds),
                 ])
             data_end_exp = ws_exp.max_row
-            ws_exp.append(["Total", "", f"=SUM(C2:C{data_end_exp})", "", ""]) 
+            ws_exp.append(["Total", "", f"=SUM(C2:C{data_end_exp})", "", ""])
             tot_row_exp = ws_exp.max_row
             ws_exp[f"A{tot_row_exp}"].font = Font(bold=True)
             ws_exp[f"C{tot_row_exp}"].font = Font(bold=True)
@@ -587,7 +587,7 @@ class BudgetApp(tk.Tk):
             ws_rep.append(["Total Income", float(self.bm.total_income())])
             ws_rep.append(["Total Expenses", float(self.bm.total_expenses())])
             ws_rep.append(["Net (Profit)", float(self.bm.net())])
-            ws_rep.append(["Profit Margin", f"{self.bm.profit_margin():.2f}%"]) 
+            ws_rep.append(["Profit Margin", f"{self.bm.profit_margin():.2f}%"])
             for r in range(1, 6):
                 ws_rep[f"A{r}"].font = Font(bold=True)
             ws_rep.column_dimensions['A'].width = 20
@@ -597,8 +597,8 @@ class BudgetApp(tk.Tk):
             ws_rep["B4"].number_format = numbers.FORMAT_CURRENCY_USD_SIMPLE
 
             ws_rep.append([])
-            ws_rep.append(["Expense Breakdown by Category"]) 
-            ws_rep.append(["Category", "Amount", "% of Income", "% of Expenses"]) 
+            ws_rep.append(["Expense Breakdown by Category"])
+            ws_rep.append(["Category", "Amount", "% of Income", "% of Expenses"])
             ws_rep[ws_rep.max_row - 0][0].font = Font(bold=True)
             for cell in ws_rep[ws_rep.max_row]:
                 cell.font = Font(bold=True)
@@ -608,7 +608,7 @@ class BudgetApp(tk.Tk):
             start_row = ws_rep.max_row + 1
             for cat, amt in sorted(by_cat.items()):
                 # Write numeric percentages (0-1) and apply % number format later
-                ws_rep.append([cat, float(amt), (p_inc.get(cat, 0.0) / 100.0), (p_exp.get(cat, 0.0) / 100.0)]) 
+                ws_rep.append([cat, float(amt), (p_inc.get(cat, 0.0) / 100.0), (p_exp.get(cat, 0.0) / 100.0)])
             end_row = ws_rep.max_row
             # Amount formatting for the table
             for row in ws_rep.iter_rows(min_row=start_row, min_col=2, max_col=2):
@@ -627,7 +627,7 @@ class BudgetApp(tk.Tk):
                 rep_table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True, showColumnStripes=False)
                 ws_rep.add_table(rep_table)
             # Totals row for breakdown
-            ws_rep.append(["Total", f"=SUM(B{start_row}:B{end_row})", "", ""]) 
+            ws_rep.append(["Total", f"=SUM(B{start_row}:B{end_row})", "", ""])
             tot_row_rep = ws_rep.max_row
             ws_rep[f"A{tot_row_rep}"].font = Font(bold=True)
             ws_rep[f"B{tot_row_rep}"].font = Font(bold=True)

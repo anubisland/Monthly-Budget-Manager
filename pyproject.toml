@@ -1,0 +1,26 @@
+[project]
+name = "monthly-budget-manager"
+version = "1.0.0"
+description = "A cross-platform personal finance tool for tracking monthly income and expenses"
+requires-python = ">=3.10"
+license = "MIT"
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"budget_manager_gui.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["budget_manager"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

@@ -17,8 +17,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from budget_manager import (
     BudgetMonth,
-    Expense,
-    Income,
     _clamp_non_negative,
     _is_valid_ym,
     _is_valid_ymd,
@@ -28,7 +26,6 @@ from budget_manager import (
     print_report,
     read_csv,
 )
-
 
 # ===========================================================================
 # Helpers
