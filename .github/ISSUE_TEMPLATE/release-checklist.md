@@ -32,6 +32,15 @@ labels: release
 - [ ] Data import/export verified
 - [ ] GUI runs without errors
 
+### First-Run Tour (per company standard ANU-681)
+
+- [ ] Web surface: tour auto-starts on a wiped browser profile (no `anubisland-tour-completed-at`)
+- [ ] Skip and Replay tour controls work; Replay button visible in the status bar
+- [ ] Tour copy localizes EN/AR; Arabic renders RTL
+- [ ] Telemetry: `tour_started`, `tour_step_completed`, `tour_completed`, `tour_skipped` observed in browser DevTools console / `window.__tourTelemetryBuffer`
+- [ ] Screen-reader pass on the primary platform (e.g. NVDA on Windows for the web build)
+- [ ] WCAG 2.2 AA contrast verified on tooltip and overlay
+
 ### Release Artifacts
 
 - [ ] Windows executable built and tested
