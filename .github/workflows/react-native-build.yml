@@ -116,7 +116,7 @@ jobs:
 
   ios:
     name: iOS Archive
-    runs-on: macos-13
+    runs-on: macos-14
     timeout-minutes: 60
     defaults:
       run:
@@ -153,6 +153,33 @@ jobs:
           else
             echo "iOS project not initialized; skipping"
           fi
+      - name: iOS 26 SDK preflight (fail-fast)
+        # Required by ANU-769 audit: App Store submission needs Xcode 26+ with iphoneos26.* SDK.
+        # Hard-fails if the runner image is older so the gap is visible instead of silently soft-passing.
+        run: |
+          set -euo pipefail
+          echo "::group::xcodebuild -version"
+          xcodebuild -version
+          echo "::endgroup::"
+          echo "::group::xcodebuild -showsdks"
+          xcodebuild -showsdks
+          echo "::endgroup::"
+
+          XCODE_MAJOR=$(xcodebuild -version | awk '/^Xcode/ { split($2, v, "."); print v[1]; exit }')
+          if [ -z "${XCODE_MAJOR:-}" ]; then
+            echo "::error::Could not parse Xcode version from xcodebuild -version output"
+            exit 1
+          fi
+          if [ "$XCODE_MAJOR" -lt 26 ]; then
+            echo "::error::Xcode ${XCODE_MAJOR} detected; App Store submission requires Xcode 26+. Upgrade the runner image (current: ${ImageOS:-unknown})."
+            exit 1
+          fi
+          if ! xcodebuild -showsdks | grep -qE '^[[:space:]]*iOS[[:space:]]+26\.|iphoneos26\.'; then
+            echo "::error::iphoneos26.* SDK not present on this runner. App Store submission requires the iOS 26 SDK."
+            exit 1
+          fi
+
+          echo "Preflight OK: Xcode ${XCODE_MAJOR} with iphoneos26 SDK present."
       - name: Build iOS (Release device archive)
         run: |
           if [ -d ios ]; then
@@ -310,7 +337,7 @@ jobs:
 
   macos:
     name: macOS App
-    runs-on: macos-13
+    runs-on: macos-14
     timeout-minutes: 60
     defaults:
       run:
