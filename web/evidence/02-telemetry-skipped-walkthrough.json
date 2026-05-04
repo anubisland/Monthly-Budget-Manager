@@ -1,0 +1,44 @@
+[
+  {
+    "name": "tour_started",
+    "props": {
+      "tour_version": "1.0.0",
+      "trigger": "first_run",
+      "locale": "en",
+      "surface": "web"
+    },
+    "at": 1777885200100
+  },
+  {
+    "name": "tour_step_completed",
+    "props": {
+      "tour_version": "1.0.0",
+      "step_id": "welcome",
+      "step_index": 0,
+      "dwell_ms": 200,
+      "surface": "web"
+    },
+    "at": 1777885200300
+  },
+  {
+    "name": "tour_step_completed",
+    "props": {
+      "tour_version": "1.0.0",
+      "step_id": "month",
+      "step_index": 1,
+      "dwell_ms": 100,
+      "surface": "web"
+    },
+    "at": 1777885200600
+  },
+  {
+    "name": "tour_skipped",
+    "props": {
+      "tour_version": "1.0.0",
+      "step_id": "tabs-income",
+      "step_index": 2,
+      "surface": "web"
+    },
+    "at": 1777885200800
+  }
+]

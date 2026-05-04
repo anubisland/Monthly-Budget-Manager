@@ -1,0 +1,158 @@
+{
+  "capturedAt": "2026-05-04T09:00:00.000Z",
+  "tourVersion": "1.0.0",
+  "surface": "web",
+  "captureMode": "jsdom (deterministic, no real-renderer screenshots)",
+  "notes": [
+    "This is the deterministic capture. Real-browser screenshots are produced",
+    "by `capture-tour-evidence-puppeteer.mjs`, executed in CI by the",
+    "`web-tour-evidence` GitHub Actions workflow on every push to this branch",
+    "and PR. Screenshot artifacts are uploaded to that workflow run."
+  ],
+  "autoStart": {
+    "tooltipMounted": true,
+    "tourActiveOnLoad": true,
+    "completionFlagBeforeWalkthrough": null,
+    "welcomeStepWiring": {
+      "htmlLang": "en",
+      "htmlDir": "ltr",
+      "tooltip": {
+        "role": "dialog",
+        "ariaModal": "true",
+        "ariaLabelledby": "mbm-tour-title",
+        "ariaDescribedby": "mbm-tour-body",
+        "tabindex": "-1",
+        "dir": "ltr",
+        "lang": "en",
+        "focused": true
+      },
+      "title": {
+        "id": "mbm-tour-title",
+        "text": "Welcome to Monthly Budget Manager"
+      },
+      "body": {
+        "id": "mbm-tour-body",
+        "text": "A quick tour will show you the main features in under a minute."
+      },
+      "liveRegion": {
+        "role": "status",
+        "ariaLive": "polite",
+        "ariaAtomic": "true",
+        "text": "Welcome to Monthly Budget Manager. A quick tour will show you the main features in under a minute."
+      },
+      "buttons": [
+        {
+          "action": "skip",
+          "text": "Skip tour"
+        },
+        {
+          "action": "next",
+          "text": "Next"
+        }
+      ]
+    }
+  },
+  "fullWalkthrough": {
+    "eventCount": 14,
+    "eventNames": [
+      "tour_started",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_completed"
+    ],
+    "tourActiveAfter": false,
+    "completionFlagAfter": "2026-05-04T09:00:03.800Z",
+    "bufferFile": "02-telemetry-full-walkthrough.json"
+  },
+  "skippedWalkthrough": {
+    "eventCount": 4,
+    "eventNames": [
+      "tour_started",
+      "tour_step_completed",
+      "tour_step_completed",
+      "tour_skipped"
+    ],
+    "tourActiveAfter": false,
+    "completionFlagAfter": "2026-05-04T09:00:00.900Z",
+    "bufferFile": "02-telemetry-skipped-walkthrough.json"
+  },
+  "arabic": {
+    "stepIndex": 3,
+    "htmlLang": "ar",
+    "htmlDir": "rtl",
+    "htmlClassList": [
+      "lang-ar"
+    ],
+    "tooltipDir": "rtl",
+    "tooltipLang": "ar",
+    "titleText": "أضف إدخال دخل",
+    "bodyText": "اكتب الاسم والمبلغ والتاريخ ثم اضغط إضافة دخل. كرّر لكل مصدر دخل.",
+    "domFile": "04-arabic-mid-tour-dom.html"
+  },
+  "contrast": [
+    {
+      "name": "tooltip body text on tooltip surface",
+      "fg": "#374151",
+      "bg": "#ffffff",
+      "purpose": "normal text",
+      "ratio": 10.31,
+      "passesAANormal": true,
+      "passesAALarge": true
+    },
+    {
+      "name": "tooltip title text on tooltip surface",
+      "fg": "#111827",
+      "bg": "#ffffff",
+      "purpose": "large text",
+      "ratio": 17.74,
+      "passesAANormal": true,
+      "passesAALarge": true
+    },
+    {
+      "name": "tooltip counter on tooltip surface",
+      "fg": "#6b7280",
+      "bg": "#ffffff",
+      "purpose": "normal text (small)",
+      "ratio": 4.83,
+      "passesAANormal": true,
+      "passesAALarge": true
+    },
+    {
+      "name": "primary button text on primary button",
+      "fg": "#ffffff",
+      "bg": "#2563eb",
+      "purpose": "normal text",
+      "ratio": 5.17,
+      "passesAANormal": true,
+      "passesAALarge": true
+    },
+    {
+      "name": "secondary button text on secondary button",
+      "fg": "#1f2937",
+      "bg": "#f3f4f6",
+      "purpose": "normal text",
+      "ratio": 13.34,
+      "passesAANormal": true,
+      "passesAALarge": true
+    },
+    {
+      "name": "replay-tour button text on app surface",
+      "fg": "#2563eb",
+      "bg": "#ffffff",
+      "purpose": "normal text",
+      "ratio": 5.17,
+      "passesAANormal": true,
+      "passesAALarge": true
+    }
+  ]
+}
