@@ -124,6 +124,77 @@
 
         /* Scrollable table wrapper */
         .table-wrapper { overflow-x: auto; }
+
+        /* ----- First-run guided tour ----- */
+        .mbm-tour-overlay {
+            position: fixed; inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            z-index: 998;
+        }
+        .mbm-tour-spotlight {
+            position: absolute;
+            box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 999;
+            transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease;
+        }
+        .mbm-tour-tooltip {
+            position: absolute;
+            background: #ffffff;
+            color: #111827;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.18);
+            padding: 18px 20px;
+            max-width: 360px;
+            z-index: 1000;
+            outline: none;
+        }
+        .mbm-tour-tooltip:focus { box-shadow: 0 0 0 3px rgba(37,99,235,0.5), 0 10px 25px rgba(0,0,0,0.18); }
+        .mbm-tour-title {
+            font-size: 1.05rem; font-weight: 700; margin: 0 0 6px 0; color: #111827;
+        }
+        .mbm-tour-body {
+            font-size: 0.9rem; line-height: 1.55; margin: 0 0 12px 0; color: #374151;
+        }
+        .mbm-tour-counter {
+            font-size: 0.75rem; color: #6b7280; margin: 0 0 12px 0;
+        }
+        .mbm-tour-actions {
+            display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+        }
+        .mbm-tour-btn {
+            min-height: 36px; padding: 6px 14px; border-radius: 6px;
+            font-size: 0.875rem; font-weight: 500; border: 1px solid transparent;
+            cursor: pointer; transition: background 0.15s, border-color 0.15s;
+        }
+        .mbm-tour-btn:focus {
+            outline: none; box-shadow: 0 0 0 3px rgba(37,99,235,0.4);
+        }
+        .mbm-tour-btn-primary {
+            background: #2563eb; color: #fff;
+        }
+        .mbm-tour-btn-primary:hover { background: #1d4ed8; }
+        .mbm-tour-btn-secondary {
+            background: #f3f4f6; color: #1f2937; border-color: #d1d5db;
+        }
+        .mbm-tour-btn-secondary:hover { background: #e5e7eb; }
+        .mbm-tour-live {
+            position: absolute; left: -10000px; width: 1px; height: 1px;
+            overflow: hidden;
+        }
+        html.lang-ar .mbm-tour-tooltip {
+            font-family: var(--font-ar);
+        }
+        [dir="rtl"] .mbm-tour-actions { justify-content: flex-start; }
+
+        /* Replay-tour button (settings affordance) */
+        #replayTourBtn {
+            background: transparent; border: none; color: #2563eb; cursor: pointer;
+            font-size: 0.8125rem; padding: 4px 8px; border-radius: 4px;
+        }
+        #replayTourBtn:hover { background: #eff6ff; text-decoration: underline; }
+        #replayTourBtn:focus { outline: none; box-shadow: 0 0 0 2px rgba(37,99,235,0.4); }
     </style>
 
     <!-- Apply stored language BEFORE body renders to avoid flash of wrong direction -->
@@ -134,7 +205,7 @@
     <div class="container mx-auto px-4 py-6 max-w-5xl">
 
         <!-- Header -->
-        <div class="bg-white rounded-lg shadow-sm p-5 mb-4">
+        <div class="bg-white rounded-lg shadow-sm p-5 mb-4" data-tour-id="welcome">
             <div class="flex justify-between items-center flex-wrap gap-3">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800" data-i18n="app.title">Monthly Budget Manager</h1>
@@ -143,6 +214,7 @@
                 <!-- Language Toggle -->
                 <button
                     id="langToggle"
+                    data-tour-id="language"
                     role="switch"
                     aria-checked="false"
                     aria-label="Switch to Arabic / التحويل إلى العربية"
@@ -161,7 +233,7 @@
         <!-- Toolbar -->
         <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
             <div class="flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2">
+                <div class="flex items-center gap-2" data-tour-id="month">
                     <label class="text-sm font-medium text-gray-700 whitespace-nowrap" for="monthInput" data-i18n="toolbar.month">Month (YYYY-MM)</label>
                     <input
                         type="month"
@@ -171,13 +243,15 @@
                         title="YYYY-MM"
                     >
                 </div>
-                <button onclick="newBudget()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-i18n="toolbar.newBudget">New Budget</button>
-                <label class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition cursor-pointer" data-i18n="toolbar.importCsv">
+                <button data-tour-id="new-budget" onclick="newBudget()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-i18n="toolbar.newBudget">New Budget</button>
+                <label data-tour-id="import-csv" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition cursor-pointer" data-i18n="toolbar.importCsv">
                     Import CSV
                     <input type="file" id="csvImport" accept=".csv" class="hidden" onchange="importCsv(event)">
                 </label>
-                <button onclick="exportCsv()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportCsv">Export CSV</button>
-                <button onclick="exportJson()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportJson">Export JSON</button>
+                <span data-tour-id="export" class="inline-flex gap-2">
+                    <button onclick="exportCsv()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportCsv">Export CSV</button>
+                    <button onclick="exportJson()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportJson">Export JSON</button>
+                </span>
             </div>
         </div>
 
@@ -185,16 +259,16 @@
         <div class="bg-white rounded-lg shadow-sm mb-4">
             <div class="border-b border-gray-200">
                 <div class="flex">
-                    <button class="tab-btn active px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="income" onclick="switchTab('income')" data-i18n="tab.income">Income</button>
-                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="expenses" onclick="switchTab('expenses')" data-i18n="tab.expenses">Expenses</button>
-                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="report" onclick="switchTab('report')" data-i18n="tab.report">Report</button>
+                    <button class="tab-btn active px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="income" data-tour-id="tab-income" onclick="switchTab('income')" data-i18n="tab.income">Income</button>
+                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="expenses" data-tour-id="tab-expenses" onclick="switchTab('expenses')" data-i18n="tab.expenses">Expenses</button>
+                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="report" data-tour-id="tab-report" onclick="switchTab('report')" data-i18n="tab.report">Report</button>
                 </div>
             </div>
 
             <!-- Income Tab -->
             <div id="tab-income" class="tab-content p-5">
                 <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="income.addTitle">Add Income</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5">
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5" data-tour-id="add-income">
                     <div>
                         <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.name">Name</label>
                         <input type="text" id="incomeName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -243,7 +317,7 @@
                         <input type="text" id="expenseName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                             data-i18n-placeholder="form.expenseNamePlaceholder" placeholder="e.g. Rent">
                     </div>
-                    <div>
+                    <div data-tour-id="expense-cat">
                         <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.category">Category</label>
                         <select id="expenseCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                             <option value="" data-i18n-option="cat.selectCategory">Select category</option>
@@ -355,12 +429,21 @@
             </div>
         </div>
 
-        <!-- Status bar -->
-        <div class="bg-white rounded-lg shadow-sm px-4 py-2">
+        <!-- Status bar (also hosts the Settings → Replay tour entry) -->
+        <div class="bg-white rounded-lg shadow-sm px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
             <p id="statusBar" class="text-sm text-gray-500" data-i18n="status.ready">Ready</p>
+            <button
+                id="replayTourBtn"
+                data-tour-id="replay"
+                type="button"
+                onclick="window.tour && window.tour.replay()"
+                data-i18n="tour.replayBtn"
+                aria-label="Replay first-run tour"
+            >Replay tour</button>
         </div>
     </div>
 
     <script src="script.js"></script>
+    <script src="tour.js"></script>
 </body>
 </html>
