@@ -15,8 +15,18 @@ permissions:
   contents: write
 
 jobs:
+  # Release-hygiene gate (ANU-682). Blocks the build when CHANGELOG /
+  # README / docs/guides hygiene rules are not satisfied. Pinned to @v1 of
+  # the reusable workflow published by ANU-691; flip `enforce` to `fail`
+  # after 48 h of clean warn-mode runs (tracked on ANU-722).
+  hygiene:
+    uses: anubisland/.github/.github/workflows/release-hygiene-gate.yml@v1
+    with:
+      enforce: warn
+
   build:
     name: build (${{ matrix.os }})
+    needs: hygiene
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
