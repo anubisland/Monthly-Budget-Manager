@@ -491,7 +491,7 @@ class BudgetApp(ctk.CTk):
         c = theme_colors()
         frame = ctk.CTkFrame(self._content_frame, fg_color="transparent")
         frame.grid_columnconfigure(0, weight=1)
-        frame.grid_rowconfigure(4, weight=1)
+        frame.grid_rowconfigure(3, weight=1)
 
         title = ctk.CTkLabel(
             frame,
@@ -547,9 +547,22 @@ class BudgetApp(ctk.CTk):
             command=self._add_income,
         ).grid(row=1, column=4, padx=(12, 16), pady=(0, 12))
 
+        # Search bar
+        search_frame = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        search_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        search_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(search_frame, text=_("search.placeholder"), font=(FONT_FAMILY, 12),
+                      text_color=c.text_secondary).grid(row=0, column=0, padx=(16, 4), pady=10, sticky="w")
+        self._inc_search_var = ctk.StringVar()
+        self._inc_search_var.trace_add("write", lambda *a: self._refresh_income_table())
+        ctk.CTkEntry(search_frame, textvariable=self._inc_search_var, width=200, height=30,
+                      font=(FONT_FAMILY, 12), placeholder_text=_("search.placeholder")).grid(
+            row=0, column=1, padx=4, pady=10, sticky="w")
+
         # Tree table
         table_frame = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
-        table_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
+        table_frame.grid(row=3, column=0, sticky="nsew", pady=(0, 8))
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(1, weight=1)
 
@@ -558,7 +571,7 @@ class BudgetApp(ctk.CTk):
 
         # Buttons
         btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="w")
+        btn_frame.grid(row=4, column=0, sticky="w")
         ctk.CTkButton(btn_frame, text=_("income.remove_selected"), height=32, font=(FONT_FAMILY, 12),
                        command=self._remove_selected_income).grid(row=0, column=0, padx=(0, 8))
         ctk.CTkButton(btn_frame, text=_("income.clear_all"), height=32, font=(FONT_FAMILY, 12),
@@ -571,16 +584,25 @@ class BudgetApp(ctk.CTk):
     def _refresh_income_table(self) -> None:
         _ = self._
         c = theme_colors()
+        query = (self._inc_search_var.get().strip().lower()
+                 if hasattr(self, "_inc_search_var") else "")
         text = self._income_tree
+        text.configure(state="normal")
         text.delete("1.0", "end")
         header = f"{_('income.column_name'):<30}  {_('income.column_amount'):>12}  {_('income.column_date'):<16}\n"
         text.insert("end", header, ("header",))
         text.tag_config("header", font=(FONT_FAMILY, 12, "bold"), foreground=c.primary)
         sep = "-" * 60 + "\n"
         text.insert("end", sep)
+        count = 0
         for inc in self.bm.incomes:
+            if query and query not in inc.name.lower() and query not in (inc.date or "").lower():
+                continue
             row = f"{inc.name:<30}  ${inc.amount:>8,.2f}  {self._format_day(inc.date):<16}\n"
             text.insert("end", row)
+            count += 1
+        if query and count == 0:
+            text.insert("end", _("search.no_results"))
         text.configure(state="disabled")
 
     def _add_income(self) -> None:
@@ -637,7 +659,7 @@ class BudgetApp(ctk.CTk):
         c = theme_colors()
         frame = ctk.CTkFrame(self._content_frame, fg_color="transparent")
         frame.grid_columnconfigure(0, weight=1)
-        frame.grid_rowconfigure(4, weight=1)
+        frame.grid_rowconfigure(3, weight=1)
 
         title = ctk.CTkLabel(
             frame,
@@ -706,9 +728,22 @@ class BudgetApp(ctk.CTk):
             command=self._add_expense,
         ).grid(row=1, column=5, padx=(12, 16), pady=(0, 12))
 
+        # Search bar
+        search_frame = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        search_frame.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        search_frame.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(search_frame, text=_("search.placeholder"), font=(FONT_FAMILY, 12),
+                      text_color=c.text_secondary).grid(row=0, column=0, padx=(16, 4), pady=10, sticky="w")
+        self._exp_search_var = ctk.StringVar()
+        self._exp_search_var.trace_add("write", lambda *a: self._refresh_expense_table())
+        ctk.CTkEntry(search_frame, textvariable=self._exp_search_var, width=200, height=30,
+                      font=(FONT_FAMILY, 12), placeholder_text=_("search.placeholder")).grid(
+            row=0, column=1, padx=4, pady=10, sticky="w")
+
         # Table
         table_frame = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
-        table_frame.grid(row=2, column=0, sticky="nsew", pady=(0, 8))
+        table_frame.grid(row=3, column=0, sticky="nsew", pady=(0, 8))
         table_frame.grid_columnconfigure(0, weight=1)
         table_frame.grid_rowconfigure(1, weight=1)
 
@@ -716,7 +751,7 @@ class BudgetApp(ctk.CTk):
         self._expense_tree.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
 
         btn_frame = ctk.CTkFrame(frame, fg_color="transparent")
-        btn_frame.grid(row=3, column=0, sticky="w")
+        btn_frame.grid(row=4, column=0, sticky="w")
         ctk.CTkButton(btn_frame, text=_("expense.remove_selected"), height=32, font=(FONT_FAMILY, 12),
                        command=self._remove_selected_expense).grid(row=0, column=0, padx=(0, 8))
         ctk.CTkButton(btn_frame, text=_("expense.clear_all"), height=32, font=(FONT_FAMILY, 12),
@@ -728,16 +763,25 @@ class BudgetApp(ctk.CTk):
     def _refresh_expense_table(self) -> None:
         _ = self._
         c = theme_colors()
+        query = (self._exp_search_var.get().strip().lower()
+                 if hasattr(self, "_exp_search_var") else "")
         text = self._expense_tree
+        text.configure(state="normal")
         text.delete("1.0", "end")
         header = f"{_('expense.column_name'):<25}  {_('expense.column_category'):<18}  {_('expense.column_amount'):>10}  {_('expense.column_date'):<16}\n"
         text.insert("end", header, ("header",))
         text.tag_config("header", font=(FONT_FAMILY, 12, "bold"), foreground=c.primary)
         sep = "-" * 72 + "\n"
         text.insert("end", sep)
+        count = 0
         for exp in self.bm.expenses:
+            if query and query not in exp.name.lower() and query not in exp.category.lower() and query not in (exp.date or "").lower():
+                continue
             row = f"{exp.name:<25}  {exp.category:<18}  ${exp.amount:>7,.2f}  {self._format_day(exp.date):<16}\n"
             text.insert("end", row)
+            count += 1
+        if query and count == 0:
+            text.insert("end", _("search.no_results"))
         text.configure(state="disabled")
 
     def _add_expense(self) -> None:

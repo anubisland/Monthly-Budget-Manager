@@ -145,6 +145,13 @@
   "compare.no_months": "لا توجد أشهر متاحة. أضف ميزانيات أولاً.",
   "compare.select_hint": "اختر شهراً أو أكثر أعلاه لعرض المقارنة.",
 
+  "search.placeholder": "بحث\u2026",
+  "search.filter_name": "الاسم",
+  "search.filter_category": "الفئة",
+  "search.filter_amount": "المبلغ",
+  "search.filter_date": "التاريخ",
+  "search.no_results": "لم يتم العثور على إدخالات مطابقة.",
+
   "budget.progress": "تقدم الميزانية",
   "budget.no_limits": "حدد حدود الميزانية في الإعدادات لتتبع تقدم الإنفاق.",
   "budget.over": "تجاوز الميزانية: {cats}",

@@ -145,6 +145,13 @@
   "compare.no_months": "No months available. Add budgets first.",
   "compare.select_hint": "Select one or more months above to see comparison.",
 
+  "search.placeholder": "Search\u2026",
+  "search.filter_name": "Name",
+  "search.filter_category": "Category",
+  "search.filter_amount": "Amount",
+  "search.filter_date": "Date",
+  "search.no_results": "No matching entries found.",
+
   "budget.progress": "Budget Progress",
   "budget.no_limits": "Set budget limits in Settings to track spending progress.",
   "budget.over": "Over budget: {cats}",
