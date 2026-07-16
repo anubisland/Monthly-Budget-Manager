@@ -716,3 +716,54 @@ class TestRecurringTransactions:
         assert d["id"] == 5
         assert d["category"] == "Test"
         assert d["active"] is True
+
+
+class TestAutoCategorize:
+    def test_basic_match(self):
+        from monthly_budget.core import TransactionRule, apply_auto_category
+        rules = [
+            TransactionRule(pattern="netflix", category="Subscriptions"),
+            TransactionRule(pattern="walmart", category="Food"),
+        ]
+        assert apply_auto_category("Netflix Monthly", rules) == "Subscriptions"
+        assert apply_auto_category("Walmart Groceries", rules) == "Food"
+
+    def test_no_match_returns_default(self):
+        from monthly_budget.core import TransactionRule, apply_auto_category
+        rules = [TransactionRule(pattern="netflix", category="Subscriptions")]
+        assert apply_auto_category("Random Purchase", rules, "Misc") == "Misc"
+
+    def test_first_match_wins(self):
+        from monthly_budget.core import TransactionRule, apply_auto_category
+        rules = [
+            TransactionRule(pattern="amazon", category="Shopping"),
+            TransactionRule(pattern="amazon prime", category="Subscriptions"),
+        ]
+        assert apply_auto_category("Amazon Prime", rules, "Misc") == "Shopping"
+
+    def test_disabled_rule_skipped(self):
+        from monthly_budget.core import TransactionRule, apply_auto_category
+        rules = [
+            TransactionRule(pattern="netflix", category="Subscriptions", enabled=False),
+            TransactionRule(pattern="netflix", category="Entertainment"),
+        ]
+        assert apply_auto_category("Netflix", rules) == "Entertainment"
+
+    def test_case_insensitive(self):
+        from monthly_budget.core import TransactionRule, apply_auto_category
+        rules = [TransactionRule(pattern="NETFLIX", category="Subscriptions")]
+        assert apply_auto_category("netflix", rules) == "Subscriptions"
+        assert apply_auto_category("Netflix", rules) == "Subscriptions"
+        assert apply_auto_category("NETFLIX", rules) == "Subscriptions"
+
+    def test_empty_rules(self):
+        from monthly_budget.core import apply_auto_category
+        assert apply_auto_category("Anything", [], "Default") == "Default"
+
+    def test_rule_to_dict(self):
+        from monthly_budget.core import TransactionRule
+        r = TransactionRule(id=3, pattern="test", category="Food", enabled=True)
+        d = r.to_dict()
+        assert d["id"] == 3
+        assert d["pattern"] == "test"
+        assert d["category"] == "Food"

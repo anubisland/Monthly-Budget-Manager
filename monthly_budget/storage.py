@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .core import BudgetMonth, Income, Expense, RecurringTransaction
+from .core import BudgetMonth, Income, Expense, RecurringTransaction, TransactionRule
 
 
 class Storage:
@@ -75,6 +75,12 @@ class Storage:
                 start_date TEXT NOT NULL,
                 end_date TEXT,
                 active INTEGER NOT NULL DEFAULT 1
+            );
+            CREATE TABLE IF NOT EXISTS transaction_rules (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pattern TEXT NOT NULL,
+                category TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1
             );
         """)
         conn.commit()
@@ -228,6 +234,53 @@ class Storage:
     def delete_recurring(self, rt_id: int) -> None:
         conn = self._connect()
         conn.execute("DELETE FROM recurring_transactions WHERE id = ?", (rt_id,))
+        conn.commit()
+
+    # ── Transaction Rules ───────────────────────────────────────────
+
+    def save_rule(self, rule: TransactionRule) -> int:
+        conn = self._connect()
+        if rule.id > 0:
+            conn.execute(
+                "UPDATE transaction_rules SET pattern=?, category=?, enabled=? WHERE id=?",
+                (rule.pattern, rule.category, int(rule.enabled), rule.id),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO transaction_rules (pattern, category, enabled) VALUES (?, ?, ?)",
+                (rule.pattern, rule.category, int(rule.enabled)),
+            )
+            rule.id = cur.lastrowid
+        conn.commit()
+        return rule.id
+
+    def load_rule(self, rule_id: int) -> Optional[TransactionRule]:
+        conn = self._connect()
+        cur = conn.execute("SELECT * FROM transaction_rules WHERE id = ?", (rule_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        return TransactionRule(
+            id=row["id"],
+            pattern=row["pattern"],
+            category=row["category"],
+            enabled=bool(row["enabled"]),
+        )
+
+    def list_rules(self) -> List[TransactionRule]:
+        conn = self._connect()
+        cur = conn.execute("SELECT * FROM transaction_rules ORDER BY id")
+        return [
+            TransactionRule(
+                id=r["id"], pattern=r["pattern"],
+                category=r["category"], enabled=bool(r["enabled"]),
+            )
+            for r in cur.fetchall()
+        ]
+
+    def delete_rule(self, rule_id: int) -> None:
+        conn = self._connect()
+        conn.execute("DELETE FROM transaction_rules WHERE id = ?", (rule_id,))
         conn.commit()
 
     @staticmethod

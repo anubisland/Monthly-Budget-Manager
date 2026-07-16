@@ -275,3 +275,32 @@ class TestStorageRecurring:
         assert storage.load_recurring(rt_id) is not None
         storage.delete_recurring(rt_id)
         assert storage.load_recurring(rt_id) is None
+
+
+class TestStorageTransactionRules:
+    def test_save_and_list_rules(self, storage):
+        from monthly_budget.core import TransactionRule
+        storage.save_rule(TransactionRule(pattern="netflix", category="Subscriptions"))
+        storage.save_rule(TransactionRule(pattern="walmart", category="Food"))
+        rules = storage.list_rules()
+        assert len(rules) == 2
+
+    def test_delete_rule(self, storage):
+        from monthly_budget.core import TransactionRule
+        storage.save_rule(TransactionRule(pattern="test", category="Misc"))
+        assert len(storage.list_rules()) == 1
+        rules = storage.list_rules()
+        storage.delete_rule(rules[0].id)
+        assert len(storage.list_rules()) == 0
+
+    def test_update_rule(self, storage):
+        from monthly_budget.core import TransactionRule
+        rt = TransactionRule(pattern="old", category="Misc")
+        storage.save_rule(rt)
+        rt.pattern = "new"
+        rt.category = "Food"
+        storage.save_rule(rt)
+        loaded = storage.load_rule(rt.id)
+        assert loaded is not None
+        assert loaded.pattern == "new"
+        assert loaded.category == "Food"

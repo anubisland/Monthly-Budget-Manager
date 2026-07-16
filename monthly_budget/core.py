@@ -152,6 +152,33 @@ def _recurring_days_in_month(rt: RecurringTransaction, year: int, month: int) ->
 
 
 @dataclass
+class TransactionRule:
+    pattern: str
+    category: str
+    enabled: bool = True
+    id: int = 0
+
+    def to_dict(self) -> Dict:
+        return {
+            "id": self.id,
+            "pattern": self.pattern,
+            "category": self.category,
+            "enabled": self.enabled,
+        }
+
+
+def apply_auto_category(name: str, rules: List[TransactionRule], default: str = "Uncategorized") -> str:
+    """Return the first matching rule category, or default."""
+    name_lower = name.lower()
+    for rule in rules:
+        if not rule.enabled:
+            continue
+        if rule.pattern.lower() in name_lower:
+            return rule.category
+    return default
+
+
+@dataclass
 class BudgetMonth:
     month: Optional[str] = None
     incomes: List[Income] = field(default_factory=list)

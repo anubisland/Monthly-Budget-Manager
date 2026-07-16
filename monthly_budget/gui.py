@@ -788,6 +788,13 @@ class BudgetApp(ctk.CTk):
         _ = self._
         name = (self._exp_name_var.get() or _("expense.empty_name_default")).strip()
         category = (self._exp_cat_var.get() or _("expense.empty_category_default")).strip()
+
+        # Auto-categorize from rules if category not explicitly set
+        from .core import apply_auto_category
+        if not category or category == _("expense.empty_category_default"):
+            rules = self._storage.list_rules()
+            category = apply_auto_category(name, rules, default=category)
+
         amt_str = self._exp_amount_var.get().strip().replace(",", "")
         raw_date = self._exp_date_var.get().strip()
         try:
@@ -1621,9 +1628,52 @@ class BudgetApp(ctk.CTk):
         self._budget_limit_list.grid(row=3, column=0, columnspan=5, padx=20, pady=(4, 16), sticky="ew")
         self._refresh_budget_limit_list()
 
+        # Auto-categorize rules section
+        rules_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        rules_card.grid(row=4, column=0, sticky="ew", pady=(0, 12))
+        rules_card.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            rules_card, text=_("settings.auto_cat"),
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, columnspan=4, padx=20, pady=(16, 4), sticky="w")
+
+        ctk.CTkLabel(
+            rules_card, text=_("settings.auto_cat_desc"),
+            font=(FONT_FAMILY, 12), text_color=c.text_secondary, anchor="w",
+        ).grid(row=1, column=0, columnspan=4, padx=20, pady=(0, 8), sticky="w")
+
+        self._rule_pattern_var = ctk.StringVar()
+        self._rule_cat_var = ctk.StringVar(value="Uncategorized")
+
+        ctk.CTkLabel(rules_card, text=_("settings.rule_pattern"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=2, column=0, padx=(20, 4), pady=4, sticky="w")
+        ctk.CTkEntry(rules_card, textvariable=self._rule_pattern_var, width=140, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=2, column=1, padx=4, pady=4, sticky="w")
+
+        ctk.CTkLabel(rules_card, text=_("settings.rule_category"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=2, column=2, padx=(8, 4), pady=4, sticky="w")
+        ctk.CTkComboBox(
+            rules_card,
+            values=["Food", "Rent", "Utilities", "Transport", "Healthcare",
+                    "Entertainment", "Education", "Clothing", "Savings",
+                    "Debt", "Subscriptions", "Gifts", "Misc", "Uncategorized"],
+            variable=self._rule_cat_var, width=140, height=32, font=(FONT_FAMILY, 12),
+        ).grid(row=2, column=3, padx=4, pady=4, sticky="w")
+
+        ctk.CTkButton(
+            rules_card, text=_("settings.rule_add"), height=32, font=(FONT_FAMILY, 12),
+            fg_color=c.primary, command=self._add_rule,
+        ).grid(row=2, column=4, padx=(8, 20), pady=4)
+
+        # Rules list with delete buttons
+        self._rules_frame = ctk.CTkFrame(rules_card, fg_color="transparent")
+        self._rules_frame.grid(row=3, column=0, columnspan=5, padx=20, pady=(4, 16), sticky="ew")
+        self._refresh_rules_list()
+
         # About section
         about_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
-        about_card.grid(row=4, column=0, sticky="ew", pady=(0, 12))
+        about_card.grid(row=5, column=0, sticky="ew", pady=(0, 12))
 
         about_label = ctk.CTkLabel(
             about_card, text=_("settings.about"),
@@ -1758,6 +1808,42 @@ class BudgetApp(ctk.CTk):
             status = f"{cat:<20}  Limit: ${limit:>7,.2f}  Spent: ${spent:>7,.2f}  Remaining: ${remaining:>+7,.2f}"
             text.insert("end", status + "\n")
         text.configure(state="disabled")
+
+    def _add_rule(self) -> None:
+        _ = self._
+        pattern = self._rule_pattern_var.get().strip().lower()
+        if not pattern:
+            return
+        cat = self._rule_cat_var.get().strip() or "Uncategorized"
+        from .core import TransactionRule
+        rule = TransactionRule(pattern=pattern, category=cat)
+        self._storage.save_rule(rule)
+        self._rule_pattern_var.set("")
+        self._rule_cat_var.set("Uncategorized")
+        self._refresh_rules_list()
+
+    def _refresh_rules_list(self) -> None:
+        _ = self._
+        for w in self._rules_frame.winfo_children():
+            w.destroy()
+        rules = self._storage.list_rules()
+        if not rules:
+            lbl = ctk.CTkLabel(self._rules_frame, text=_("settings.rule_empty"),
+                               font=(FONT_FAMILY, 12), text_color=theme_colors().text_secondary)
+            lbl.pack(anchor="w", pady=2)
+            return
+        for rule in rules:
+            row = ctk.CTkFrame(self._rules_frame, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            ctk.CTkLabel(row, text=f"\"{rule.pattern}\" \u2192 {rule.category}",
+                         font=(FONT_FAMILY, 12), text_color=theme_colors().text).pack(side="left", padx=(0, 8))
+            ctk.CTkButton(row, text=_("settings.rule_delete"), height=24, width=60,
+                          font=(FONT_FAMILY, 10), fg_color=theme_colors().danger,
+                          command=lambda rid=rule.id: self._delete_rule(rid)).pack(side="right")
+
+    def _delete_rule(self, rule_id: int) -> None:
+        self._storage.delete_rule(rule_id)
+        self._refresh_rules_list()
 
     def _on_month_changed(self) -> None:
         _ = self._
