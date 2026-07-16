@@ -6,6 +6,7 @@ __app_name__ = "Monthly Budget Manager"
 from .core import BudgetMonth, Income, Expense, read_csv, print_report, interactive_collect
 from .i18n import I18n
 from .theme import set_dark_mode, is_dark_mode, colors, get_colors
+from .storage import Storage
 
 __all__ = [
     "BudgetMonth",
@@ -19,6 +20,7 @@ __all__ = [
     "is_dark_mode",
     "colors",
     "get_colors",
+    "Storage",
     "__version__",
     "__app_name__",
 ]

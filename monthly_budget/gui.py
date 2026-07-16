@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import json
 import math as _math
 import datetime as _dt
 import calendar as _cal
 import tkinter as tk
-from pathlib import Path
 from typing import Optional
 
 import customtkinter as ctk
@@ -13,6 +11,7 @@ import customtkinter as ctk
 from .core import BudgetMonth
 from .i18n import I18n
 from .theme import colors as theme_colors, set_dark_mode
+from .storage import Storage
 
 ctk.set_appearance_mode("system")
 ctk.set_default_color_theme("blue")
@@ -31,11 +30,8 @@ class BudgetApp(ctk.CTk):
         self._ = self._i18n.t
 
         self.bm = BudgetMonth()
-        self._prefs_path: Optional[Path] = None
-        try:
-            self._prefs_path = Path.home() / ".budget_manager_prefs.json"
-        except Exception:
-            pass
+        self._storage = Storage()
+        self._current_month: str = ""
 
         self._current_view: Optional[ctk.CTkFrame] = None
         self._dark_mode = ctk.get_appearance_mode() == "Dark"
@@ -81,16 +77,18 @@ class BudgetApp(ctk.CTk):
         month_frame.grid(row=0, column=2, padx=(10, 0), sticky="w")
 
         self._month_var = ctk.StringVar()
-        month_entry = ctk.CTkEntry(
+        self._month_combo = ctk.CTkComboBox(
             month_frame,
-            textvariable=self._month_var,
-            width=100,
+            variable=self._month_var,
+            values=[],  # populated dynamically
+            width=110,
             height=32,
-            placeholder_text="2025-08",
             font=(FONT_FAMILY, 13),
+            state="normal",
         )
-        month_entry.grid(row=0, column=0, padx=(0, 6))
-        month_entry.bind("<FocusOut>", lambda _e: self._on_month_changed())
+        self._month_combo.grid(row=0, column=0, padx=(0, 6))
+        self._month_combo.bind("<FocusOut>", lambda _e: self._on_month_changed())
+        self._month_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_month_changed())
 
         refresh_btn = ctk.CTkButton(
             month_frame,
@@ -100,7 +98,16 @@ class BudgetApp(ctk.CTk):
             command=self.update_report,
             font=(FONT_FAMILY, 12),
         )
-        refresh_btn.grid(row=0, column=1, padx=(0, 16))
+        refresh_btn.grid(row=0, column=1, padx=(0, 8))
+
+        self._save_indicator = ctk.CTkLabel(
+            month_frame,
+            text="",
+            width=60,
+            font=(FONT_FAMILY, 10),
+            text_color=theme_colors().text_secondary,
+        )
+        self._save_indicator.grid(row=0, column=2, padx=(0, 8), sticky="w")
 
         # Theme toggle
         theme_frame = ctk.CTkFrame(header, fg_color="transparent")
@@ -505,6 +512,8 @@ class BudgetApp(ctk.CTk):
         self._inc_date_var.set("")
         self._refresh_income_table()
         self.update_report()
+        self._auto_save()
+        self._set_saved()
         self._set_status(_("app.income_added"))
 
     def _remove_selected_income(self) -> None:
@@ -514,6 +523,8 @@ class BudgetApp(ctk.CTk):
         self.bm.incomes.pop()
         self._refresh_income_table()
         self.update_report()
+        self._auto_save()
+        self._set_saved()
         self._set_status(_("app.income_removed"))
 
     def _clear_incomes(self) -> None:
@@ -522,6 +533,8 @@ class BudgetApp(ctk.CTk):
             self.bm.incomes.clear()
             self._refresh_income_table()
             self.update_report()
+            self._auto_save()
+            self._set_saved()
             self._set_status(_("app.incomes_cleared"))
 
     # ─── EXPENSES VIEW ─────────────────────────────────────────────────
@@ -658,6 +671,8 @@ class BudgetApp(ctk.CTk):
         self._exp_date_var.set("")
         self._refresh_expense_table()
         self.update_report()
+        self._auto_save()
+        self._set_saved()
         self._set_status(_("app.expense_added"))
 
     def _remove_selected_expense(self) -> None:
@@ -667,6 +682,8 @@ class BudgetApp(ctk.CTk):
         self.bm.expenses.pop()
         self._refresh_expense_table()
         self.update_report()
+        self._auto_save()
+        self._set_saved()
         self._set_status(_("app.expense_removed"))
 
     def _clear_expenses(self) -> None:
@@ -675,6 +692,8 @@ class BudgetApp(ctk.CTk):
             self.bm.expenses.clear()
             self._refresh_expense_table()
             self.update_report()
+            self._auto_save()
+            self._set_saved()
             self._set_status(_("app.expenses_cleared"))
 
     # ─── REPORTS VIEW ──────────────────────────────────────────────────
@@ -981,9 +1000,34 @@ class BudgetApp(ctk.CTk):
             self._draw_pie_chart(self._rep_pie_canvas)
 
     def _on_month_changed(self) -> None:
-        self.bm.month = self._month_var.get().strip() or None
+        new_month = self._month_var.get().strip()
+        self._auto_save()
+        self._current_month = new_month
+        self.bm = BudgetMonth(month=new_month or None)
+        if new_month and self._storage.budget_exists(new_month):
+            loaded = self._storage.load_budget(new_month)
+            if loaded:
+                self.bm = loaded
         self.update_report()
+        self._refresh_month_list()
         self._save_prefs()
+        self._set_saved()
+
+    def _auto_save(self) -> None:
+        month = self._month_var.get().strip()
+        if month:
+            self.bm.month = month
+            self._storage.save_budget(self.bm)
+
+    def _set_saved(self) -> None:
+        self._save_indicator.configure(text=self._("app.saved").format(file="DB"))
+
+    def _refresh_month_list(self) -> None:
+        months = self._storage.list_months()
+        current = self._month_var.get().strip()
+        if current and current not in months:
+            months = [current] + months
+        self._month_combo.configure(values=months)
 
     def update_report(self) -> None:
         self.bm.month = self._month_var.get().strip() or self.bm.month
@@ -1159,36 +1203,33 @@ class BudgetApp(ctk.CTk):
         self._status_var.set(message)
 
     def _save_prefs(self) -> None:
-        if not self._prefs_path:
-            return
         try:
-            data = {"month": (self._month_var.get() or "").strip(),
-                    "lang": self._i18n.lang,
-                    "theme": ctk.get_appearance_mode()}
-            self._prefs_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            self._storage.save_setting("month", self._month_var.get().strip() or "")
+            self._storage.save_setting("lang", self._i18n.lang)
+            self._storage.save_setting("theme", ctk.get_appearance_mode())
         except Exception:
             pass
 
     def _load_prefs(self) -> None:
-        if not self._prefs_path:
-            return
         try:
-            if self._prefs_path.exists():
-                data = json.loads(self._prefs_path.read_text(encoding="utf-8"))
-                month = (data.get("month") or "").strip()
-                if month:
-                    self._month_var.set(month)
-                    self.bm.month = month
-                lang = data.get("lang", "")
-                if lang and lang in ("en", "ar"):
-                    self._i18n.set_language(lang)
-                theme = data.get("theme", "")
-                if theme in ("Light", "Dark", "System"):
-                    ctk.set_appearance_mode(theme)
-                    self._dark_mode = theme == "Dark"
-                    set_dark_mode(self._dark_mode)
+            month = self._storage.load_setting("month") or ""
+            if month:
+                self._month_var.set(month)
+                self._current_month = month
+                loaded = self._storage.load_budget(month)
+                if loaded:
+                    self.bm = loaded
+            lang = self._storage.load_setting("lang") or ""
+            if lang in ("en", "ar"):
+                self._i18n.set_language(lang)
+            theme = self._storage.load_setting("theme") or ""
+            if theme in ("Light", "Dark", "System"):
+                ctk.set_appearance_mode(theme)
+                self._dark_mode = theme == "Dark"
+                set_dark_mode(self._dark_mode)
         except Exception:
             pass
+        self._refresh_month_list()
 
     def quit(self) -> None:
         self.destroy()
