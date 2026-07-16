@@ -1463,9 +1463,29 @@ class BudgetApp(ctk.CTk):
         self._rep_bar_canvas.bind("<Configure>", lambda e: self._redraw_report_charts())
         self._rep_pie_canvas.bind("<Configure>", lambda e: self._redraw_report_charts())
 
+        # Export buttons
+        export_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        export_card.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        export_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            export_card, text="Export Report",
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, padx=20, pady=(12, 4), sticky="w")
+
+        export_btn_frame = ctk.CTkFrame(export_card, fg_color="transparent")
+        export_btn_frame.grid(row=1, column=0, padx=20, pady=(4, 16), sticky="w")
+
+        ctk.CTkButton(export_btn_frame, text=_("report.export_ofx"), height=32, font=(FONT_FAMILY, 12),
+                       fg_color=c.primary, command=lambda: self._export_report("ofx")).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(export_btn_frame, text=_("report.export_qif"), height=32, font=(FONT_FAMILY, 12),
+                       fg_color=c.primary, command=lambda: self._export_report("qif")).pack(side="left", padx=4)
+        ctk.CTkButton(export_btn_frame, text=_("report.export_pdf"), height=32, font=(FONT_FAMILY, 12),
+                       fg_color=c.primary, command=lambda: self._export_report("pdf")).pack(side="left", padx=4)
+
         # Category breakdown
         breakdown_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
-        breakdown_card.grid(row=3, column=0, sticky="nsew", pady=(0, 16))
+        breakdown_card.grid(row=4, column=0, sticky="nsew", pady=(0, 16))
         breakdown_card.grid_columnconfigure(0, weight=1)
         breakdown_card.grid_rowconfigure(1, weight=1)
 
@@ -1844,6 +1864,45 @@ class BudgetApp(ctk.CTk):
     def _delete_rule(self, rule_id: int) -> None:
         self._storage.delete_rule(rule_id)
         self._refresh_rules_list()
+
+    def _export_report(self, fmt: str) -> None:
+        _ = self._
+        from tkinter import filedialog
+        from .exporter import export_ofx, export_qif, export_pdf
+
+        ext_map = {"ofx": ".ofx", "qif": ".qif", "pdf": ".pdf"}
+        filetypes = {
+            "ofx": [("OFX files", "*.ofx"), ("All files", "*.*")],
+            "qif": [("QIF files", "*.qif"), ("All files", "*.*")],
+            "pdf": [("PDF files", "*.pdf"), ("All files", "*.*")],
+        }
+        default_name = f"budget_{self._current_month or 'report'}{ext_map.get(fmt, '.txt')}"
+
+        path = filedialog.asksaveasfilename(
+            defaultextension=ext_map.get(fmt, ".txt"),
+            filetypes=filetypes.get(fmt, [("All files", "*.*")]),
+            initialfile=default_name,
+            title=f"Export {fmt.upper()}",
+        )
+        if not path:
+            return
+
+        try:
+            if fmt == "ofx":
+                content = export_ofx(self.bm)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            elif fmt == "qif":
+                content = export_qif(self.bm)
+                with open(path, "w", encoding="utf-8") as f:
+                    f.write(content)
+            elif fmt == "pdf":
+                export_pdf(self.bm, path)
+            else:
+                return
+            self._status_var.set(_("report.export_success", fmt=fmt.upper(), path=path))
+        except Exception as e:
+            self._status_var.set(_("report.export_error", fmt=fmt.upper(), error=str(e)))
 
     def _on_month_changed(self) -> None:
         _ = self._
