@@ -18,6 +18,7 @@
   "nav.reports": "Reports",
   "nav.settings": "Settings",
   "nav.recurring": "Recurring",
+  "nav.compare": "Compare",
 
   "header.month": "Month (YYYY-MM)",
   "header.refresh": "Refresh",
@@ -129,6 +130,20 @@
   "recurring.freq_quarterly": "Quarterly",
   "recurring.freq_yearly": "Yearly",
   "recurring.applied": "Applied {count} recurring transaction(s) for {month}.",
+
+  "compare.title": "Month-over-Month Comparison",
+  "compare.desc": "Select months to compare income, expenses, and net totals.",
+  "compare.select_months": "Select months (Ctrl+click for multiple):",
+  "compare.table_header": "Comparison Summary",
+  "compare.col_month": "Month",
+  "compare.col_income": "Income",
+  "compare.col_expenses": "Expenses",
+  "compare.col_net": "Net",
+  "compare.col_margin": "Margin",
+  "compare.col_count": "Txns",
+  "compare.chart_title": "Income vs Expenses by Month",
+  "compare.no_months": "No months available. Add budgets first.",
+  "compare.select_hint": "Select one or more months above to see comparison.",
 
   "budget.progress": "Budget Progress",
   "budget.no_limits": "Set budget limits in Settings to track spending progress.",

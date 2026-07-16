@@ -152,6 +152,7 @@ class BudgetApp(ctk.CTk):
             ("income", "\u2191", "nav.income"),
             ("expenses", "\u2193", "nav.expenses"),
             ("recurring", "\u21bb", "nav.recurring"),
+            ("compare", "\u2263", "nav.compare"),
             ("reports", "\u2261", "nav.reports"),
             ("settings", "\u2699", "nav.settings"),
         ]
@@ -227,6 +228,8 @@ class BudgetApp(ctk.CTk):
             self._current_view = self._build_expenses_view()
         elif view_name == "recurring":
             self._current_view = self._build_recurring_view()
+        elif view_name == "compare":
+            self._current_view = self._build_compare_view()
         elif view_name == "reports":
             self._current_view = self._build_reports_view()
         elif view_name == "settings":
@@ -1103,6 +1106,229 @@ class BudgetApp(ctk.CTk):
             self._auto_save()
             self._set_saved()
             self.update_report()
+
+    # ─── COMPARE VIEW ───────────────────────────────────────────────────
+
+    def _build_compare_view(self) -> ctk.CTkFrame:
+        _ = self._
+        c = theme_colors()
+        frame = ctk.CTkScrollableFrame(self._content_frame, fg_color="transparent")
+        frame.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(
+            frame, text=_("compare.title"),
+            font=(FONT_FAMILY, 22, "bold"), text_color=c.text, anchor="w",
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 4))
+
+        desc = ctk.CTkLabel(
+            frame, text=_("compare.desc"),
+            font=(FONT_FAMILY, 12), text_color=c.text_secondary, anchor="w",
+        )
+        desc.grid(row=1, column=0, sticky="w", pady=(0, 16))
+
+        # Month selection card
+        sel_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        sel_card.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        sel_card.grid_columnconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            sel_card, text=_("compare.select_months"),
+            font=(FONT_FAMILY, 13, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, padx=20, pady=(16, 8), sticky="w")
+
+        self._compare_month_listbox = tk.Listbox(
+            sel_card, selectmode=tk.EXTENDED, height=6,
+            font=(FONT_FAMILY, 12), exportselection=False,
+        )
+        self._compare_month_listbox.grid(row=1, column=0, columnspan=2, padx=20, pady=(0, 8), sticky="ew")
+        self._compare_month_listbox.bind("<<ListboxSelect>>", self._compare_selection_changed)
+
+        # Refresh and select-all buttons
+        btn_f = ctk.CTkFrame(sel_card, fg_color="transparent")
+        btn_f.grid(row=2, column=0, columnspan=2, padx=20, pady=(0, 16), sticky="w")
+        ctk.CTkButton(
+            btn_f, text="Refresh Months", height=28, font=(FONT_FAMILY, 11),
+            fg_color=c.primary, command=self._compare_refresh_months,
+        ).pack(side="left", padx=(0, 8))
+        ctk.CTkButton(
+            btn_f, text="Select All", height=28, font=(FONT_FAMILY, 11),
+            fg_color="transparent", text_color=c.primary, hover_color=c.hover,
+            command=self._compare_select_all,
+        ).pack(side="left", padx=4)
+
+        # Comparison table card
+        self._compare_table_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        self._compare_table_card.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        self._compare_table_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self._compare_table_card, text=_("compare.table_header"),
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, padx=20, pady=(16, 4), sticky="w")
+
+        self._compare_table_text = ctk.CTkTextbox(
+            self._compare_table_card, height=160, font=(FONT_FAMILY, 12),
+            fg_color="transparent", wrap="none",
+        )
+        self._compare_table_text.grid(row=1, column=0, padx=20, pady=(4, 16), sticky="ew")
+
+        # Chart card
+        self._compare_chart_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        self._compare_chart_card.grid(row=4, column=0, sticky="ew", pady=(0, 16))
+        self._compare_chart_card.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            self._compare_chart_card, text=_("compare.chart_title"),
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, padx=20, pady=(16, 4), sticky="w")
+
+        self._compare_canvas = ctk.CTkCanvas(
+            self._compare_chart_card, height=260, bg=c.card_bg, highlightthickness=0,
+        )
+        self._compare_canvas.grid(row=1, column=0, padx=20, pady=(4, 16), sticky="ew")
+        self._compare_canvas.bind("<Configure>", lambda e: self._redraw_compare_chart())
+
+        self._compare_refresh_months()
+        return frame
+
+    def _compare_refresh_months(self) -> None:
+        months = self._storage.list_months()
+        self._compare_month_listbox.delete(0, "end")
+        for m in months:
+            self._compare_month_listbox.insert("end", m)
+        if not months:
+            _ = self._
+            self._compare_show_result(_("compare.no_months"))
+
+    def _compare_select_all(self) -> None:
+        self._compare_month_listbox.select_set(0, "end")
+        self._compare_selection_changed()
+
+    def _compare_selection_changed(self, event=None) -> None:
+        _ = self._
+        sel = self._compare_month_listbox.curselection()
+        if not sel:
+            self._compare_show_result(_("compare.select_hint"))
+            self._redraw_compare_chart()
+            return
+
+        selected_months = [self._compare_month_listbox.get(i) for i in sel]
+        budgets: list[tuple[str, BudgetMonth]] = []
+        for m in selected_months:
+            loaded = self._storage.load_budget(m)
+            if loaded:
+                budgets.append((m, loaded))
+
+        # Build table
+        lines = []
+        header = (
+            f"{_('compare.col_month'):<12} "
+            f"{_('compare.col_income'):>12} "
+            f"{_('compare.col_expenses'):>12} "
+            f"{_('compare.col_net'):>12} "
+            f"{_('compare.col_margin'):>8} "
+            f"{_('compare.col_count'):>6}"
+        )
+        lines.append(header)
+        lines.append("-" * len(header))
+        for m, bm in budgets:
+            inc = bm.total_income()
+            exp = bm.total_expenses()
+            net = bm.net()
+            margin = bm.profit_margin()
+            count = len(bm.incomes) + len(bm.expenses)
+            lines.append(
+                f"{m:<12} ${inc:>8,.2f} ${exp:>8,.2f} ${net:>+8,.2f} {margin:>6.1f}% {count:>5}"
+            )
+        # Totals row
+        if len(budgets) > 1:
+            t_inc = sum(bm.total_income() for _, bm in budgets)
+            t_exp = sum(bm.total_expenses() for _, bm in budgets)
+            t_net = sum(bm.net() for _, bm in budgets)
+            t_margin = (t_net / t_inc * 100) if t_inc > 0 else 0
+            lines.append("-" * len(header))
+            lines.append(
+                f"{'Total':<12} ${t_inc:>8,.2f} ${t_exp:>8,.2f} ${t_net:>+8,.2f} {t_margin:>6.1f}%"
+            )
+        self._compare_show_result("\n".join(lines))
+        self._redraw_compare_chart()
+
+    def _compare_show_result(self, text: str) -> None:
+        tb = self._compare_table_text
+        tb.configure(state="normal")
+        tb.delete("1.0", "end")
+        tb.insert("end", text)
+        tb.configure(state="disabled")
+
+    def _redraw_compare_chart(self) -> None:
+        canvas = self._compare_canvas
+        canvas.delete("all")
+        c = theme_colors()
+        try:
+            w = max(1, int(canvas.winfo_width()))
+            h = max(1, int(canvas.winfo_height()))
+        except Exception:
+            return
+        _ = self._
+
+        sel = self._compare_month_listbox.curselection()
+        if not sel:
+            canvas.create_text(w / 2, h / 2, text=_("compare.select_hint"),
+                               fill=c.text_secondary, font=(FONT_FAMILY, 11))
+            return
+
+        selected_months = [self._compare_month_listbox.get(i) for i in sel]
+        budgets: list[tuple[str, float, float]] = []
+        for m in selected_months:
+            bm = self._storage.load_budget(m)
+            if bm:
+                budgets.append((m, bm.total_income(), bm.total_expenses()))
+
+        if not budgets:
+            canvas.create_text(w / 2, h / 2, text=_("compare.select_hint"),
+                               fill=c.text_secondary, font=(FONT_FAMILY, 11))
+            return
+
+        pad = 20
+        n = len(budgets)
+        if n == 0:
+            return
+        group_w = max(10, (w - 3 * pad) / n)
+        bar_w = max(4, group_w * 0.3)
+        max_val = max(max(inc, exp) for _, inc, exp in budgets)
+        if max_val <= 0:
+            max_val = 1.0
+        usable_h = max(1, h - 3 * pad)
+        scale = usable_h / max_val
+        y_base = h - pad
+
+        # Baseline
+        canvas.create_line(pad, y_base, w - pad, y_base, fill=c.border)
+
+        for i, (month, inc, exp) in enumerate(budgets):
+            cx = pad + group_w * (i + 0.5)
+            h_inc = int(inc * scale)
+            h_exp = int(exp * scale)
+
+            # Income bar
+            x1 = cx - bar_w - 2
+            canvas.create_rectangle(x1, y_base - h_inc, x1 + bar_w, y_base,
+                                    fill=c.primary, outline="")
+
+            # Expense bar
+            x2 = cx + 2
+            canvas.create_rectangle(x2, y_base - h_exp, x2 + bar_w, y_base,
+                                    fill=c.danger, outline="")
+
+            # Labels
+            short_m = month[-2:] if len(month) > 2 else month
+            canvas.create_text(cx, y_base + 10, text=short_m,
+                               fill=c.text_secondary, font=(FONT_FAMILY, 9))
+            canvas.create_text(x1 + bar_w / 2, y_base - h_inc - 4, text=f"${inc:,.0f}",
+                               fill=c.primary, font=(FONT_FAMILY, 8, "bold"), anchor="s")
+            canvas.create_text(x2 + bar_w / 2, y_base - h_exp - 4, text=f"${exp:,.0f}",
+                               fill=c.danger, font=(FONT_FAMILY, 8, "bold"), anchor="s")
 
     # ─── REPORTS VIEW ──────────────────────────────────────────────────
 
