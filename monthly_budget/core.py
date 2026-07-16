@@ -6,6 +6,7 @@ import json
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
+import calendar as _cal
 from datetime import date as _date
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -30,6 +31,124 @@ class Expense:
 
     def to_dict(self) -> Dict:
         return {"name": self.name, "amount": self.amount, "category": self.category, "date": self.date}
+
+
+@dataclass
+class RecurringTransaction:
+    category: str
+    description: str
+    amount: float
+    frequency: str  # weekly, biweekly, monthly, quarterly, yearly
+    day: int  # day of month (1-31) or day of week (0=Mon..6=Sun) for weekly
+    start_date: str  # YYYY-MM
+    end_date: Optional[str] = None  # YYYY-MM, None = no end
+    active: bool = True
+    id: int = 0
+
+    def to_dict(self) -> Dict:
+        return {
+            "id": self.id,
+            "category": self.category,
+            "description": self.description,
+            "amount": self.amount,
+            "frequency": self.frequency,
+            "day": self.day,
+            "start_date": self.start_date,
+            "end_date": self.end_date,
+            "active": self.active,
+        }
+
+
+def apply_recurring_for_month(
+    recurring_list: List[RecurringTransaction],
+    year: int,
+    month: int,
+) -> List[Expense]:
+    """Generate Expense entries for a given month from active recurring templates."""
+    result: List[Expense] = []
+    for rt in recurring_list:
+        if not rt.active:
+            continue
+        # Check if rt applies to this month
+        try:
+            sy, sm = (int(x) for x in rt.start_date.split("-"))
+        except (ValueError, AttributeError):
+            continue
+        if (year, month) < (sy, sm):
+            continue
+        if rt.end_date:
+            try:
+                ey, em = (int(x) for x in rt.end_date.split("-"))
+            except (ValueError, AttributeError):
+                pass
+            else:
+                if (year, month) > (ey, em):
+                    continue
+
+        # Determine which days in the month this recurring fires
+        days = _recurring_days_in_month(rt, year, month)
+        for d in days:
+            date_str = f"{year}-{month:02d}-{d:02d}"
+            result.append(Expense(
+                name=rt.description,
+                amount=rt.amount,
+                category=rt.category,
+                date=date_str,
+            ))
+    return result
+
+
+def _recurring_days_in_month(rt: RecurringTransaction, year: int, month: int) -> List[int]:
+    """Return list of days-of-month (1-31) when this recurring fires."""
+    freq = rt.frequency
+    day = rt.day
+    days_in_month = _cal.monthrange(year, month)[1]
+
+    if freq == "monthly":
+        d = min(day, days_in_month)
+        return [d]
+
+    elif freq == "yearly":
+        # Only fire in the same month as start_date
+        try:
+            start_month = int(rt.start_date.split("-")[1])
+        except (ValueError, AttributeError, IndexError):
+            start_month = 1
+        if month != start_month:
+            return []
+        d = min(day, days_in_month)
+        return [d]
+
+    elif freq == "quarterly":
+        # Fire on months 1,4,7,10 for quarter-start, etc.
+        if month not in (1, 4, 7, 10):
+            return []
+        return [min(day, days_in_month)]
+
+    elif freq == "weekly":
+        # day is day-of-week: 0=Mon..6=Sun
+        # Find all occurrences of that weekday in the month
+        result: List[int] = []
+        for d in range(1, days_in_month + 1):
+            wd = _date(year, month, d).weekday()
+            if wd == day:
+                result.append(d)
+        return result
+
+    elif freq == "biweekly":
+        # Similar to weekly but every other week
+        # Use a simple heuristic: fire on the 1st and 3rd (or 2nd/4th) of the weekday
+        result = []
+        count = 0
+        for d in range(1, days_in_month + 1):
+            wd = _date(year, month, d).weekday()
+            if wd == day:
+                count += 1
+                if count % 2 == 1:  # 1st, 3rd, 5th occurrence
+                    result.append(d)
+        return result
+
+    return []
 
 
 @dataclass

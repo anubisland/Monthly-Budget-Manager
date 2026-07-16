@@ -213,3 +213,65 @@ class TestStoragePersistence:
         assert loaded is not None
         assert loaded.incomes[0].amount == 100
         s2.close()
+
+
+class TestStorageRecurring:
+    def test_save_and_load_recurring(self, storage):
+        from monthly_budget.core import RecurringTransaction
+        rt = RecurringTransaction(
+            category="Rent", description="Monthly Rent", amount=1500,
+            frequency="monthly", day=1, start_date="2025-01",
+        )
+        rt_id = storage.save_recurring(rt)
+        assert rt_id > 0
+
+        loaded = storage.load_recurring(rt_id)
+        assert loaded is not None
+        assert loaded.category == "Rent"
+        assert loaded.description == "Monthly Rent"
+        assert loaded.amount == 1500
+        assert loaded.frequency == "monthly"
+        assert loaded.day == 1
+        assert loaded.start_date == "2025-01"
+        assert loaded.end_date is None
+        assert loaded.active is True
+
+    def test_update_recurring(self, storage):
+        from monthly_budget.core import RecurringTransaction
+        rt = RecurringTransaction(
+            category="Food", description="Lunch", amount=50,
+            frequency="weekly", day=0, start_date="2025-01",
+        )
+        rt_id = storage.save_recurring(rt)
+
+        rt2 = RecurringTransaction(
+            id=rt_id, category="Food", description="Lunch Updated", amount=60,
+            frequency="weekly", day=0, start_date="2025-01",
+        )
+        storage.save_recurring(rt2)
+
+        loaded = storage.load_recurring(rt_id)
+        assert loaded is not None
+        assert loaded.description == "Lunch Updated"
+        assert loaded.amount == 60
+
+    def test_list_recurring(self, storage):
+        from monthly_budget.core import RecurringTransaction
+        for i in range(3):
+            storage.save_recurring(RecurringTransaction(
+                category="Test", description=f"Item {i}", amount=10 * (i + 1),
+                frequency="monthly", day=1, start_date="2025-01",
+            ))
+        items = storage.list_recurring()
+        assert len(items) == 3
+
+    def test_delete_recurring(self, storage):
+        from monthly_budget.core import RecurringTransaction
+        rt = RecurringTransaction(
+            category="Test", description="Delete Me", amount=100,
+            frequency="monthly", day=1, start_date="2025-01",
+        )
+        rt_id = storage.save_recurring(rt)
+        assert storage.load_recurring(rt_id) is not None
+        storage.delete_recurring(rt_id)
+        assert storage.load_recurring(rt_id) is None

@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .core import BudgetMonth, Income, Expense
+from .core import BudgetMonth, Income, Expense, RecurringTransaction
 
 
 class Storage:
@@ -64,6 +64,17 @@ class Storage:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
+            );
+            CREATE TABLE IF NOT EXISTS recurring_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                description TEXT NOT NULL,
+                amount REAL NOT NULL,
+                frequency TEXT NOT NULL,
+                day INTEGER NOT NULL,
+                start_date TEXT NOT NULL,
+                end_date TEXT,
+                active INTEGER NOT NULL DEFAULT 1
             );
         """)
         conn.commit()
@@ -174,3 +185,61 @@ class Storage:
         conn = self._connect()
         cur = conn.execute("SELECT 1 FROM budgets WHERE month = ?", (month,))
         return cur.fetchone() is not None
+
+    # ── Recurring Transactions ──────────────────────────────────────
+
+    def save_recurring(self, rt: RecurringTransaction) -> int:
+        conn = self._connect()
+        if rt.id > 0:
+            conn.execute(
+                "UPDATE recurring_transactions SET category=?, description=?, amount=?, "
+                "frequency=?, day=?, start_date=?, end_date=?, active=? WHERE id=?",
+                (rt.category, rt.description, rt.amount, rt.frequency, rt.day,
+                 rt.start_date, rt.end_date, int(rt.active), rt.id),
+            )
+        else:
+            cur = conn.execute(
+                "INSERT INTO recurring_transactions (category, description, amount, frequency, day, start_date, end_date, active) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (rt.category, rt.description, rt.amount, rt.frequency, rt.day,
+                 rt.start_date, rt.end_date, int(rt.active)),
+            )
+            rt.id = cur.lastrowid
+        conn.commit()
+        return rt.id
+
+    def load_recurring(self, rt_id: int) -> Optional[RecurringTransaction]:
+        conn = self._connect()
+        cur = conn.execute(
+            "SELECT * FROM recurring_transactions WHERE id = ?", (rt_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        return self._row_to_recurring(row)
+
+    def list_recurring(self) -> List[RecurringTransaction]:
+        conn = self._connect()
+        cur = conn.execute(
+            "SELECT * FROM recurring_transactions ORDER BY id"
+        )
+        return [self._row_to_recurring(r) for r in cur.fetchall()]
+
+    def delete_recurring(self, rt_id: int) -> None:
+        conn = self._connect()
+        conn.execute("DELETE FROM recurring_transactions WHERE id = ?", (rt_id,))
+        conn.commit()
+
+    @staticmethod
+    def _row_to_recurring(row) -> RecurringTransaction:
+        return RecurringTransaction(
+            id=row["id"],
+            category=row["category"],
+            description=row["description"],
+            amount=row["amount"],
+            frequency=row["frequency"],
+            day=row["day"],
+            start_date=row["start_date"],
+            end_date=row["end_date"],
+            active=bool(row["active"]),
+        )

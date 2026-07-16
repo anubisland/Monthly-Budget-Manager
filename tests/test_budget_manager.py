@@ -593,3 +593,126 @@ class TestMain:
         bm.add_expense("Rent", 1000, "Housing")
         bm.add_expense("Mortgage", 500, "Housing")
         assert bm.expenses_by_category()["Housing"] == 1500.0
+
+
+class TestRecurringTransactions:
+    """Tests for RecurringTransaction and apply_recurring_for_month."""
+
+    def test_recurring_monthly(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Rent", description="Monthly Rent", amount=1500,
+            frequency="monthly", day=1, start_date="2025-01",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 6)
+        assert len(expenses) == 1
+        assert expenses[0].name == "Monthly Rent"
+        assert expenses[0].amount == 1500
+        assert expenses[0].category == "Rent"
+        assert expenses[0].date == "2025-06-01"
+
+    def test_recurring_monthly_end_date(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Rent", description="Rent", amount=1500,
+            frequency="monthly", day=1, start_date="2025-01", end_date="2025-03",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 4)
+        assert len(expenses) == 0
+
+    def test_recurring_before_start(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Sub", description="Sub", amount=10,
+            frequency="monthly", day=15, start_date="2025-06",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 5)
+        assert len(expenses) == 0
+
+    def test_recurring_inactive_skipped(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Netflix", description="Streaming", amount=15,
+            frequency="monthly", day=10, start_date="2025-01", active=False,
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 6)
+        assert len(expenses) == 0
+
+    def test_recurring_weekly(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        # Weekly on Monday (0) — June 2025 has 5 Mondays
+        rt = RecurringTransaction(
+            category="Food", description="Lunch", amount=50,
+            frequency="weekly", day=0, start_date="2025-01",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 6)
+        assert len(expenses) > 0
+        for e in expenses:
+            assert e.date.startswith("2025-06-")
+
+    def test_recurring_yearly(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Insurance", description="Annual", amount=1200,
+            frequency="yearly", day=15, start_date="2020-01",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 6)
+        assert len(expenses) == 0  # yearly only fires in January
+        expenses_jan = apply_recurring_for_month([rt], 2025, 1)
+        assert len(expenses_jan) == 1
+        assert expenses_jan[0].date == "2025-01-15"
+
+    def test_recurring_quarterly(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rt = RecurringTransaction(
+            category="Tax", description="Quarterly", amount=500,
+            frequency="quarterly", day=15, start_date="2025-01",
+        )
+        for m in (1, 4, 7, 10):
+            ex = apply_recurring_for_month([rt], 2025, m)
+            assert len(ex) == 1, f"Expected 1 expense in month {m}"
+            assert ex[0].date == f"2025-{m:02d}-15"
+        for m in (2, 3, 5, 6, 8, 9, 11, 12):
+            assert len(apply_recurring_for_month([rt], 2025, m)) == 0
+
+    def test_recurring_multiple_same_month(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        rts = [
+            RecurringTransaction(category="Rent", description="Rent", amount=1500, frequency="monthly", day=1, start_date="2025-01"),
+            RecurringTransaction(category="Netflix", description="Streaming", amount=15, frequency="monthly", day=10, start_date="2025-01"),
+        ]
+        expenses = apply_recurring_for_month(rts, 2025, 6)
+        assert len(expenses) == 2
+
+    def test_recurring_biweekly(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        # Biweekly on Monday (0)
+        rt = RecurringTransaction(
+            category="Savings", description="Transfer", amount=200,
+            frequency="biweekly", day=0, start_date="2025-01",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 6)
+        assert len(expenses) > 0
+
+    def test_recurring_day_clamped(self):
+        from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
+        # Day 31 in a 30-day month
+        rt = RecurringTransaction(
+            category="Sub", description="Sub", amount=10,
+            frequency="monthly", day=31, start_date="2025-01",
+        )
+        expenses = apply_recurring_for_month([rt], 2025, 4)  # April has 30 days
+        assert len(expenses) == 1
+        assert expenses[0].date == "2025-04-30"
+
+    def test_recurring_to_dict(self):
+        from monthly_budget.core import RecurringTransaction
+        rt = RecurringTransaction(
+            id=5, category="Test", description="Test", amount=100,
+            frequency="monthly", day=1, start_date="2025-01", end_date="2025-12",
+            active=True,
+        )
+        d = rt.to_dict()
+        assert d["id"] == 5
+        assert d["category"] == "Test"
+        assert d["active"] is True

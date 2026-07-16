@@ -151,6 +151,7 @@ class BudgetApp(ctk.CTk):
             ("dashboard", "\u2302", "nav.dashboard"),
             ("income", "\u2191", "nav.income"),
             ("expenses", "\u2193", "nav.expenses"),
+            ("recurring", "\u21bb", "nav.recurring"),
             ("reports", "\u2261", "nav.reports"),
             ("settings", "\u2699", "nav.settings"),
         ]
@@ -224,6 +225,8 @@ class BudgetApp(ctk.CTk):
             self._current_view = self._build_income_view()
         elif view_name == "expenses":
             self._current_view = self._build_expenses_view()
+        elif view_name == "recurring":
+            self._current_view = self._build_recurring_view()
         elif view_name == "reports":
             self._current_view = self._build_reports_view()
         elif view_name == "settings":
@@ -783,6 +786,324 @@ class BudgetApp(ctk.CTk):
             self._set_saved()
             self._set_status(_("app.expenses_cleared"))
 
+    # ─── RECURRING VIEW ─────────────────────────────────────────────────
+
+    def _build_recurring_view(self) -> ctk.CTkFrame:
+        _ = self._
+        c = theme_colors()
+        frame = ctk.CTkScrollableFrame(self._content_frame, fg_color="transparent")
+        frame.grid_columnconfigure(0, weight=1)
+
+        title = ctk.CTkLabel(
+            frame, text=_("recurring.title"),
+            font=(FONT_FAMILY, 22, "bold"), text_color=c.text, anchor="w",
+        )
+        title.grid(row=0, column=0, sticky="w", pady=(0, 4))
+
+        desc = ctk.CTkLabel(
+            frame, text=_("recurring.desc"),
+            font=(FONT_FAMILY, 12), text_color=c.text_secondary, anchor="w",
+        )
+        desc.grid(row=1, column=0, sticky="w", pady=(0, 16))
+
+        # ── Add/Edit form card ──
+        form_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        form_card.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        form_card.grid_columnconfigure(1, weight=1)
+
+        self._recur_edit_id = 0
+        self._recur_desc_var = ctk.StringVar()
+        self._recur_cat_var = ctk.StringVar(value="Uncategorized")
+        self._recur_amount_var = ctk.StringVar()
+        self._recur_freq_var = ctk.StringVar(value="monthly")
+        self._recur_day_var = ctk.StringVar(value="1")
+        self._recur_start_var = ctk.StringVar()
+        self._recur_end_var = ctk.StringVar()
+
+        row = 0
+        ctk.CTkLabel(form_card, text=_("recurring.description"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=(16, 4), sticky="w")
+        ctk.CTkEntry(form_card, textvariable=self._recur_desc_var, width=200, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=row, column=1, padx=4, pady=(16, 4), sticky="w")
+
+        row = 1
+        ctk.CTkLabel(form_card, text=_("recurring.category"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        cat_combo = ctk.CTkComboBox(
+            form_card,
+            values=["Food", "Rent", "Utilities", "Transport", "Healthcare",
+                    "Entertainment", "Education", "Clothing", "Savings",
+                    "Debt", "Subscriptions", "Gifts", "Misc", "Uncategorized"],
+            variable=self._recur_cat_var, width=200, height=32, font=(FONT_FAMILY, 12),
+        )
+        cat_combo.grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        row = 2
+        ctk.CTkLabel(form_card, text=_("recurring.amount"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        ctk.CTkEntry(form_card, textvariable=self._recur_amount_var, width=120, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        row = 3
+        ctk.CTkLabel(form_card, text=_("recurring.frequency"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        freq_combo = ctk.CTkComboBox(
+            form_card,
+            values=["monthly", "weekly", "biweekly", "quarterly", "yearly"],
+            variable=self._recur_freq_var, width=120, height=32, font=(FONT_FAMILY, 12),
+        )
+        freq_combo.grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        row = 4
+        ctk.CTkLabel(form_card, text=_("recurring.day"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        ctk.CTkEntry(form_card, textvariable=self._recur_day_var, width=60, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        row = 5
+        ctk.CTkLabel(form_card, text=_("recurring.start_date"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        ctk.CTkEntry(form_card, textvariable=self._recur_start_var, width=120, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        row = 6
+        ctk.CTkLabel(form_card, text=_("recurring.end_date"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=row, column=0, padx=(16, 4), pady=4, sticky="w")
+        ctk.CTkEntry(form_card, textvariable=self._recur_end_var, width=120, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=row, column=1, padx=4, pady=4, sticky="w")
+
+        # Buttons
+        row = 7
+        btn_frame = ctk.CTkFrame(form_card, fg_color="transparent")
+        btn_frame.grid(row=row, column=0, columnspan=2, padx=16, pady=(12, 16), sticky="w")
+
+        self._recur_add_btn = ctk.CTkButton(
+            btn_frame, text=_("recurring.add"), height=32, font=(FONT_FAMILY, 12),
+            fg_color=c.primary, command=self._recur_add,
+        )
+        self._recur_add_btn.pack(side="left", padx=(0, 8))
+
+        self._recur_update_btn = ctk.CTkButton(
+            btn_frame, text=_("recurring.update"), height=32, font=(FONT_FAMILY, 12),
+            fg_color=c.primary, command=self._recur_update,
+        )
+        self._recur_update_btn.pack(side="left", padx=4)
+
+        self._recur_cancel_btn = ctk.CTkButton(
+            btn_frame, text=_("recurring.cancel"), height=32, font=(FONT_FAMILY, 12),
+            fg_color="transparent", text_color=c.text,
+            hover_color=c.hover, command=self._recur_cancel_edit,
+        )
+        self._recur_cancel_btn.pack(side="left", padx=4)
+
+        # ── Recurring list ──
+        list_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        list_card.grid(row=3, column=0, sticky="nsew", pady=(0, 12))
+        list_card.grid_columnconfigure(0, weight=1)
+        list_card.grid_rowconfigure(2, weight=1)
+
+        # Header row: title + apply button
+        header_frame = ctk.CTkFrame(list_card, fg_color="transparent")
+        header_frame.grid(row=0, column=0, padx=20, pady=(16, 4), sticky="ew")
+        header_frame.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            header_frame, text=_("recurring.title"),
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        ).grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            header_frame, text="Apply to Current Month", height=28, font=(FONT_FAMILY, 11),
+            fg_color=c.primary, command=self._recur_apply_to_current,
+        ).grid(row=0, column=1, sticky="e")
+
+        # Action row: ID entry + Edit/Delete buttons
+        action_frame = ctk.CTkFrame(list_card, fg_color="transparent")
+        action_frame.grid(row=1, column=0, padx=20, pady=(4, 4), sticky="w")
+
+        self._recur_action_id_var = ctk.StringVar()
+        ctk.CTkLabel(action_frame, text="ID:", font=(FONT_FAMILY, 12), text_color=c.text).pack(side="left", padx=(0, 4))
+        ctk.CTkEntry(action_frame, textvariable=self._recur_action_id_var, width=50, height=28,
+                      font=(FONT_FAMILY, 12)).pack(side="left", padx=4)
+        ctk.CTkButton(
+            action_frame, text=_("recurring.update"), height=28, width=60, font=(FONT_FAMILY, 11),
+            fg_color=c.primary, command=self._recur_edit_by_id,
+        ).pack(side="left", padx=4)
+        ctk.CTkButton(
+            action_frame, text=_("recurring.delete"), height=28, width=60, font=(FONT_FAMILY, 11),
+            fg_color=c.negative, command=self._recur_delete_by_id,
+        ).pack(side="left", padx=4)
+
+        self._recur_list_text = ctk.CTkTextbox(
+            list_card, font=(FONT_FAMILY, 12), fg_color="transparent", wrap="none",
+        )
+        self._recur_list_text.grid(row=2, column=0, padx=20, pady=(4, 8), sticky="nsew")
+        self._recur_refresh_list()
+
+        return frame
+
+    def _recur_refresh_list(self) -> None:
+        _ = self._
+        text = self._recur_list_text
+        text.configure(state="normal")
+        text.delete("1.0", "end")
+        rows = self._storage.list_recurring()
+        if not rows:
+            text.insert("end", _("recurring.empty"))
+            text.configure(state="disabled")
+            return
+
+        header = f"{'ID':<4} {'Description':<24} {'Category':<14} {'Amount':>8} {'Freq':<10} {'Day':<4} {'Start':<10} {'End':<10} {'Active':<6}"
+        text.insert("end", header + "\n")
+        text.insert("end", "-" * len(header) + "\n")
+        for rt in rows:
+            active_flag = _("recurring.active_word") if hasattr(self, '_') and False else ("Y" if rt.active else "N")
+            line = (
+                f"{rt.id:<4} {rt.description:<24} {rt.category:<14} "
+                f"${rt.amount:>6,.2f} {rt.frequency:<10} {rt.day:<4} "
+                f"{rt.start_date:<10} {(rt.end_date or '-'):<10} {active_flag:<6}"
+            )
+            text.insert("end", line + "\n")
+        text.configure(state="disabled")
+
+    def _recur_add(self) -> None:
+        _ = self._
+        desc = self._recur_desc_var.get().strip()
+        if not desc:
+            return
+        try:
+            amount = float(self._recur_amount_var.get().strip().replace(",", ""))
+            if amount < 0:
+                raise ValueError
+        except ValueError:
+            return
+        cat = self._recur_cat_var.get().strip() or "Uncategorized"
+        freq = self._recur_freq_var.get().strip()
+        try:
+            day = int(self._recur_day_var.get().strip())
+        except ValueError:
+            return
+        start = self._recur_start_var.get().strip() or "2000-01"
+        end = self._recur_end_var.get().strip() or None
+
+        from .core import RecurringTransaction
+        rt = RecurringTransaction(
+            category=cat, description=desc, amount=amount,
+            frequency=freq, day=day, start_date=start, end_date=end, active=True,
+        )
+        self._storage.save_recurring(rt)
+        self._recur_clear_form()
+        self._recur_refresh_list()
+        self._set_saved()
+
+    def _recur_update(self) -> None:
+        if self._recur_edit_id <= 0:
+            return
+        _ = self._
+        desc = self._recur_desc_var.get().strip()
+        if not desc:
+            return
+        try:
+            amount = float(self._recur_amount_var.get().strip().replace(",", ""))
+            if amount < 0:
+                raise ValueError
+        except ValueError:
+            return
+        cat = self._recur_cat_var.get().strip() or "Uncategorized"
+        freq = self._recur_freq_var.get().strip()
+        try:
+            day = int(self._recur_day_var.get().strip())
+        except ValueError:
+            return
+        start = self._recur_start_var.get().strip() or "2000-01"
+        end = self._recur_end_var.get().strip() or None
+
+        from .core import RecurringTransaction
+        rt = RecurringTransaction(
+            id=self._recur_edit_id,
+            category=cat, description=desc, amount=amount,
+            frequency=freq, day=day, start_date=start, end_date=end, active=True,
+        )
+        self._storage.save_recurring(rt)
+        self._recur_cancel_edit()
+        self._recur_refresh_list()
+        self._set_saved()
+
+    def _recur_cancel_edit(self) -> None:
+        self._recur_edit_id = 0
+        self._recur_clear_form()
+        _ = self._
+        self._recur_add_btn.configure(text=_("recurring.add"))
+
+    def _recur_clear_form(self) -> None:
+        self._recur_desc_var.set("")
+        self._recur_cat_var.set("Uncategorized")
+        self._recur_amount_var.set("")
+        self._recur_freq_var.set("monthly")
+        self._recur_day_var.set("1")
+        self._recur_start_var.set("")
+        self._recur_end_var.set("")
+
+    def _recur_edit_by_id(self) -> None:
+        _ = self._
+        try:
+            rt_id = int(self._recur_action_id_var.get().strip())
+        except ValueError:
+            return
+        rt = self._storage.load_recurring(rt_id)
+        if rt is None:
+            return
+        self._recur_edit_id = rt.id
+        self._recur_desc_var.set(rt.description)
+        self._recur_cat_var.set(rt.category)
+        self._recur_amount_var.set(str(rt.amount))
+        self._recur_freq_var.set(rt.frequency)
+        self._recur_day_var.set(str(rt.day))
+        self._recur_start_var.set(rt.start_date)
+        self._recur_end_var.set(rt.end_date or "")
+
+    def _recur_delete_by_id(self) -> None:
+        _ = self._
+        try:
+            rt_id = int(self._recur_action_id_var.get().strip())
+        except ValueError:
+            return
+        rt = self._storage.load_recurring(rt_id)
+        if rt is None:
+            return
+        self._storage.delete_recurring(rt_id)
+        self._recur_refresh_list()
+        self._set_saved()
+
+    def _recur_apply_to_current(self) -> None:
+        _ = self._
+        if not self._current_month:
+            return
+        try:
+            ym = self._current_month.split("-")
+            year = int(ym[0])
+            month = int(ym[1])
+        except (IndexError, ValueError):
+            return
+
+        recurring_list = self._storage.list_recurring()
+        from .core import apply_recurring_for_month
+        new_expenses = apply_recurring_for_month(recurring_list, year, month)
+        existing = {(e.name, e.amount, e.category, e.date) for e in self.bm.expenses}
+        count = 0
+        for exp in new_expenses:
+            key = (exp.name, exp.amount, exp.category, exp.date)
+            if key not in existing:
+                self.bm.expenses.append(exp)
+                existing.add(key)
+                count += 1
+
+        self._status_var.set(_("recurring.applied", count=count, month=self._current_month))
+        if count > 0:
+            self._auto_save()
+            self._set_saved()
+            self.update_report()
+
     # ─── REPORTS VIEW ──────────────────────────────────────────────────
 
     def _build_reports_view(self) -> ctk.CTkFrame:
@@ -1169,14 +1490,37 @@ class BudgetApp(ctk.CTk):
         text.configure(state="disabled")
 
     def _on_month_changed(self) -> None:
+        _ = self._
         new_month = self._month_var.get().strip()
         self._auto_save()
         self._current_month = new_month
         self.bm = BudgetMonth(month=new_month or None)
+        was_new = not (new_month and self._storage.budget_exists(new_month))
         if new_month and self._storage.budget_exists(new_month):
             loaded = self._storage.load_budget(new_month)
             if loaded:
                 self.bm = loaded
+        elif was_new and new_month:
+            # Auto-apply recurring transactions to new months
+            from .core import apply_recurring_for_month
+            try:
+                ym = new_month.split("-")
+                year = int(ym[0])
+                month = int(ym[1])
+                recurring_list = self._storage.list_recurring()
+                new_expenses = apply_recurring_for_month(recurring_list, year, month)
+                existing = {(e.name, e.amount, e.category, e.date) for e in self.bm.expenses}
+                count = 0
+                for exp in new_expenses:
+                    key = (exp.name, exp.amount, exp.category, exp.date)
+                    if key not in existing:
+                        self.bm.expenses.append(exp)
+                        existing.add(key)
+                        count += 1
+                if count > 0:
+                    self._status_var.set(_("recurring.applied", count=count, month=new_month))
+            except (IndexError, ValueError):
+                pass
         self.update_report()
         self._refresh_month_list()
         self._save_prefs()
