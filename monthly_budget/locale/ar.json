@@ -100,6 +100,17 @@
   "settings.prefs_saved": "تم حفظ التفضيلات.",
   "settings.about": "حول",
   "settings.about_text": "مدير الميزانية الشهرية\nالإصدار {version}\nأداة مالية شخصية متعددة المنصات.",
+  "settings.budget_limits": "حدود الميزانية (نظام المظاريف)",
+  "settings.budget_desc": "حدد حد إنفاق شهري لكل فئة. يظهر التقدم في لوحة المعلومات.",
+  "settings.budget_category": "الفئة:",
+  "settings.budget_limit": "الحد ($):",
+  "settings.budget_set": "تعيين الحد",
+  "settings.budget_empty": "لم يتم تعيين حدود للميزانية. أضف حداً أعلاه.",
+
+  "budget.progress": "تقدم الميزانية",
+  "budget.no_limits": "حدد حدود الميزانية في الإعدادات لتتبع تقدم الإنفاق.",
+  "budget.over": "تجاوز الميزانية: {cats}",
+  "budget.no_limit_label": "(بدون حد)",
 
   "file.new": "ميزانية جديدة",
   "file.open": "فتح CSV\u2026",

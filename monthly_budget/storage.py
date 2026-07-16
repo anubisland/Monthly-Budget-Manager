@@ -53,6 +53,14 @@ class Storage:
                 date TEXT,
                 FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
             );
+            CREATE TABLE IF NOT EXISTS budget_limits (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                budget_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                limit_amount REAL NOT NULL,
+                UNIQUE(budget_id, category),
+                FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+            );
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
@@ -74,6 +82,7 @@ class Storage:
             budget_id = row["id"]
             conn.execute("DELETE FROM incomes WHERE budget_id = ?", (budget_id,))
             conn.execute("DELETE FROM expenses WHERE budget_id = ?", (budget_id,))
+            conn.execute("DELETE FROM budget_limits WHERE budget_id = ?", (budget_id,))
             conn.execute(
                 "UPDATE budgets SET updated_at = datetime('now') WHERE id = ?",
                 (budget_id,),
@@ -93,6 +102,11 @@ class Storage:
             conn.execute(
                 "INSERT INTO expenses (budget_id, name, amount, category, date) VALUES (?, ?, ?, ?, ?)",
                 (budget_id, exp.name, exp.amount, exp.category, exp.date),
+            )
+        for cat, limit in bm.budget_limits.items():
+            conn.execute(
+                "INSERT OR REPLACE INTO budget_limits (budget_id, category, limit_amount) VALUES (?, ?, ?)",
+                (budget_id, cat, limit),
             )
         conn.commit()
 
@@ -118,6 +132,13 @@ class Storage:
             bm.expenses.append(
                 Expense(name=r["name"], amount=r["amount"], category=r["category"], date=r["date"])
             )
+
+        for r in conn.execute(
+            "SELECT category, limit_amount FROM budget_limits WHERE budget_id = ?",
+            (budget_id,),
+        ):
+            bm.budget_limits[r["category"]] = r["limit_amount"]
+
         return bm
 
     def list_months(self) -> List[str]:

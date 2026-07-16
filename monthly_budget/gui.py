@@ -359,7 +359,90 @@ class BudgetApp(ctk.CTk):
 
         self._dash_insights = insights_label
 
+        # Budget progress
+        budget_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        budget_card.grid(row=4, column=0, sticky="ew", pady=(0, 16))
+        budget_card.grid_columnconfigure(0, weight=1)
+
+        budget_label = ctk.CTkLabel(
+            budget_card,
+            text=_("budget.progress"),
+            font=(FONT_FAMILY, 14, "bold"),
+            text_color=c.text,
+            anchor="w",
+        )
+        budget_label.grid(row=0, column=0, padx=16, pady=(12, 4), sticky="w")
+
+        self._budget_progress_frame = ctk.CTkFrame(budget_card, fg_color="transparent")
+        self._budget_progress_frame.grid(row=1, column=0, padx=16, pady=(0, 12), sticky="ew")
+        self._budget_progress_frame.grid_columnconfigure(1, weight=1)
+        self._refresh_budget_progress()
+
         return frame
+
+    def _refresh_budget_progress(self) -> None:
+        _ = self._
+        c = theme_colors()
+        for w in list(self._budget_progress_frame.winfo_children()):
+            w.destroy()
+
+        cat_data = self.bm.category_with_limits()
+        row = 0
+        for cat, data in cat_data.items():
+            budget = data["budget"]
+            spent = data["spent"]
+            remaining = data["remaining"]
+            if budget <= 0 and spent <= 0:
+                continue
+            pct = self.bm.budget_progress(cat)
+            bar_color = c.positive if remaining >= 0 else c.danger
+
+            name = ctk.CTkLabel(
+                self._budget_progress_frame, text=cat,
+                font=(FONT_FAMILY, 12), text_color=c.text, anchor="w", width=100,
+            )
+            name.grid(row=row, column=0, padx=(0, 8), pady=3, sticky="w")
+
+            progress = ctk.CTkProgressBar(
+                self._budget_progress_frame,
+                height=18,
+                corner_radius=4,
+                fg_color=c.border,
+                progress_color=bar_color,
+            )
+            progress.grid(row=row, column=1, padx=(0, 8), pady=3, sticky="ew")
+            progress.set(pct)
+
+            if budget > 0:
+                status = ctk.CTkLabel(
+                    self._budget_progress_frame,
+                    text=f"${spent:,.0f} / ${budget:,.0f} ({'+' if remaining >= 0 else ''}{remaining:,.0f})",
+                    font=(FONT_FAMILY, 11),
+                    text_color=bar_color,
+                    anchor="e",
+                    width=200,
+                )
+            else:
+                status = ctk.CTkLabel(
+                    self._budget_progress_frame,
+                    text=f"${spent:,.0f} ({_('budget.no_limit_label')})",
+                    font=(FONT_FAMILY, 11),
+                    text_color=c.text_secondary,
+                    anchor="e",
+                    width=200,
+                )
+            status.grid(row=row, column=2, padx=(0, 0), pady=3, sticky="e")
+            row += 1
+
+        if row == 0:
+            empty = ctk.CTkLabel(
+                self._budget_progress_frame,
+                text=_("budget.no_limits"),
+                font=(FONT_FAMILY, 12),
+                text_color=c.text_secondary,
+                anchor="w",
+            )
+            empty.grid(row=0, column=0, columnspan=3, pady=8, sticky="w")
 
     def _get_insight_text(self) -> str:
         _ = self._
@@ -384,6 +467,10 @@ class BudgetApp(ctk.CTk):
         if by_cat:
             top_cat = max(by_cat.items(), key=lambda x: x[1])
             parts.append(f"{_('dashboard.top_category')}: {top_cat[0]} (${top_cat[1]:,.2f})")
+
+        over = self.bm.over_budget_categories()
+        if over:
+            parts.append(_("budget.over", cats=", ".join(over)))
 
         return "  |  ".join(parts)
 
@@ -896,9 +983,56 @@ class BudgetApp(ctk.CTk):
                          _("settings.theme_dark") if current == "Dark" else
                          _("settings.theme_light"))
 
+        # Budget limits section
+        budget_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
+        budget_card.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        budget_card.grid_columnconfigure(1, weight=1)
+
+        budget_label = ctk.CTkLabel(
+            budget_card, text=_("settings.budget_limits"),
+            font=(FONT_FAMILY, 14, "bold"), text_color=c.text, anchor="w",
+        )
+        budget_label.grid(row=0, column=0, columnspan=3, padx=20, pady=(16, 4), sticky="w")
+
+        budget_desc = ctk.CTkLabel(
+            budget_card, text=_("settings.budget_desc"),
+            font=(FONT_FAMILY, 12), text_color=c.text_secondary, anchor="w",
+        )
+        budget_desc.grid(row=1, column=0, columnspan=3, padx=20, pady=(0, 8), sticky="w")
+
+        self._budget_cat_var = ctk.StringVar()
+        self._budget_limit_var = ctk.StringVar()
+
+        ctk.CTkLabel(budget_card, text=_("settings.budget_category"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=2, column=0, padx=(20, 4), pady=4, sticky="w")
+        cat_combo = ctk.CTkComboBox(
+            budget_card,
+            values=["Food", "Rent", "Utilities", "Transport", "Healthcare",
+                    "Entertainment", "Education", "Clothing", "Savings",
+                    "Debt", "Subscriptions", "Gifts", "Misc"],
+            variable=self._budget_cat_var,
+            width=140, height=32, font=(FONT_FAMILY, 12),
+        )
+        cat_combo.grid(row=2, column=1, padx=4, pady=4, sticky="w")
+
+        ctk.CTkLabel(budget_card, text=_("settings.budget_limit"), font=(FONT_FAMILY, 12), text_color=c.text).grid(
+            row=2, column=2, padx=(8, 4), pady=4, sticky="w")
+        ctk.CTkEntry(budget_card, textvariable=self._budget_limit_var, width=100, height=32,
+                      font=(FONT_FAMILY, 12)).grid(row=2, column=3, padx=4, pady=4, sticky="w")
+        ctk.CTkButton(
+            budget_card, text=_("settings.budget_set"), height=32, font=(FONT_FAMILY, 12),
+            fg_color=c.primary, command=self._set_budget_limit,
+        ).grid(row=2, column=4, padx=(8, 20), pady=4)
+
+        # Current limits list
+        self._budget_limit_list = ctk.CTkTextbox(budget_card, height=120, font=(FONT_FAMILY, 12),
+                                                   fg_color="transparent")
+        self._budget_limit_list.grid(row=3, column=0, columnspan=5, padx=20, pady=(4, 16), sticky="ew")
+        self._refresh_budget_limit_list()
+
         # About section
         about_card = ctk.CTkFrame(frame, fg_color=c.card_bg, corner_radius=12)
-        about_card.grid(row=3, column=0, sticky="ew", pady=(0, 12))
+        about_card.grid(row=4, column=0, sticky="ew", pady=(0, 12))
 
         about_label = ctk.CTkLabel(
             about_card, text=_("settings.about"),
@@ -999,6 +1133,41 @@ class BudgetApp(ctk.CTk):
             self._draw_bar_chart(self._rep_bar_canvas)
             self._draw_pie_chart(self._rep_pie_canvas)
 
+    def _set_budget_limit(self) -> None:
+        _ = self._
+        cat = self._budget_cat_var.get().strip()
+        limit_str = self._budget_limit_var.get().strip().replace(",", "")
+        if not cat or not limit_str:
+            return
+        try:
+            limit = float(limit_str)
+            if limit < 0:
+                raise ValueError
+        except ValueError:
+            self._show_error(_("dialog.error_invalid_amount"), _("dialog.error_amount_non_negative"))
+            return
+        self.bm.set_budget_limit(cat, limit)
+        self._budget_cat_var.set("")
+        self._budget_limit_var.set("")
+        self._refresh_budget_limit_list()
+        self._auto_save()
+        self._set_saved()
+
+    def _refresh_budget_limit_list(self) -> None:
+        _ = self._
+        text = self._budget_limit_list
+        text.delete("1.0", "end")
+        if not self.bm.budget_limits:
+            text.insert("end", _("settings.budget_empty"))
+            text.configure(state="disabled")
+            return
+        for cat, limit in sorted(self.bm.budget_limits.items()):
+            spent = self.bm.spent_in_category(cat)
+            remaining = self.bm.remaining_in_category(cat)
+            status = f"{cat:<20}  Limit: ${limit:>7,.2f}  Spent: ${spent:>7,.2f}  Remaining: ${remaining:>+7,.2f}"
+            text.insert("end", status + "\n")
+        text.configure(state="disabled")
+
     def _on_month_changed(self) -> None:
         new_month = self._month_var.get().strip()
         self._auto_save()
@@ -1050,6 +1219,8 @@ class BudgetApp(ctk.CTk):
             self._refresh_income_table()
         if hasattr(self, "_expense_tree"):
             self._refresh_expense_table()
+        if hasattr(self, "_budget_progress_frame"):
+            self._refresh_budget_progress()
         self._redraw_dashboard_charts()
         self._redraw_report_charts()
 

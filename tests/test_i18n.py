@@ -6,7 +6,6 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pytest
 from monthly_budget.i18n import I18n, _SUPPORTED_LANGUAGES
 
 

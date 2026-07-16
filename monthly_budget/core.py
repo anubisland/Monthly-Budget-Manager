@@ -37,6 +37,7 @@ class BudgetMonth:
     month: Optional[str] = None
     incomes: List[Income] = field(default_factory=list)
     expenses: List[Expense] = field(default_factory=list)
+    budget_limits: Dict[str, float] = field(default_factory=dict)
 
     def add_income(self, name: str, amount: float, date: Optional[str] = None) -> None:
         self.incomes.append(
@@ -85,11 +86,56 @@ class BudgetMonth:
             return 0.0
         return (self.net() / income) * 100.0
 
+    # ── Envelope budgeting ──────────────────────────────────────────
+
+    def set_budget_limit(self, category: str, limit: float) -> None:
+        self.budget_limits[category] = _clamp_non_negative(limit)
+
+    def spent_in_category(self, category: str) -> float:
+        return self.expenses_by_category().get(category, 0.0)
+
+    def remaining_in_category(self, category: str) -> float:
+        limit = self.budget_limits.get(category, 0.0)
+        return limit - self.spent_in_category(category)
+
+    def is_over_budget(self, category: str) -> bool:
+        return self.remaining_in_category(category) < 0
+
+    def over_budget_categories(self) -> List[str]:
+        return [c for c in self.budget_limits if self.is_over_budget(c)]
+
+    def total_budgeted(self) -> float:
+        return sum(self.budget_limits.values())
+
+    def total_remaining(self) -> float:
+        return sum(self.remaining_in_category(c) for c in self.budget_limits)
+
+    def budget_progress(self, category: str) -> float:
+        limit = self.budget_limits.get(category, 0.0)
+        if limit <= 0:
+            return 0.0
+        return min(self.spent_in_category(category) / limit, 1.0)
+
+    def category_with_limits(self) -> Dict[str, Dict[str, float]]:
+        result: Dict[str, Dict[str, float]] = {}
+        by_cat = self.expenses_by_category()
+        all_cats = set(by_cat.keys()) | set(self.budget_limits.keys())
+        for cat in sorted(all_cats):
+            result[cat] = {
+                "budget": self.budget_limits.get(cat, 0.0),
+                "spent": by_cat.get(cat, 0.0),
+                "remaining": self.remaining_in_category(cat),
+            }
+        return result
+
+    # ── Serialization ──────────────────────────────────────────────
+
     def to_dict(self) -> Dict:
         return {
             "month": self.month,
             "incomes": [x.to_dict() for x in self.incomes],
             "expenses": [x.to_dict() for x in self.expenses],
+            "budget_limits": dict(self.budget_limits),
             "totals": {
                 "income": round(self.total_income(), 2),
                 "expenses": round(self.total_expenses(), 2),
@@ -107,10 +153,12 @@ class BudgetMonth:
         self.month = data.get("month")
         self.incomes = [Income(**inc) for inc in data.get("incomes", [])]
         self.expenses = [Expense(**exp) for exp in data.get("expenses", [])]
+        self.budget_limits = dict(data.get("budget_limits", {}))
 
     def clear(self) -> None:
         self.incomes.clear()
         self.expenses.clear()
+        self.budget_limits.clear()
         self.month = None
 
 

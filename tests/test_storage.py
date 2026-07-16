@@ -159,6 +159,46 @@ class TestStorageSettings:
         assert storage.load_setting("language") == "en"
 
 
+class TestStorageBudgetLimits:
+    def test_save_and_load_limits(self, storage):
+        bm = BudgetMonth(month="2025-09")
+        bm.set_budget_limit("Food", 500)
+        bm.set_budget_limit("Rent", 1500)
+        storage.save_budget(bm)
+
+        loaded = storage.load_budget("2025-09")
+        assert loaded is not None
+        assert loaded.budget_limits["Food"] == 500
+        assert loaded.budget_limits["Rent"] == 1500
+
+    def test_update_limits(self, storage):
+        bm = BudgetMonth(month="2025-10")
+        bm.set_budget_limit("Food", 300)
+        storage.save_budget(bm)
+
+        bm2 = BudgetMonth(month="2025-10")
+        bm2.set_budget_limit("Food", 400)
+        bm2.set_budget_limit("Transport", 200)
+        storage.save_budget(bm2)
+
+        loaded = storage.load_budget("2025-10")
+        assert loaded is not None
+        assert loaded.budget_limits["Food"] == 400
+        assert loaded.budget_limits["Transport"] == 200
+
+    def test_limits_survives_reconnect(self, storage):
+        bm = BudgetMonth(month="2025-11")
+        bm.set_budget_limit("Utilities", 300)
+        storage.save_budget(bm)
+        storage.close()
+
+        s2 = Storage(storage.db_path)
+        loaded = s2.load_budget("2025-11")
+        assert loaded is not None
+        assert loaded.budget_limits["Utilities"] == 300
+        s2.close()
+
+
 class TestStoragePersistence:
     def test_data_survives_reconnect(self, storage):
         storage.save_setting("lang", "ar")

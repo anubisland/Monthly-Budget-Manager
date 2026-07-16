@@ -100,6 +100,17 @@
   "settings.prefs_saved": "Preferences saved.",
   "settings.about": "About",
   "settings.about_text": "Monthly Budget Manager\nVersion {version}\nA cross-platform personal finance tool.",
+  "settings.budget_limits": "Budget Limits (Envelope Budgeting)",
+  "settings.budget_desc": "Set a monthly spending limit per category. Progress shows on the Dashboard.",
+  "settings.budget_category": "Category:",
+  "settings.budget_limit": "Limit ($):",
+  "settings.budget_set": "Set Limit",
+  "settings.budget_empty": "No budget limits set. Add one above.",
+
+  "budget.progress": "Budget Progress",
+  "budget.no_limits": "Set budget limits in Settings to track spending progress.",
+  "budget.over": "Over budget: {cats}",
+  "budget.no_limit_label": "(no limit)",
 
   "file.new": "New Budget",
   "file.open": "Open CSV\u2026",

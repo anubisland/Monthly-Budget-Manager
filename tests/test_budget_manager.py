@@ -17,8 +17,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from budget_manager import (
     BudgetMonth,
-    Expense,
-    Income,
     _clamp_non_negative,
     _is_valid_ym,
     _is_valid_ymd,
@@ -249,6 +247,119 @@ class TestBudgetMonthToDict:
         bm = _budget_with_data()
         # Should not raise
         json.dumps(bm.to_dict())
+
+    def test_to_dict_includes_budget_limits(self):
+        bm = _budget_with_data()
+        bm.set_budget_limit("Food", 500)
+        d = bm.to_dict()
+        assert "budget_limits" in d
+        assert d["budget_limits"]["Food"] == 500
+
+
+# ===========================================================================
+# Envelope budgeting
+# ===========================================================================
+
+class TestEnvelopeBudgeting:
+    def test_set_budget_limit(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 500)
+        assert bm.budget_limits["Food"] == 500
+
+    def test_set_negative_limit_clamped(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", -100)
+        assert bm.budget_limits["Food"] == 0
+
+    def test_spent_in_category(self):
+        bm = BudgetMonth()
+        bm.add_expense("Groceries", 150, "Food")
+        bm.add_expense("Dinner", 50, "Food")
+        assert bm.spent_in_category("Food") == 200
+
+    def test_spent_in_empty_category(self):
+        bm = BudgetMonth()
+        assert bm.spent_in_category("NonExistent") == 0
+
+    def test_remaining_in_category(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 500)
+        bm.add_expense("Groceries", 150, "Food")
+        assert bm.remaining_in_category("Food") == 350
+
+    def test_remaining_no_limit(self):
+        bm = BudgetMonth()
+        bm.add_expense("Groceries", 100, "Food")
+        assert bm.remaining_in_category("Food") == -100
+
+    def test_is_over_budget(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 100)
+        bm.add_expense("Groceries", 150, "Food")
+        assert bm.is_over_budget("Food")
+
+    def test_is_not_over_budget(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 200)
+        bm.add_expense("Groceries", 100, "Food")
+        assert not bm.is_over_budget("Food")
+
+    def test_over_budget_categories(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 100)
+        bm.set_budget_limit("Rent", 1000)
+        bm.add_expense("Groceries", 150, "Food")
+        bm.add_expense("Rent", 900, "Rent")
+        over = bm.over_budget_categories()
+        assert "Food" in over
+        assert "Rent" not in over
+
+    def test_total_budgeted(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 500)
+        bm.set_budget_limit("Rent", 1000)
+        assert bm.total_budgeted() == 1500
+
+    def test_total_remaining(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 500)
+        bm.set_budget_limit("Rent", 1000)
+        bm.add_expense("Groceries", 100, "Food")
+        bm.add_expense("Rent", 1000, "Rent")
+        assert bm.total_remaining() == 400
+
+    def test_total_remaining_no_limits(self):
+        bm = BudgetMonth()
+        assert bm.total_remaining() == 0
+
+    def test_budget_progress(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 200)
+        bm.add_expense("Groceries", 50, "Food")
+        assert bm.budget_progress("Food") == 0.25
+
+    def test_budget_progress_zero_limit(self):
+        bm = BudgetMonth()
+        assert bm.budget_progress("NonExistent") == 0
+
+    def test_budget_progress_over_100(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 100)
+        bm.add_expense("Groceries", 200, "Food")
+        assert bm.budget_progress("Food") == 1.0
+
+    def test_category_with_limits(self):
+        bm = BudgetMonth()
+        bm.set_budget_limit("Food", 500)
+        bm.add_expense("Groceries", 100, "Food")
+        bm.add_expense("Rent", 1000, "Rent")
+        result = bm.category_with_limits()
+        assert "Food" in result
+        assert result["Food"]["budget"] == 500
+        assert result["Food"]["spent"] == 100
+        assert result["Food"]["remaining"] == 400
+        assert result["Rent"]["budget"] == 0
+        assert result["Rent"]["spent"] == 1000
 
 
 # ===========================================================================
