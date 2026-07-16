@@ -215,6 +215,39 @@ class TestStoragePersistence:
         s2.close()
 
 
+class TestStorageMultipleBudgets:
+    def test_different_budget_names(self, storage):
+        bm1 = BudgetMonth(month="2025-01")
+        storage.save_budget(bm1, "Personal")
+        bm2 = BudgetMonth(month="2025-01")
+        storage.save_budget(bm2, "Business")
+
+        # Same month, different budgets should coexist
+        p = storage.load_budget("2025-01", "Personal")
+        b = storage.load_budget("2025-01", "Business")
+        assert p is not None
+        assert b is not None
+
+        # Months listed per budget
+        assert storage.list_months("Personal") == ["2025-01"]
+        assert storage.list_months("Business") == ["2025-01"]
+        assert storage.list_months() == []  # "Default" has no months
+
+    def test_list_budget_names(self, storage):
+        storage.save_budget(BudgetMonth(month="2025-01"), "Personal")
+        storage.save_budget(BudgetMonth(month="2025-02"), "Personal")
+        storage.save_budget(BudgetMonth(month="2025-01"), "Business")
+        names = storage.list_budget_names()
+        assert "Personal" in names
+        assert "Business" in names
+
+    def test_delete_budget_by_name(self, storage):
+        storage.save_budget(BudgetMonth(month="2025-01"), "Personal")
+        assert storage.budget_exists("2025-01", "Personal")
+        storage.delete_budget("2025-01", "Personal")
+        assert not storage.budget_exists("2025-01", "Personal")
+
+
 class TestStorageRecurring:
     def test_save_and_load_recurring(self, storage):
         from monthly_budget.core import RecurringTransaction

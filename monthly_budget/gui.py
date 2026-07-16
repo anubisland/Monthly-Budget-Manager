@@ -56,6 +56,7 @@ class BudgetApp(ctk.CTk):
         self.grid_rowconfigure(2, weight=1)
 
     def _build_header(self) -> None:
+        _ = self._
         c = theme_colors()
         header = ctk.CTkFrame(self, height=HEADER_HEIGHT, fg_color=c.card_bg, corner_radius=0)
         header.grid(row=0, column=0, columnspan=2, sticky="ew", padx=0, pady=0)
@@ -76,6 +77,23 @@ class BudgetApp(ctk.CTk):
         month_frame = ctk.CTkFrame(header, fg_color="transparent")
         month_frame.grid(row=0, column=2, padx=(10, 0), sticky="w")
 
+        ctk.CTkLabel(month_frame, text=_("header.budget") + ":", font=(FONT_FAMILY, 12),
+                      text_color=c.text_secondary).grid(row=0, column=0, padx=(0, 2))
+        self._budget_name_var = ctk.StringVar(value="Default")
+        self._budget_name_combo = ctk.CTkComboBox(
+            month_frame,
+            variable=self._budget_name_var,
+            values=["Default"],
+            width=100,
+            height=32,
+            font=(FONT_FAMILY, 13),
+        )
+        self._budget_name_combo.grid(row=0, column=1, padx=(0, 4))
+        self._budget_name_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_budget_changed())
+
+        sep2 = ctk.CTkLabel(month_frame, text="/", text_color=c.text_secondary, font=(FONT_FAMILY, 14))
+        sep2.grid(row=0, column=1, padx=2)
+
         self._month_var = ctk.StringVar()
         self._month_combo = ctk.CTkComboBox(
             month_frame,
@@ -86,7 +104,7 @@ class BudgetApp(ctk.CTk):
             font=(FONT_FAMILY, 13),
             state="normal",
         )
-        self._month_combo.grid(row=0, column=0, padx=(0, 6))
+        self._month_combo.grid(row=0, column=2, padx=(4, 6))
         self._month_combo.bind("<FocusOut>", lambda _e: self._on_month_changed())
         self._month_combo.bind("<<ComboboxSelected>>", lambda _e: self._on_month_changed())
 
@@ -1244,7 +1262,7 @@ class BudgetApp(ctk.CTk):
         return frame
 
     def _compare_refresh_months(self) -> None:
-        months = self._storage.list_months()
+        months = self._storage.list_months(self._budget_name)
         self._compare_month_listbox.delete(0, "end")
         for m in months:
             self._compare_month_listbox.insert("end", m)
@@ -1265,9 +1283,10 @@ class BudgetApp(ctk.CTk):
             return
 
         selected_months = [self._compare_month_listbox.get(i) for i in sel]
+        bn = self._budget_name
         budgets: list[tuple[str, BudgetMonth]] = []
         for m in selected_months:
-            loaded = self._storage.load_budget(m)
+            loaded = self._storage.load_budget(m, bn)
             if loaded:
                 budgets.append((m, loaded))
 
@@ -1329,10 +1348,11 @@ class BudgetApp(ctk.CTk):
                                fill=c.text_secondary, font=(FONT_FAMILY, 11))
             return
 
+        bn = self._budget_name
         selected_months = [self._compare_month_listbox.get(i) for i in sel]
         budgets: list[tuple[str, float, float]] = []
         for m in selected_months:
-            bm = self._storage.load_budget(m)
+            bm = self._storage.load_budget(m, bn)
             if bm:
                 budgets.append((m, bm.total_income(), bm.total_expenses()))
 
@@ -1904,15 +1924,25 @@ class BudgetApp(ctk.CTk):
         except Exception as e:
             self._status_var.set(_("report.export_error", fmt=fmt.upper(), error=str(e)))
 
+    def _on_budget_changed(self) -> None:
+        self._refresh_month_list()
+        months = self._storage.list_months(self._budget_name)
+        if months:
+            self._month_var.set(months[0])
+        else:
+            self._month_var.set("")
+        self._on_month_changed()
+
     def _on_month_changed(self) -> None:
         _ = self._
         new_month = self._month_var.get().strip()
         self._auto_save()
         self._current_month = new_month
         self.bm = BudgetMonth(month=new_month or None)
-        was_new = not (new_month and self._storage.budget_exists(new_month))
-        if new_month and self._storage.budget_exists(new_month):
-            loaded = self._storage.load_budget(new_month)
+        bn = self._budget_name
+        was_new = not (new_month and self._storage.budget_exists(new_month, bn))
+        if new_month and self._storage.budget_exists(new_month, bn):
+            loaded = self._storage.load_budget(new_month, bn)
             if loaded:
                 self.bm = loaded
         elif was_new and new_month:
@@ -1943,19 +1973,30 @@ class BudgetApp(ctk.CTk):
 
     def _auto_save(self) -> None:
         month = self._month_var.get().strip()
+        bn = self._budget_name
         if month:
             self.bm.month = month
-            self._storage.save_budget(self.bm)
+            self._storage.save_budget(self.bm, bn)
 
     def _set_saved(self) -> None:
         self._save_indicator.configure(text=self._("app.saved").format(file="DB"))
 
     def _refresh_month_list(self) -> None:
-        months = self._storage.list_months()
+        months = self._storage.list_months(self._budget_name)
         current = self._month_var.get().strip()
         if current and current not in months:
             months = [current] + months
         self._month_combo.configure(values=months)
+
+    def _refresh_budget_name_list(self) -> None:
+        names = self._storage.list_budget_names()
+        if "Default" not in names:
+            names = ["Default"] + names
+        self._budget_name_combo.configure(values=names)
+        cur = self._budget_name_var.get().strip()
+        if cur and cur not in names:
+            names.append(cur)
+            self._budget_name_combo.configure(values=names)
 
     def update_report(self) -> None:
         self.bm.month = self._month_var.get().strip() or self.bm.month
@@ -2134,6 +2175,7 @@ class BudgetApp(ctk.CTk):
 
     def _save_prefs(self) -> None:
         try:
+            self._storage.save_setting("budget_name", self._budget_name)
             self._storage.save_setting("month", self._month_var.get().strip() or "")
             self._storage.save_setting("lang", self._i18n.lang)
             self._storage.save_setting("theme", ctk.get_appearance_mode())
@@ -2142,11 +2184,15 @@ class BudgetApp(ctk.CTk):
 
     def _load_prefs(self) -> None:
         try:
+            bn = self._storage.load_setting("budget_name") or "Default"
+            self._budget_name_var.set(bn)
+            self._refresh_budget_name_list()
+
             month = self._storage.load_setting("month") or ""
             if month:
                 self._month_var.set(month)
                 self._current_month = month
-                loaded = self._storage.load_budget(month)
+                loaded = self._storage.load_budget(month, bn)
                 if loaded:
                     self.bm = loaded
             lang = self._storage.load_setting("lang") or ""

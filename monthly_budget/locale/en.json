@@ -24,6 +24,7 @@
   "header.refresh": "Refresh",
   "header.language": "Language",
   "header.theme": "Theme",
+  "header.budget": "Budget",
 
   "dashboard.total_income": "Total Income",
   "dashboard.total_expenses": "Total Expenses",

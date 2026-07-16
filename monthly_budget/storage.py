@@ -32,9 +32,11 @@ class Storage:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS budgets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                month TEXT UNIQUE NOT NULL,
+                month TEXT NOT NULL,
+                budget_name TEXT NOT NULL DEFAULT 'Default',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(month, budget_name)
             );
             CREATE TABLE IF NOT EXISTS incomes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -90,10 +92,11 @@ class Storage:
             self._conn.close()
             self._conn = None
 
-    def save_budget(self, bm: BudgetMonth) -> None:
+    def save_budget(self, bm: BudgetMonth, budget_name: str = "Default") -> None:
         conn = self._connect()
         month = bm.month or "unknown"
-        cur = conn.execute("SELECT id FROM budgets WHERE month = ?", (month,))
+        cur = conn.execute("SELECT id FROM budgets WHERE month = ? AND budget_name = ?",
+                           (month, budget_name))
         row = cur.fetchone()
         if row:
             budget_id = row["id"]
@@ -106,7 +109,7 @@ class Storage:
             )
         else:
             cur = conn.execute(
-                "INSERT INTO budgets (month) VALUES (?)", (month,)
+                "INSERT INTO budgets (month, budget_name) VALUES (?, ?)", (month, budget_name)
             )
             budget_id = cur.lastrowid
 
@@ -127,9 +130,10 @@ class Storage:
             )
         conn.commit()
 
-    def load_budget(self, month: str) -> Optional[BudgetMonth]:
+    def load_budget(self, month: str, budget_name: str = "Default") -> Optional[BudgetMonth]:
         conn = self._connect()
-        cur = conn.execute("SELECT id FROM budgets WHERE month = ?", (month,))
+        cur = conn.execute("SELECT id FROM budgets WHERE month = ? AND budget_name = ?",
+                           (month, budget_name))
         row = cur.fetchone()
         if not row:
             return None
@@ -158,14 +162,23 @@ class Storage:
 
         return bm
 
-    def list_months(self) -> List[str]:
+    def list_months(self, budget_name: str = "Default") -> List[str]:
         conn = self._connect()
-        cur = conn.execute("SELECT month FROM budgets ORDER BY month DESC")
+        cur = conn.execute(
+            "SELECT month FROM budgets WHERE budget_name = ? ORDER BY month DESC",
+            (budget_name,),
+        )
         return [r["month"] for r in cur.fetchall()]
 
-    def delete_budget(self, month: str) -> None:
+    def list_budget_names(self) -> List[str]:
         conn = self._connect()
-        conn.execute("DELETE FROM budgets WHERE month = ?", (month,))
+        cur = conn.execute("SELECT DISTINCT budget_name FROM budgets ORDER BY budget_name")
+        return [r["budget_name"] for r in cur.fetchall()]
+
+    def delete_budget(self, month: str, budget_name: str = "Default") -> None:
+        conn = self._connect()
+        conn.execute("DELETE FROM budgets WHERE month = ? AND budget_name = ?",
+                     (month, budget_name))
         conn.commit()
 
     def save_setting(self, key: str, value: str) -> None:
@@ -187,9 +200,10 @@ class Storage:
         cur = conn.execute("SELECT key, value FROM settings")
         return {r["key"]: r["value"] for r in cur.fetchall()}
 
-    def budget_exists(self, month: str) -> bool:
+    def budget_exists(self, month: str, budget_name: str = "Default") -> bool:
         conn = self._connect()
-        cur = conn.execute("SELECT 1 FROM budgets WHERE month = ?", (month,))
+        cur = conn.execute("SELECT 1 FROM budgets WHERE month = ? AND budget_name = ?",
+                           (month, budget_name))
         return cur.fetchone() is not None
 
     # ── Recurring Transactions ──────────────────────────────────────
