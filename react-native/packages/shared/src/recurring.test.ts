@@ -114,6 +114,48 @@ describe('detectRecurring', () => {
   });
 });
 
+// The spec says the template carries the MOST RECENT amount. Entries within a
+// month are stored in insertion order, not date order, so comparing month keys
+// alone let the last-INSERTED entry win over the chronologically latest one.
+// Here the 20th is inserted BEFORE the 1st: the 20th must still win.
+describe('most-recent within a single month', () => {
+  it('uses the chronologically latest entry, not the last inserted', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-07', 'expense', e({ id: 'p', name: 'Rent', category: 'housing', amount: 9, date: '2026-07-01' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'late', name: 'Rent', category: 'housing', amount: 200, date: '2026-08-20' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'early', name: 'Rent', category: 'housing', amount: 1500, date: '2026-08-01' }));
+    const t = detectRecurring(s).find((x) => x.name === 'Rent');
+    expect(t?.lastAmount).toBe(200);
+    expect(t?.dayOfMonth).toBe(20);
+  });
+
+  it('still prefers a later month over an earlier one', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'aug', name: 'Rent', category: 'housing', amount: 1600, date: '2026-08-01' }));
+    s = upsertEntry(s, '2026-07', 'expense', e({ id: 'jul', name: 'Rent', category: 'housing', amount: 1500, date: '2026-07-28' }));
+    const t = detectRecurring(s).find((x) => x.name === 'Rent');
+    expect(t?.lastAmount).toBe(1600);
+  });
+});
+
+// A forcing fixture: collect() visits income before expense each month, so
+// 'income:salary:zebra' is discovered FIRST -- yet 'expense:food:apple' must
+// sort ahead of it. This test fails if the .sort() is removed, which the
+// previous ordering test did not.
+describe('template sort is actually applied', () => {
+  it('sorts by id even when discovery order is the reverse', () => {
+    let s = emptyStore();
+    for (const m of ['2026-06', '2026-07']) {
+      s = upsertEntry(s, m, 'income', e({ id: 'z' + m, name: 'Zebra', category: 'salary', amount: 1, date: m + '-01' }));
+      s = upsertEntry(s, m, 'expense', e({ id: 'a' + m, name: 'Apple', category: 'food', amount: 2, date: m + '-01' }));
+    }
+    expect(detectRecurring(s).map((t) => t.id)).toEqual([
+      'expense:food:apple',
+      'income:salary:zebra',
+    ]);
+  });
+});
+
 describe('suggestionsForMonth', () => {
   it('suggests recurring items not yet present in the target month', () => {
     const names = suggestionsForMonth(store(), '2026-09').map((s) => s.name).sort();

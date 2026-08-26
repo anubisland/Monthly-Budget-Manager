@@ -6,7 +6,7 @@ interface Track {
   name: string;
   category: string;
   months: Set<MonthKey>;
-  lastMonth: MonthKey;
+  lastDate: string;
   lastAmount: number;
   lastDay: number | null;
 }
@@ -40,16 +40,21 @@ function collect(store: BudgetStore): Map<string, Track> {
             name: entry.name,
             category: entry.category,
             months: new Set([month]),
-            lastMonth: month,
+            lastDate: entry.date,
             lastAmount: entry.amount,
             lastDay: dayOf(entry),
           });
           continue;
         }
         prev.months.add(month);
-        // Months are walked in ascending order, so a later month always wins.
-        if (compareKeys(month, prev.lastMonth) >= 0) {
-          prev.lastMonth = month;
+        // Compare FULL DATES, not month keys. Entries within a month are stored
+        // in insertion order, not date order, so a month-level comparison would
+        // let the last-INSERTED entry win over the chronologically latest one --
+        // making the template report a stale amount. Date strings are YYYY-MM-DD
+        // (or month-only YYYY-MM), both of which sort lexicographically in
+        // chronological order.
+        if (entry.date >= prev.lastDate) {
+          prev.lastDate = entry.date;
           prev.lastAmount = entry.amount;
           prev.lastDay = dayOf(entry);
         }
