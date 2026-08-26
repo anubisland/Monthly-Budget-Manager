@@ -2725,7 +2725,10 @@ export function migrateV0toV1(
         id: `v0-${seq}`,
         name: String(v0row.name ?? '').trim() || (kind === 'income' ? 'Income' : 'Expense'),
         category: mapCategory(kind, v0row.category),
-        amount: Number(v0row.amount ?? 0),
+        // NOT Number(): upsertEntry runs parseAmount, which handles formatted
+        // strings like "1,500.00". Pre-coercing with Number() here would turn
+        // that into NaN and silently zero real money.
+        amount: v0row.amount as number,
         date,
       };
       store = upsertEntry(store, key, kind, entry);
