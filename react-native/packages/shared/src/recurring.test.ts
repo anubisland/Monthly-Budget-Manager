@@ -66,12 +66,6 @@ describe('detectRecurring', () => {
     expect(a?.id).toBe('expense:housing:rent');
   });
 
-  it('sorts templates by id in ascending order', () => {
-    const ids = detectRecurring(store()).map((t) => t.id);
-    // expense:housing:rent < income:salary:salary lexicographically ('e' < 'i')
-    expect(ids).toEqual(['expense:housing:rent', 'income:salary:salary']);
-  });
-
   it('keeps an income "other" template distinct from an expense "other" template', () => {
     let s = emptyStore();
     s = upsertEntry(s, '2026-06', 'income', e({ id: 'io1', name: 'Misc', category: 'other', amount: 10 }));

@@ -28,6 +28,11 @@ function collect(store: BudgetStore): Map<string, Track> {
     { kind: 'expense', field: 'expenses' },
   ];
 
+  // The ascending sort is no longer required for correctness -- lastDate is a
+  // max over full date strings, which is order-independent. It is kept because
+  // upsertEntry does not verify that an entry's date agrees with the month key
+  // it is filed under, and in that inconsistent case iteration order decides
+  // which entry wins. Sorting keeps that outcome deterministic.
   for (const month of Object.keys(store.months).sort(compareKeys)) {
     for (const { kind, field } of kinds) {
       for (const entry of store.months[month][field]) {
