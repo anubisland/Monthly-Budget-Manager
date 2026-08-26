@@ -174,3 +174,44 @@ describe('compareMonths', () => {
     expect(c.byCategory).toEqual([]);
   });
 });
+
+// Matches the tie-break test in totals.test.ts. An untested comparator branch
+// is exactly what a future refactor silently drops, and display order on a tie
+// would then become arbitrary.
+describe('category sort tie-break', () => {
+  it('orders categories tied on current amount alphabetically', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't1', amount: 50, category: 'transport' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't2', amount: 50, category: 'food' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't3', amount: 50, category: 'housing' }));
+    expect(compareMonths(s, '2026-08').byCategory.map((r) => r.category)).toEqual([
+      'food',
+      'housing',
+      'transport',
+    ]);
+  });
+});
+
+// A sign-crossing net delta produces a real but counter-intuitive percent:
+// going from -50 (a loss) to +100 (a profit) is an improvement, yet
+// (150 / -50) * 100 = -300%. The spec guarantees only that percent is never
+// Infinity or NaN, and `favorable` correctly reports true here.
+//
+// Pinned so the comparison UI author knows this case exists: render `absolute`
+// and the `favorable` flag when `previous` is negative, NOT the raw percent.
+describe('sign-crossing deltas', () => {
+  it('reports a misleading percent but a correct favorable flag', () => {
+    const d = makeDelta(100, -50, 'net');
+    expect(d.absolute).toBe(150);
+    expect(d.percent).toBe(-300);
+    expect(d.favorable).toBe(true);
+    expect(d.status).toBe('changed');
+    expect(Number.isFinite(d.percent as number)).toBe(true);
+  });
+
+  it('is symmetric going from profit to loss', () => {
+    const d = makeDelta(-50, 100, 'net');
+    expect(d.absolute).toBe(-150);
+    expect(d.favorable).toBe(false);
+  });
+});
