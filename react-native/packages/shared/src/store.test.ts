@@ -43,6 +43,15 @@ describe('getMonth', () => {
     getMonth(s, '2026-08');
     expect(Object.keys(s.months)).toEqual([]);
   });
+
+  it('returns a distinct object each call, so a caller cannot corrupt the store', () => {
+    const s = emptyStore();
+    const a = getMonth(s, '2026-08');
+    const b = getMonth(s, '2026-08');
+    expect(a).not.toBe(b);
+    a.expenses.push(entry());
+    expect(getMonth(s, '2026-08').expenses).toHaveLength(0);
+  });
 });
 
 describe('upsertEntry', () => {
@@ -73,6 +82,15 @@ describe('upsertEntry', () => {
     expect(getMonth(s, '2026-08').expenses[0].amount).toBe(1600);
   });
 
+  it('leaves an earlier store version untouched when updating', () => {
+    const v1 = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ amount: 1500 }));
+    const snapshot = JSON.stringify(v1);
+    const v2 = upsertEntry(v1, '2026-08', 'expense', entry({ amount: 1600 }));
+    expect(JSON.stringify(v1)).toBe(snapshot);
+    expect(getMonth(v1, '2026-08').expenses[0].amount).toBe(1500);
+    expect(getMonth(v2, '2026-08').expenses[0].amount).toBe(1600);
+  });
+
   it('clamps negative amounts to zero', () => {
     const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ amount: -50 }));
     expect(getMonth(s, '2026-08').expenses[0].amount).toBe(0);
@@ -94,14 +112,18 @@ describe('removeEntry', () => {
     expect(getMonth(s, '2026-08').expenses.map((e) => e.id)).toEqual(['b']);
   });
 
-  it('is a no-op for an unknown id', () => {
+  // toBe, not toEqual: the contract is that a no-op returns the SAME store
+  // reference. Deep equality would still pass if a regression made this
+  // always spread into a fresh object, defeating reference-equality checks
+  // in the modules built on this store.
+  it('is a no-op for an unknown id, returning the same reference', () => {
     const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ id: 'a' }));
-    expect(removeEntry(s, '2026-08', 'expense', 'zzz')).toEqual(s);
+    expect(removeEntry(s, '2026-08', 'expense', 'zzz')).toBe(s);
   });
 
-  it('is a no-op for an unknown month', () => {
+  it('is a no-op for an unknown month, returning the same reference', () => {
     const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry());
-    expect(removeEntry(s, '2020-01', 'expense', 'e1')).toEqual(s);
+    expect(removeEntry(s, '2020-01', 'expense', 'e1')).toBe(s);
   });
 });
 
