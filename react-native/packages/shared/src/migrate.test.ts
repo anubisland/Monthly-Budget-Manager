@@ -211,6 +211,32 @@ describe('migrateV0toV1', () => {
     expect(getMonth(store, '2026-08').incomes[0].amount).toBe(0);
   });
 
+  it('parses a comma-formatted string amount instead of zeroing it out', () => {
+    // Number('1,500.00') is NaN -- pre-coercing with Number() before handing
+    // off to upsertEntry's parseAmount would silently zero real money.
+    const { store } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [{ name: 'Salary', amount: '1,500.00', date: '2026-08-01' }],
+      expenses: [],
+    });
+    expect(getMonth(store, '2026-08').incomes[0].amount).toBe(1500);
+  });
+
+  it('never throws, even for a circular payload that JSON.stringify cannot serialize', () => {
+    const circular: Record<string, unknown> = { meta: { year: 2026, month: 8 }, incomes: [], expenses: [] };
+    circular.self = circular;
+    expect(() => migrateV0toV1(circular)).not.toThrow();
+    expect(migrateV0toV1(circular).store.version).toBe(1);
+  });
+
+  it('falls back to a "null" backup when JSON.stringify returns undefined', () => {
+    // A bare function is valid `unknown` input and JSON.stringify(fn) returns
+    // undefined rather than throwing -- backup must still be a string.
+    const fn = (() => {}) as unknown;
+    const { backup } = migrateV0toV1(fn);
+    expect(backup).toBe('null');
+  });
+
   it('drops a row whose only date signal is a malformed meta year, rather than mis-filing it', () => {
     // meta.year has 5 digits, so the fallback key ("20261-01") can never be a
     // valid MonthKey. The row must be skipped, not silently misfiled.

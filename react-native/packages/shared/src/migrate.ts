@@ -81,7 +81,14 @@ export function migrateV0toV1(
   opts?: { currency?: string; locale?: 'ar' | 'en'; today?: Date },
 ): MigrationResult {
   const today = opts?.today ?? new Date();
-  const backup = JSON.stringify(raw ?? null);
+  // JSON.stringify throws on circular input. Migration must never throw, so
+  // an unserializable payload degrades to a null backup rather than crashing.
+  let backup: string;
+  try {
+    backup = JSON.stringify(raw ?? null) ?? 'null';
+  } catch {
+    backup = 'null';
+  }
 
   if (isRecord(raw) && raw.version === 1) {
     return { store: raw as unknown as BudgetStore, backup, migrated: false, entriesMoved: 0 };
@@ -115,7 +122,10 @@ export function migrateV0toV1(
         id: `v0-${seq}`,
         name: String(v0row.name ?? '').trim() || (kind === 'income' ? 'Income' : 'Expense'),
         category: mapCategory(kind, v0row.category),
-        amount: Number(v0row.amount ?? 0),
+        // Pass the raw value through -- upsertEntry's parseAmount tolerates
+        // strings like "1,500.00". Pre-coercing with Number() here would
+        // turn that into NaN and silently zero real money.
+        amount: v0row.amount as number,
         date,
       };
       store = upsertEntry(store, key, kind, entry);
