@@ -175,3 +175,26 @@ describe('whitespace-only categories fall back, not leak', () => {
     ]);
   });
 });
+
+// The spec mandates that category percentages are 0, never NaN, when the
+// bucket total is 0. Reachable only when entries EXIST but all sum to zero --
+// an empty month returns early and never computes a percentage. This was the
+// last uncovered branch in bucket().
+describe('zero-total categories yield 0 percent, never NaN', () => {
+  it('handles entries that exist but sum to zero', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'z1', amount: 0, category: 'food' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'z2', amount: 0, category: 'housing' }));
+    const rows = expensesByCategoryForMonth(s, '2026-08');
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r.percent).toBe(0);
+      expect(Number.isNaN(r.percent)).toBe(false);
+    }
+  });
+
+  it('does the same on the legacy path', () => {
+    const rows = expensesByCategory([{ name: 'a', amount: 0, category: 'x' }] as never);
+    expect(rows[0].percent).toBe(0);
+  });
+});
