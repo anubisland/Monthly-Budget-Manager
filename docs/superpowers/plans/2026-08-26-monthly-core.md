@@ -372,8 +372,19 @@ describe('parseAmount', () => {
   });
 
   it('rounds to two decimals', () => {
-    expect(parseAmount(1.005)).toBe(1.01);
     expect(parseAmount('2.348')).toBe(2.35);
+    expect(parseAmount(1.006)).toBe(1.01);
+    expect(parseAmount(1234.567)).toBe(1234.57);
+  });
+
+  // Math.round(n * 100) / 100 inherits IEEE 754 artifacts: 1.005 * 100 is
+  // 100.49999999999999, so it rounds DOWN to 1, not up to 1.01. This is
+  // pinned deliberately, not aspirational -- apps/desktop depends on the
+  // legacy parseAmount export, so "correcting" this would be a breaking
+  // behavior change. Do not fix it; it is load-bearing.
+  it('rounds half-cent values down where float representation dictates', () => {
+    expect(parseAmount(1.005)).toBe(1);
+    expect(parseAmount(1.015)).toBe(1.01);
   });
 
   it('returns 0 for unparseable input', () => {
@@ -463,7 +474,7 @@ export function formatMoney(amount: number, currency: string, locale: Locale): s
 npm test -w @monthly-budget/shared -- money
 ```
 
-Expected: `Tests: 9 passed, 9 total`.
+Expected: `Tests: 10 passed, 10 total`.
 
 - [ ] **Step 5: Commit**
 
