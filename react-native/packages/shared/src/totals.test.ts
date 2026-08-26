@@ -136,3 +136,42 @@ describe('legacy exports stay byte-compatible', () => {
     expect(expensesByCategory(looseExp)[0].category).toBe('Housing');
   });
 });
+
+// bucket() resolves a blank category with `(r.category || fallback).trim() || fallback`.
+// The empty-string case is covered elsewhere; these pin the .trim() half, so that
+// "simplifying" the expression to `r.category || fallback` would fail loudly instead
+// of leaking whitespace into the UI as a category name.
+describe('whitespace-only categories fall back, not leak', () => {
+  it('falls back to the taxonomy slug in the month-scoped path', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'w1', amount: 40, category: '   ' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 'w2', amount: 60, category: '\t\n ' }));
+    const rows = expensesByCategoryForMonth(s, '2026-08');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].category).toBe('other');
+    expect(rows[0].amount).toBe(100);
+  });
+
+  it('falls back to the legacy display string in the legacy path', () => {
+    const rows = expensesByCategory([
+      { name: 'a', amount: 10, category: '   ' },
+      { name: 'b', amount: 20, category: '' },
+    ] as never);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].category).toBe('Uncategorized');
+    expect(rows[0].amount).toBe(30);
+  });
+
+  // Pins deterministic display order when two categories tie on amount.
+  it('orders equal amounts alphabetically by category', () => {
+    let s = emptyStore();
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't1', amount: 50, category: 'transport' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't2', amount: 50, category: 'food' }));
+    s = upsertEntry(s, '2026-08', 'expense', e({ id: 't3', amount: 50, category: 'housing' }));
+    expect(expensesByCategoryForMonth(s, '2026-08').map((r) => r.category)).toEqual([
+      'food',
+      'housing',
+      'transport',
+    ]);
+  });
+});
