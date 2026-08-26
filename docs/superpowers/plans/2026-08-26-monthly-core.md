@@ -12,7 +12,7 @@
 
 - **Additive only, never breaking.** `apps/desktop` imports `totals`, `expensesByCategory`, `serialize`, and `deserialize` from this package and CI builds it. These four exports must keep their exact current signatures and behavior. Verified by Task 12.
 - **Target file size: 120 lines max per module.** Split by responsibility, not by line count.
-- **No `Date.now()`, `new Date()` with no argument, or `Math.random()` inside core functions.** Every function that needs today takes an injectable `today: Date` parameter defaulting to `new Date()`. Tests always pass an explicit date.
+- **No non-injectable clock or randomness in core functions.** Any function that needs the current time MUST accept an injectable override (`today: Date`, or a `seed` callback) defaulting to the real clock, and every test MUST pass one explicitly. `Math.random()` is banned outright. The single exception is the legacy `deserialize` in `index.ts`, which calls `new Date()` and must stay byte-identical because `apps/desktop` depends on it — the additive-only constraint wins there.
 - **`MonthKey` is the string format `"YYYY-MM"`** — zero-padded month, sortable lexicographically.
 - **Category `id` values are stable ASCII slugs and are never translated.** Display names come from the i18n layer (Phase 2).
 - **No silent error swallowing.** No `catch` that only logs. Core functions either return a typed result or throw.
@@ -741,7 +741,7 @@ export function compareKeys(a: MonthKey, b: MonthKey): number {
 npm test -w @monthly-budget/shared -- month
 ```
 
-Expected: `Tests: 17 passed, 17 total`.
+Expected: `Tests: 18 passed, 18 total`.
 
 - [ ] **Step 5: Commit**
 
@@ -2431,7 +2431,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Produces:
   - `interface MigrationResult { store: BudgetStore; backup: string; migrated: boolean; entriesMoved: number }`
   - `needsMigration(raw: unknown): boolean`
-  - `migrateV0toV1(raw: unknown, opts?: { currency?: string; locale?: 'ar' | 'en' }): MigrationResult`
+  - `migrateV0toV1(raw: unknown, opts?: { currency?: string; locale?: 'ar' | 'en'; today?: Date }): MigrationResult`
 
 `migrateV0toV1` is pure: it returns the backup string but performs no I/O. The storage layer in Phase 2 writes it.
 
@@ -2566,6 +2566,15 @@ describe('migrateV0toV1', () => {
     expect(migrateV0toV1('garbage').entriesMoved).toBe(0);
   });
 
+  it('uses the injected today when meta has no usable year', () => {
+    const { store } = migrateV0toV1(
+      { meta: {}, incomes: [], expenses: [{ name: 'Orphan', category: 'Food', amount: 10 }] },
+      { today: new Date(2031, 4, 9) },
+    );
+    // No meta.year, so the injected clock supplies the year; month falls back to 01.
+    expect(getMonth(store, '2031-01').expenses.map((e) => e.name)).toEqual(['Orphan']);
+  });
+
   it('honours currency and locale options', () => {
     const { store } = migrateV0toV1(v0, { currency: 'EGP', locale: 'en' });
     expect(store.currency).toBe('EGP');
@@ -2627,10 +2636,13 @@ function mapCategory(kind: EntryKind, raw: unknown): string {
   return hit ? hit.id : OTHER_CATEGORY_ID;
 }
 
-function fallbackDate(meta: Record<string, unknown> | undefined): string {
+function fallbackDate(
+  meta: Record<string, unknown> | undefined,
+  today: Date,
+): string {
   const year = Number(meta?.year);
   const month = Number(meta?.month);
-  const y = Number.isFinite(year) && year > 0 ? year : new Date().getFullYear();
+  const y = Number.isFinite(year) && year > 0 ? year : today.getFullYear();
   const m = Number.isFinite(month) && month >= 1 && month <= 12 ? month : 1;
   return `${y}-${String(m).padStart(2, '0')}-01`;
 }
@@ -2642,16 +2654,17 @@ function fallbackDate(meta: Record<string, unknown> | undefined): string {
  * could be relabelled while entries kept their original dates, so meta is
  * only a last resort.
  */
-function resolve(entry: V0Entry, meta: Record<string, unknown> | undefined): {
-  key: MonthKey;
-  date: string;
-} {
+function resolve(
+  entry: V0Entry,
+  meta: Record<string, unknown> | undefined,
+  today: Date,
+): { key: MonthKey; date: string } {
   const raw = typeof entry.date === 'string' ? entry.date.trim() : '';
   const fromEntry = raw ? monthKey(raw) : null;
   if (fromEntry) {
     return { key: fromEntry, date: raw.length === 10 ? raw : `${fromEntry}-01` };
   }
-  const date = fallbackDate(meta);
+  const date = fallbackDate(meta, today);
   return { key: date.slice(0, 7), date };
 }
 
@@ -2664,15 +2677,16 @@ function resolve(entry: V0Entry, meta: Record<string, unknown> | undefined): {
  */
 export function migrateV0toV1(
   raw: unknown,
-  opts?: { currency?: string; locale?: 'ar' | 'en' },
+  opts?: { currency?: string; locale?: 'ar' | 'en'; today?: Date },
 ): MigrationResult {
+  const today = opts?.today ?? new Date();
   const backup = JSON.stringify(raw ?? null);
 
   if (isRecord(raw) && raw.version === 1) {
     return { store: raw as unknown as BudgetStore, backup, migrated: false, entriesMoved: 0 };
   }
 
-  let store = emptyStore(opts);
+  let store = emptyStore({ currency: opts?.currency, locale: opts?.locale });
   if (!needsMigration(raw)) {
     return { store, backup, migrated: false, entriesMoved: 0 };
   }
@@ -2692,7 +2706,7 @@ export function migrateV0toV1(
     for (const row of rows) {
       if (!isRecord(row)) continue;
       const v0row = row as V0Entry;
-      const { key, date } = resolve(v0row, meta);
+      const { key, date } = resolve(v0row, meta, today);
       if (!isValidMonthKey(key)) continue;
 
       seq += 1;
@@ -2718,7 +2732,7 @@ export function migrateV0toV1(
 npm test -w @monthly-budget/shared -- migrate
 ```
 
-Expected: `Tests: 17 passed, 17 total`.
+Expected: `Tests: 18 passed, 18 total`.
 
 - [ ] **Step 5: Commit**
 
