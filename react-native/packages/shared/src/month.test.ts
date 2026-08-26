@@ -41,6 +41,14 @@ describe('monthKey', () => {
     expect(monthKey('2026-13-01')).toBeNull();
     expect(monthKey('')).toBeNull();
   });
+
+  // The day component is deliberately NOT validated -- it is not part of a
+  // MonthKey. Documented here so a later module does not assume monthKey()
+  // vetted the day. Validate day-of-month at the point of use instead.
+  it('extracts the month without validating the day component', () => {
+    expect(monthKey('2026-08-99')).toBe('2026-08');
+    expect(monthKey('2026-08-00')).toBe('2026-08');
+  });
 });
 
 describe('currentMonthKey', () => {
@@ -50,6 +58,21 @@ describe('currentMonthKey', () => {
 
   it('zero-pads single-digit months', () => {
     expect(currentMonthKey(new Date(2026, 0, 5))).toBe('2026-01');
+  });
+});
+
+// Every other test injects an explicit date, per the project's determinism
+// rule, which leaves the real-clock default-parameter path unexercised. Assert only
+// the SHAPE here -- never a specific value, which would make the suite
+// depend on when it runs.
+describe('the real-clock default path', () => {
+  it('produces a well-formed key when no date is injected', () => {
+    expect(currentMonthKey()).toMatch(/^\d{4}-\d{2}$/);
+    expect(isValidMonthKey(currentMonthKey())).toBe(true);
+  });
+
+  it('reports the current month as not being in the future', () => {
+    expect(isFutureKey(currentMonthKey())).toBe(false);
   });
 });
 
@@ -77,6 +100,20 @@ describe('prevKey and nextKey round-trip', () => {
   it('returns to the original key across year boundaries', () => {
     expect(nextKey(prevKey('2026-01'))).toBe('2026-01');
     expect(prevKey(nextKey('2026-12'))).toBe('2026-12');
+  });
+});
+
+// The spec mandates pass-through, not throwing, on invalid input. Six later
+// modules depend on this contract, so it is pinned here rather than left to
+// inspection.
+describe('prevKey and nextKey with invalid keys', () => {
+  it('returns the input unchanged rather than throwing', () => {
+    expect(prevKey('bad')).toBe('bad');
+    expect(nextKey('bad')).toBe('bad');
+    expect(prevKey('')).toBe('');
+    expect(nextKey('')).toBe('');
+    expect(prevKey('2026-13')).toBe('2026-13');
+    expect(nextKey('2026-00')).toBe('2026-00');
   });
 });
 
