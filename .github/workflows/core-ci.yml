@@ -1,0 +1,43 @@
+name: Core CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: core-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    name: Typecheck & Test (shared core)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: react-native/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --workspaces --include-workspace-root
+
+      - name: Typecheck
+        run: npm run typecheck -w @monthly-budget/shared
+
+      - name: Test with coverage
+        run: npm run test:coverage -w @monthly-budget/shared
+
+      - name: Build shared package
+        run: npm run build -w @monthly-budget/shared
+
+      - name: Build adapters package
+        run: npm run build -w @monthly-budget/adapters
