@@ -1,4 +1,4 @@
-import { loadStore, saveStore } from './storage';
+import { loadStore, saveStore, isUsable } from './storage';
 import { MemoryKV } from './kv';
 import { STORE_KEY, BACKUP_KEY, CORRUPT_KEY, LEGACY_KEYS } from './keys';
 import { emptyStore, upsertEntry, monthsWithData, totalsForMonth } from '@monthly-budget/shared';
@@ -187,6 +187,141 @@ describe('loadStore — never throws for hostile input', () => {
   });
 });
 
+describe('loadStore — FIX A: isUsable must validate shape, not just "did not throw"', () => {
+  it('does not report a month with incomes but no expenses key as loaded', async () => {
+    const raw = JSON.stringify({
+      version: 1,
+      currency: 'SAR',
+      locale: 'ar',
+      recurring: [],
+      months: {
+        '2026-08': {
+          incomes: [{ id: 'a', name: 'x', category: 'salary', amount: 100, date: '2026-08-01' }],
+        },
+      },
+    });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(() => totalsForMonth(r.store, '2026-08')).not.toThrow();
+  });
+
+  it('does not report a month with expenses but no incomes key as loaded', async () => {
+    const raw = JSON.stringify({
+      version: 1,
+      currency: 'SAR',
+      locale: 'ar',
+      recurring: [],
+      months: {
+        '2026-08': {
+          expenses: [{ id: 'a', name: 'x', category: 'housing', amount: 100, date: '2026-08-01' }],
+        },
+      },
+    });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(() => totalsForMonth(r.store, '2026-08')).not.toThrow();
+  });
+
+  it('catches a month whose incomes is present but not an array', async () => {
+    const raw = JSON.stringify({
+      version: 1,
+      currency: 'SAR',
+      locale: 'ar',
+      recurring: [],
+      months: {
+        '2026-08': { incomes: 'nope', expenses: [] },
+      },
+    });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+  });
+
+  it('still loads a well-formed store with a genuinely empty month', async () => {
+    const raw = JSON.stringify({
+      version: 1,
+      currency: 'SAR',
+      locale: 'ar',
+      recurring: [],
+      months: {
+        '2026-08': { incomes: [], expenses: [] },
+      },
+    });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('loaded');
+  });
+
+  it('catches a month value that is not an object at all', async () => {
+    const raw = JSON.stringify({
+      version: 1,
+      currency: 'SAR',
+      locale: 'ar',
+      recurring: [],
+      months: { '2026-08': 'not a month record' },
+    });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+  });
+
+  it('reaches corrupt for a v1-tagged store with a malformed per-month record', async () => {
+    const raw = JSON.stringify({ version: 1, months: { '2026-08': {} }, recurring: [] });
+    const kv = new MemoryKV({ [STORE_KEY]: raw });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(r.error).toContain('not a usable budget store');
+  });
+});
+
+describe('loadStore — FIX B: a cleanup failure must not discard a completed migration', () => {
+  it('reports migrated (not corrupt) when only removeItem fails, and keeps the correct months', async () => {
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    const originalRemove = kv.removeItem.bind(kv);
+    kv.removeItem = async () => {
+      throw new Error('remove failed');
+    };
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('migrated');
+    expect(monthsWithData(r.store)).toEqual(['2026-07', '2026-08']);
+    // restore so later assertions in this test (if any) use real behaviour
+    kv.removeItem = originalRemove;
+  });
+
+  it('does not re-migrate on the next launch after a cleanup failure', async () => {
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    kv.removeItem = async () => {
+      throw new Error('remove failed');
+    };
+    await loadStore(kv, { today: TODAY });
+    kv.removeItem = MemoryKV.prototype.removeItem.bind(kv);
+    const second = await loadStore(kv, { today: TODAY });
+    expect(second.status).toBe('loaded');
+    expect(totalsForMonth(second.store, '2026-08').expenses).toBe(1500);
+  });
+
+  it('still reports corrupt when the STORE_KEY write itself fails, and legacy data stays readable', async () => {
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    kv.failWrites = 'disk full';
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(await kv.getItem(LEGACY_KEYS[0])).toBe(JSON.stringify(V0));
+  });
+});
+
+describe('loadStore — FIX C: corrupt payload AND preserve-write both fail', () => {
+  it('composes an error mentioning both failures and still returns a usable store', async () => {
+    const kv = new MemoryKV({ [STORE_KEY]: '{not json' });
+    kv.failWrites = 'disk full';
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(r.error).toContain('disk full');
+    expect(() => monthsWithData(r.store)).not.toThrow();
+  });
+});
+
 describe('saveStore', () => {
   it('writes the whole store in ONE operation (P4)', async () => {
     const kv = new MemoryKV();
@@ -215,5 +350,120 @@ describe('saveStore', () => {
     for (const legacy of LEGACY_KEYS) {
       expect(kv.writeLog.map(([k]) => k)).not.toContain(legacy);
     }
+  });
+});
+
+// The remaining guards need a KVStore that fails SELECTIVELY. MemoryKV's
+// failReads/failWrites are global, so the very first getItem short-circuits
+// and these paths were previously written off as unreachable. They are not.
+function selective(
+  inner: MemoryKV,
+  fail: (op: 'get' | 'set' | 'remove', key: string) => string | null,
+) {
+  return {
+    getItem: async (k: string) => {
+      const m = fail('get', k);
+      if (m) throw new Error(m);
+      return inner.getItem(k);
+    },
+    setItem: async (k: string, v: string) => {
+      const m = fail('set', k);
+      if (m) throw new Error(m);
+      return inner.setItem(k, v);
+    },
+    removeItem: async (k: string) => {
+      const m = fail('remove', k);
+      if (m) throw new Error(m);
+      return inner.removeItem(k);
+    },
+  };
+}
+
+describe('selective backend failures', () => {
+  it('reports a legacy-key read failure instead of pretending storage is empty', async () => {
+    // STORE_KEY reads fine and is absent; the legacy read then fails.
+    const kv = selective(new MemoryKV(), (op, k) =>
+      op === 'get' && k === LEGACY_KEYS[0] ? 'legacy read error' : null,
+    );
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(r.error).toContain('legacy read error');
+    expect(() => monthsWithData(r.store)).not.toThrow();
+  });
+
+  it('composes both errors when preserving a corrupt payload also fails', async () => {
+    const inner = new MemoryKV({ [STORE_KEY]: '{not json' });
+    const kv = selective(inner, (op, k) =>
+      op === 'set' && k === CORRUPT_KEY ? 'disk full' : null,
+    );
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(r.error).toMatch(/could not be preserved/);
+    expect(r.error).toContain('disk full');
+    expect(() => monthsWithData(r.store)).not.toThrow();
+  });
+});
+
+describe('month-shape validation rejects every broken form', () => {
+  const wrap = (m: unknown) =>
+    JSON.stringify({ version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: { '2026-08': m } });
+
+  it.each([
+    ['a string', 'nope'],
+    ['null', null],
+    ['an array', []],
+    ['a number', 7],
+    ['incomes not an array', { incomes: 'x', expenses: [] }],
+    ['expenses not an array', { incomes: [], expenses: 'x' }],
+    ['incomes missing', { expenses: [] }],
+    ['expenses missing', { incomes: [] }],
+  ])('rejects a month that is %s', async (_label, month) => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap(month) }), { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(() => totalsForMonth(r.store, '2026-08')).not.toThrow();
+  });
+
+  it('still accepts a genuinely empty month', async () => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap({ incomes: [], expenses: [] }) }), { today: TODAY });
+    expect(r.status).toBe('loaded');
+  });
+});
+
+// isUsable is a standalone guard. loadStore can only reach its per-month check,
+// because migrateV0toV1 validates version/months/recurring before it is called
+// -- so the outer guards are exercised here directly rather than left as dead
+// branches in a module that decides whether user data is readable.
+describe('isUsable as a standalone guard', () => {
+  const ok = { version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: {} };
+
+  it('accepts a well-formed store', () => {
+    expect(isUsable(ok)).toBe(true);
+    expect(isUsable({ ...ok, months: { '2026-08': { incomes: [], expenses: [] } } })).toBe(true);
+  });
+
+  it.each([
+    ['a string', 'nope'],
+    ['null', null],
+    ['undefined', undefined],
+    ['a number', 42],
+    ['an array', []],
+  ])('rejects %s', (_l, v) => {
+    expect(isUsable(v)).toBe(false);
+  });
+
+  it('rejects a wrong or missing version', () => {
+    expect(isUsable({ ...ok, version: 2 })).toBe(false);
+    expect(isUsable({ ...ok, version: undefined })).toBe(false);
+  });
+
+  it('rejects a months value that is not a plain object', () => {
+    expect(isUsable({ ...ok, months: null })).toBe(false);
+    expect(isUsable({ ...ok, months: [] })).toBe(false);
+    expect(isUsable({ ...ok, months: 'x' })).toBe(false);
+  });
+
+  it('rejects a recurring value that is not an array', () => {
+    expect(isUsable({ ...ok, recurring: null })).toBe(false);
+    expect(isUsable({ ...ok, recurring: {} })).toBe(false);
   });
 });

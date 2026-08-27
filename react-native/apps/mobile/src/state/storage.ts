@@ -1,7 +1,6 @@
 import {
   emptyStore,
   migrateV0toV1,
-  monthsWithData,
   type BudgetStore,
 } from '@monthly-budget/shared';
 import type { KVStore } from './kv';
@@ -17,14 +16,39 @@ export interface LoadResult {
   error?: string;
 }
 
-/** A store is only trustworthy if the shared helpers can actually read it. */
-function isUsable(candidate: unknown): candidate is BudgetStore {
-  try {
-    monthsWithData(candidate as BudgetStore);
-    return true;
-  } catch {
+function isMonthEntry(candidate: unknown): boolean {
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
     return false;
   }
+  const m = candidate as Record<string, unknown>;
+  return Array.isArray(m.incomes) && Array.isArray(m.expenses);
+}
+
+/**
+ * A store is only trustworthy if its shape actually matches `BudgetStore`.
+ *
+ * Previously this ran `monthsWithData()` and trusted the result whenever it
+ * didn't throw. That is too shallow: `monthsWithData` reads
+ * `m.incomes.length > 0 || m.expenses.length > 0`, a short-circuiting OR, so
+ * a month with a non-empty `incomes` and no `expenses` key at all never
+ * touches `expenses` and slips through. The store then reports `'loaded'`
+ * and the very next `totalsForMonth` call throws trying to `.reduce` over
+ * the missing array -- a crash reported as a successful load. Validating
+ * the shape explicitly, field by field, closes that gap.
+ */
+/**
+ * Exported so it can be tested directly. Reaching every guard here through
+ * loadStore is impossible -- migrateV0toV1 already validates version, months
+ * and recurring, so only the per-month depth below can fail via that route.
+ * The outer guards stay as defence in depth for any other caller.
+ */
+export function isUsable(candidate: unknown): candidate is BudgetStore {
+  if (typeof candidate !== 'object' || candidate === null) return false;
+  const c = candidate as Record<string, unknown>;
+  if (c.version !== 1) return false;
+  if (typeof c.months !== 'object' || c.months === null || Array.isArray(c.months)) return false;
+  if (!Array.isArray(c.recurring)) return false;
+  return Object.values(c.months as Record<string, unknown>).every(isMonthEntry);
 }
 
 async function readLegacy(kv: KVStore): Promise<{ key: string; raw: string } | null> {
@@ -77,6 +101,12 @@ export async function loadStore(
 
   let legacy: { key: string; raw: string } | null;
   try {
+    // NOTE: with the current test double (MemoryKV), this catch is
+    // unreachable in practice -- `failReads` is a single global flag, so a
+    // read failure here would already have short-circuited the very first
+    // `kv.getItem(STORE_KEY)` call above. A real KVStore backend could still
+    // fail here (e.g. one legacy key readable, another not), so the guard
+    // stays.
     legacy = await readLegacy(kv);
   } catch (e) {
     return { status: 'corrupt', store: fresh(), error: String(e) };
@@ -84,17 +114,16 @@ export async function loadStore(
 
   if (!legacy) return { status: 'empty', store: fresh() };
 
+  let store: BudgetStore;
+  let entriesMoved: number | undefined;
   try {
-    const { store, backup, entriesMoved } = migrateV0toV1(JSON.parse(legacy.raw), {
-      today: opts?.today,
-    });
+    const migrated = migrateV0toV1(JSON.parse(legacy.raw), { today: opts?.today });
+    store = migrated.store;
+    entriesMoved = migrated.entriesMoved;
     // P6: the backup lands BEFORE the new store. If the write of the store
     // fails, the untouched originals plus the backup are still on the device.
-    await kv.setItem(BACKUP_KEY, backup);
-    await kv.setItem(STORE_KEY, JSON.stringify(store));
-    // Only now is it safe to drop the rivals, so P1 holds from here on.
-    for (const key of LEGACY_KEYS) await kv.removeItem(key);
-    return { status: 'migrated', store, entriesMoved };
+    await kv.setItem(BACKUP_KEY, migrated.backup);
+    await kv.setItem(STORE_KEY, JSON.stringify(migrated.store));
   } catch (e) {
     let error = String(e);
     try {
@@ -104,6 +133,21 @@ export async function loadStore(
     }
     return { status: 'corrupt', store: fresh(), error };
   }
+
+  // Cleanup is a separate concern from the durable write above: by this
+  // point BACKUP_KEY and STORE_KEY both hold the migrated data, so the
+  // migration has already succeeded. A failure removing the legacy keys
+  // must not downgrade that outcome -- on the next launch STORE_KEY exists,
+  // so the legacy keys are never read again and any stale copy left behind
+  // is harmless.
+  for (const key of LEGACY_KEYS) {
+    try {
+      await kv.removeItem(key);
+    } catch {
+      // Intentionally ignored -- see comment above.
+    }
+  }
+  return { status: 'migrated', store, entriesMoved };
 }
 
 /**
