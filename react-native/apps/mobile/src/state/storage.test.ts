@@ -467,3 +467,79 @@ describe('isUsable as a standalone guard', () => {
     expect(isUsable({ ...ok, recurring: {} })).toBe(false);
   });
 });
+
+// Validating the array CONTAINERS but not their ELEMENTS reproduces the very
+// bug the month-shape check exists to stop, one level deeper. A null element
+// crashes on the next totals call; a non-finite amount is worse -- it sums as
+// zero, so a real expense silently vanishes from the total with no error.
+describe('entry-level validation', () => {
+  const wrap = (m: unknown) =>
+    JSON.stringify({ version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: { '2026-08': m } });
+  const good = { id: 'a', name: 'Rent', category: 'housing', amount: 1500, date: '2026-08-01' };
+
+  it.each([
+    ['a null element', [null]],
+    ['an undefined element', [undefined]],
+    ['a string element', ['nope']],
+    ['a nested array', [[]]],
+    ['a non-numeric amount', [{ ...good, amount: 'abc' }]],
+    ['a NaN amount', [{ ...good, amount: Number.NaN }]],
+    ['an Infinity amount', [{ ...good, amount: Number.POSITIVE_INFINITY }]],
+    ['a missing amount', [{ id: 'a', name: 'R', category: 'housing', date: '2026-08-01' }]],
+    ['a missing date', [{ id: 'a', name: 'R', category: 'housing', amount: 1 }]],
+    ['a missing id', [{ name: 'R', category: 'housing', amount: 1, date: '2026-08-01' }]],
+  ])('rejects a month whose expenses contain %s', async (_label, expenses) => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap({ incomes: [], expenses }) }), { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(() => totalsForMonth(r.store, '2026-08')).not.toThrow();
+  });
+
+  it('applies the same check to incomes', async () => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap({ incomes: [null], expenses: [] }) }), { today: TODAY });
+    expect(r.status).toBe('corrupt');
+  });
+
+  it('still accepts well-formed entries', async () => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap({ incomes: [], expenses: [good] }) }), { today: TODAY });
+    expect(r.status).toBe('loaded');
+    expect(totalsForMonth(r.store, '2026-08').expenses).toBe(1500);
+  });
+
+  it('accepts an amount of exactly zero, which is legitimate', async () => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: wrap({ incomes: [], expenses: [{ ...good, amount: 0 }] }) }), { today: TODAY });
+    expect(r.status).toBe('loaded');
+  });
+});
+
+describe('isUsable asserts no more than it verifies', () => {
+  const ok = { version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: {} };
+
+  it('rejects a non-string currency', () => {
+    expect(isUsable({ ...ok, currency: 123 })).toBe(false);
+    expect(isUsable({ ...ok, currency: undefined })).toBe(false);
+  });
+
+  it('rejects a locale outside the declared union', () => {
+    expect(isUsable({ ...ok, locale: 'fr' })).toBe(false);
+    expect(isUsable({ ...ok, locale: undefined })).toBe(false);
+  });
+});
+
+describe('cleanup failure leaves a diagnostic trail', () => {
+  it('reports a warning without downgrading the migrated status', async () => {
+    const inner = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    const kv = selective(inner, (op) => (op === 'remove' ? 'remove failed' : null));
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('migrated');
+    expect(r.warning).toContain('legacy cleanup failed');
+    expect(r.warning).toContain('remove failed');
+    expect(r.error).toBeUndefined();
+  });
+
+  it('sets no warning when cleanup succeeds', async () => {
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('migrated');
+    expect(r.warning).toBeUndefined();
+  });
+});

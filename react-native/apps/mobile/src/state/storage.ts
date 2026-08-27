@@ -14,6 +14,31 @@ export interface LoadResult {
   store: BudgetStore;
   entriesMoved?: number;
   error?: string;
+  /** Non-fatal diagnostic. Set when the migration succeeded but cleanup did not. */
+  warning?: string;
+}
+
+/**
+ * A single entry. Validating the array CONTAINERS but not their elements
+ * reproduces the very bug this guard exists to stop, one level deeper: a
+ * months map holding `incomes: [null]` passes a container-only check, loads as
+ * 'loaded', and then throws on `r.amount` the first time totals are computed.
+ * A non-finite amount is worse than a crash -- it silently sums as zero, so a
+ * real expense vanishes from the total with no error anywhere.
+ */
+function isValidEntry(candidate: unknown): boolean {
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
+    return false;
+  }
+  const e = candidate as Record<string, unknown>;
+  return (
+    typeof e.id === 'string' &&
+    typeof e.name === 'string' &&
+    typeof e.category === 'string' &&
+    typeof e.date === 'string' &&
+    typeof e.amount === 'number' &&
+    Number.isFinite(e.amount)
+  );
 }
 
 function isMonthEntry(candidate: unknown): boolean {
@@ -21,7 +46,12 @@ function isMonthEntry(candidate: unknown): boolean {
     return false;
   }
   const m = candidate as Record<string, unknown>;
-  return Array.isArray(m.incomes) && Array.isArray(m.expenses);
+  return (
+    Array.isArray(m.incomes) &&
+    m.incomes.every(isValidEntry) &&
+    Array.isArray(m.expenses) &&
+    m.expenses.every(isValidEntry)
+  );
 }
 
 /**
@@ -48,6 +78,10 @@ export function isUsable(candidate: unknown): candidate is BudgetStore {
   if (c.version !== 1) return false;
   if (typeof c.months !== 'object' || c.months === null || Array.isArray(c.months)) return false;
   if (!Array.isArray(c.recurring)) return false;
+  // Declared as `candidate is BudgetStore`, so it must not assert more than it
+  // verifies -- currency and locale are required fields of that type.
+  if (typeof c.currency !== 'string') return false;
+  if (c.locale !== 'ar' && c.locale !== 'en') return false;
   return Object.values(c.months as Record<string, unknown>).every(isMonthEntry);
 }
 
@@ -140,14 +174,25 @@ export async function loadStore(
   // must not downgrade that outcome -- on the next launch STORE_KEY exists,
   // so the legacy keys are never read again and any stale copy left behind
   // is harmless.
+  const cleanupErrors: string[] = [];
   for (const key of LEGACY_KEYS) {
     try {
       await kv.removeItem(key);
-    } catch {
-      // Intentionally ignored -- see comment above.
+    } catch (e) {
+      // Must not downgrade a migration that already landed durably -- but
+      // discarding the text entirely would leave no trace that cleanup ever
+      // failed, which is the silent-failure pattern this project forbids.
+      cleanupErrors.push(`${key}: ${String(e)}`);
     }
   }
-  return { status: 'migrated', store, entriesMoved };
+  return {
+    status: 'migrated',
+    store,
+    entriesMoved,
+    ...(cleanupErrors.length
+      ? { warning: `legacy cleanup failed: ${cleanupErrors.join('; ')}` }
+      : {}),
+  };
 }
 
 /**
