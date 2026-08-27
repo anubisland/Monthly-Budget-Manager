@@ -53,6 +53,9 @@ describe('new month-aware API surface', () => {
     expect(typeof api.nameSuggestions).toBe('function');
     expect(typeof api.detectRecurring).toBe('function');
     expect(typeof api.migrateV0toV1).toBe('function');
+    expect(typeof api.isDismissed).toBe('function');
+    expect(typeof api.dismissSuggestion).toBe('function');
+    expect(typeof api.restoreSuggestion).toBe('function');
   });
 
   it('exports the category taxonomy', () => {

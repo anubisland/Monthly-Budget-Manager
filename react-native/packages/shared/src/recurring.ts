@@ -89,6 +89,7 @@ export function suggestionsForMonth(
   store: BudgetStore,
   key: MonthKey,
 ): Array<{
+  id: string;
   kind: EntryKind;
   name: string;
   category: string;
@@ -109,6 +110,7 @@ export function suggestionsForMonth(
   return detectRecurring(store)
     .filter((t) => !present.has(t.id))
     .map((t) => ({
+      id: t.id,
       kind: t.kind,
       name: t.name,
       category: t.category,

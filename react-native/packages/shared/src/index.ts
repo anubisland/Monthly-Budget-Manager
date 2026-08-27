@@ -47,6 +47,9 @@ export {
   upsertEntry,
   removeEntry,
   monthsWithData,
+  isDismissed,
+  dismissSuggestion,
+  restoreSuggestion,
 } from './store';
 
 export { totalsForMonth, expensesByCategoryForMonth } from './totals';

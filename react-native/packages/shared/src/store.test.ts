@@ -4,6 +4,9 @@ import {
   upsertEntry,
   removeEntry,
   monthsWithData,
+  isDismissed,
+  dismissSuggestion,
+  restoreSuggestion,
 } from './store';
 import { makeId } from './ids';
 import type { Entry } from './model';
@@ -238,5 +241,82 @@ describe('updating one entry in a busy month', () => {
     expect(after.find((e) => e.id === 'e2')?.amount).toBe(9999);
     expect(after.filter((e) => e.id !== 'e2')).toEqual(before);
     expect(after.map((e) => e.id)).toEqual(['e0', 'e1', 'e2', 'e3', 'e4']); // order preserved
+  });
+});
+
+// A dismissal is the one thing about a recurring item that cannot be derived.
+// That an item is absent from a month is not evidence it was declined -- it is
+// exactly the condition for suggesting it. So the decision has to be stored.
+describe('dismissing a suggestion', () => {
+  it('reports nothing dismissed in a fresh store', () => {
+    const s = emptyStore();
+    expect(isDismissed(s, '2026-08', 'expense:housing:rent')).toBe(false);
+  });
+
+  it('records a dismissal for one month', () => {
+    const s = dismissSuggestion(emptyStore(), '2026-08', 'expense:housing:rent');
+    expect(isDismissed(s, '2026-08', 'expense:housing:rent')).toBe(true);
+  });
+
+  it('does NOT dismiss it for another month', () => {
+    // The user chose per-month dismissal: skipping September must not lose the
+    // suggestion for October.
+    const s = dismissSuggestion(emptyStore(), '2026-09', 'expense:housing:rent');
+    expect(isDismissed(s, '2026-10', 'expense:housing:rent')).toBe(false);
+  });
+
+  it('does not dismiss a different template in the same month', () => {
+    const s = dismissSuggestion(emptyStore(), '2026-08', 'expense:housing:rent');
+    expect(isDismissed(s, '2026-08', 'income:salary:pay')).toBe(false);
+  });
+
+  it('is idempotent — dismissing twice records it once', () => {
+    let s = dismissSuggestion(emptyStore(), '2026-08', 'x');
+    s = dismissSuggestion(s, '2026-08', 'x');
+    expect(s.dismissed!['2026-08']).toEqual(['x']);
+  });
+
+  it('accumulates several dismissals in one month', () => {
+    let s = dismissSuggestion(emptyStore(), '2026-08', 'a');
+    s = dismissSuggestion(s, '2026-08', 'b');
+    expect(s.dismissed!['2026-08'].sort()).toEqual(['a', 'b']);
+  });
+
+  it('never mutates the input store', () => {
+    const before = emptyStore();
+    dismissSuggestion(before, '2026-08', 'x');
+    expect(before.dismissed).toEqual({});
+  });
+
+  it('leaves the months untouched', () => {
+    let s = upsertEntry(emptyStore(), '2026-08', 'expense', entry());
+    const months = s.months;
+    s = dismissSuggestion(s, '2026-08', 'x');
+    expect(s.months).toEqual(months);
+  });
+
+  it('can be undone', () => {
+    let s = dismissSuggestion(emptyStore(), '2026-08', 'x');
+    s = restoreSuggestion(s, '2026-08', 'x');
+    expect(isDismissed(s, '2026-08', 'x')).toBe(false);
+  });
+
+  it('restoring something never dismissed is a no-op returning the same store', () => {
+    const s = emptyStore();
+    expect(restoreSuggestion(s, '2026-08', 'nope')).toBe(s);
+  });
+
+  it('treats an absent dismissed field as nothing dismissed', () => {
+    // Every store saved before this phase has no dismissed field at all.
+    const legacy = { ...emptyStore() } as Record<string, unknown>;
+    delete legacy.dismissed;
+    expect(isDismissed(legacy as never, '2026-08', 'x')).toBe(false);
+  });
+
+  it('can dismiss against a store that has no dismissed field yet', () => {
+    const legacy = { ...emptyStore() } as Record<string, unknown>;
+    delete legacy.dismissed;
+    const s = dismissSuggestion(legacy as never, '2026-08', 'x');
+    expect(isDismissed(s, '2026-08', 'x')).toBe(true);
   });
 });

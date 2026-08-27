@@ -34,7 +34,24 @@ export interface BudgetStore {
   currency: string;
   locale: 'ar' | 'en';
   months: Record<MonthKey, MonthEntry>;
+  /**
+   * Unused. Recurring items are derived by detectRecurring from history, so
+   * nothing writes this. It is kept only because `recurring: []` appears in
+   * around 25 test fixtures and two validators, and churning finished packages
+   * to delete a harmless field is the worse trade. It has not earned its place.
+   */
   recurring: RecurringTemplate[];
+  /**
+   * Template ids the user declined, per month.
+   *
+   * The only thing about a recurring item that cannot be derived. That an item
+   * is absent from a month is not evidence it was declined -- it is exactly the
+   * condition for suggesting it -- so the decision has to be recorded.
+   *
+   * Optional because every store saved before this existed has no such field,
+   * and absent must behave as empty rather than as corrupt.
+   */
+  dismissed?: Record<MonthKey, string[]>;
 }
 
 export interface Totals {

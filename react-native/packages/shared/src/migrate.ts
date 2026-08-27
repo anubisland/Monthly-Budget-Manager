@@ -90,6 +90,13 @@ function asUsableV1Store(
 ): BudgetStore | null {
   if (!isRecord(raw.months) || !Array.isArray(raw.recurring)) return null;
 
+  if (raw.dismissed !== undefined) {
+    if (!isRecord(raw.dismissed)) return null;
+    for (const v of Object.values(raw.dismissed)) {
+      if (!Array.isArray(v)) return null;
+    }
+  }
+
   const hasCurrency = typeof raw.currency === 'string';
   const hasLocale = raw.locale === 'ar' || raw.locale === 'en';
   if (hasCurrency && hasLocale) {

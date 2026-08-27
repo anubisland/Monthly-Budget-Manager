@@ -12,6 +12,7 @@ export function emptyStore(opts?: {
     locale: opts?.locale ?? 'ar',
     months: {},
     recurring: [],
+    dismissed: {},
   };
 }
 
@@ -100,4 +101,44 @@ export function monthsWithData(store: BudgetStore): MonthKey[] {
       return m.incomes.length > 0 || m.expenses.length > 0;
     })
     .sort(compareKeys);
+}
+
+function dismissedFor(store: BudgetStore, key: MonthKey): string[] {
+  return store.dismissed?.[key] ?? [];
+}
+
+export function isDismissed(store: BudgetStore, key: MonthKey, templateId: string): boolean {
+  return dismissedFor(store, key).includes(templateId);
+}
+
+/** Record that a suggestion was declined for one month. Immutable. */
+export function dismissSuggestion(
+  store: BudgetStore,
+  key: MonthKey,
+  templateId: string,
+): BudgetStore {
+  if (isDismissed(store, key, templateId)) return store;
+  return {
+    ...store,
+    dismissed: {
+      ...(store.dismissed ?? {}),
+      [key]: [...dismissedFor(store, key), templateId],
+    },
+  };
+}
+
+/** Undo a dismissal. Returns the same store when there was nothing to undo. */
+export function restoreSuggestion(
+  store: BudgetStore,
+  key: MonthKey,
+  templateId: string,
+): BudgetStore {
+  if (!isDismissed(store, key, templateId)) return store;
+  const rest = dismissedFor(store, key).filter((id) => id !== templateId);
+  return {
+    ...store,
+    // isDismissed above only returns true when store.dismissed already has an
+    // entry for this key, so store.dismissed is guaranteed defined here.
+    dismissed: { ...store.dismissed!, [key]: rest },
+  };
 }

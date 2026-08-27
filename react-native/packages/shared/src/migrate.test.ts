@@ -314,3 +314,36 @@ describe('migrateV0toV1', () => {
     });
   });
 });
+
+describe('a v1 store without the dismissed field', () => {
+  it('still loads, because every store saved before Phase 6 lacks it', () => {
+    const r = migrateV0toV1({ version: 1, currency: 'USD', locale: 'en', months: {}, recurring: [] });
+    expect(r.migrated).toBe(false);
+    expect(() => monthsWithData(r.store)).not.toThrow();
+  });
+
+  it('is rejected when dismissed is present but not an object', () => {
+    for (const bad of ['nope', 42, []]) {
+      const r = migrateV0toV1({ version: 1, currency: 'USD', locale: 'en', months: {}, recurring: [], dismissed: bad });
+      expect(monthsWithData(r.store)).toEqual([]);
+    }
+  });
+
+  it('is rejected when dismissed is an object whose value is not an array', () => {
+    const r = migrateV0toV1({
+      version: 1,
+      currency: 'USD',
+      locale: 'en',
+      months: {},
+      recurring: [],
+      dismissed: { '2026-08': 'not-an-array' },
+    });
+    expect(monthsWithData(r.store)).toEqual([]);
+  });
+
+  it('passes a well-formed dismissed field through', () => {
+    const dismissed = { '2026-08': ['expense:housing:rent'] };
+    const r = migrateV0toV1({ version: 1, currency: 'USD', locale: 'en', months: {}, recurring: [], dismissed });
+    expect(r.store.dismissed).toEqual(dismissed);
+  });
+});

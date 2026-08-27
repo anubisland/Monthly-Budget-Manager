@@ -184,3 +184,25 @@ describe('suggestionsForMonth', () => {
     expect(JSON.stringify(s)).toBe(before);
   });
 });
+
+// Dismissal needs the template id, and the returned objects dropped it.
+describe('suggestionsForMonth carries the template id', () => {
+  it('returns an id on every suggestion', () => {
+    for (const s of suggestionsForMonth(store(), '2026-09')) {
+      expect(typeof s.id).toBe('string');
+      expect(s.id.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('uses the same id detectRecurring reports, so dismissal can match', () => {
+    const templateIds = detectRecurring(store()).map((t) => t.id).sort();
+    const suggestionIds = suggestionsForMonth(store(), '2026-09').map((s) => s.id).sort();
+    expect(suggestionIds).toEqual(templateIds);
+  });
+
+  it('keeps ids stable across calls', () => {
+    const a = suggestionsForMonth(store(), '2026-09').map((s) => s.id);
+    const b = suggestionsForMonth(store(), '2026-09').map((s) => s.id);
+    expect(a).toEqual(b);
+  });
+});
