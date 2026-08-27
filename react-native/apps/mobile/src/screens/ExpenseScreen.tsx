@@ -4,7 +4,7 @@ import { Entry, formatMoney, makeId } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
 import { styles } from './styles';
-import { formatDateDisplay } from './dateDisplay';
+import { formatDateDisplay, dateForDay } from './dateDisplay';
 import { rowDirection, textAlign, writingDirection } from '../components/direction';
 
 // Predefined expense categories from Python GUI
@@ -22,7 +22,6 @@ export function ExpenseScreen() {
 
   // Build a same-shaped day-of-month date within the displayed month, so
   // entries created here always belong to the month they're shown under.
-  const dateForDay = (day: number): string => `${monthKey}-${String(day).padStart(2, '0')}`;
 
   const addExpense = () => {
     if (!newExpense.name.trim() || !newExpense.category.trim() || !newExpense.amount.trim()) {
@@ -38,11 +37,11 @@ export function ExpenseScreen() {
 
     // Create date from the displayed month plus the chosen day, defaulting
     // to the 1st so the entry always lands in the month it's added from.
-    let date = dateForDay(1);
+    let date = dateForDay(monthKey, 1);
     if (newExpense.day.trim()) {
       const day = parseInt(newExpense.day.trim());
       if (day >= 1 && day <= 31) {
-        date = dateForDay(day);
+        date = dateForDay(monthKey, day);
       }
     }
 

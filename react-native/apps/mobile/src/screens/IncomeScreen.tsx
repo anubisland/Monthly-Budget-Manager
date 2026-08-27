@@ -4,7 +4,7 @@ import { Entry, formatMoney, makeId, OTHER_CATEGORY_ID } from '@monthly-budget/s
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
 import { styles } from './styles';
-import { formatDateDisplay } from './dateDisplay';
+import { formatDateDisplay, dateForDay } from './dateDisplay';
 import { rowDirection, textAlign, writingDirection } from '../components/direction';
 
 export function IncomeScreen() {
@@ -14,7 +14,6 @@ export function IncomeScreen() {
 
   // Build a same-shaped day-of-month date within the displayed month, so
   // entries created here always belong to the month they're shown under.
-  const dateForDay = (day: number): string => `${monthKey}-${String(day).padStart(2, '0')}`;
 
   const addIncome = () => {
     if (!newIncome.name.trim() || !newIncome.amount.trim()) {
@@ -30,11 +29,11 @@ export function IncomeScreen() {
 
     // Create date from the displayed month plus the chosen day, defaulting
     // to the 1st so the entry always lands in the month it's added from.
-    let date = dateForDay(1);
+    let date = dateForDay(monthKey, 1);
     if (newIncome.day.trim()) {
       const day = parseInt(newIncome.day.trim());
       if (day >= 1 && day <= 31) {
-        date = dateForDay(day);
+        date = dateForDay(monthKey, day);
       }
     }
 

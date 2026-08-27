@@ -14,6 +14,7 @@ import { ReactNativeAdapter } from './ReactNativeAdapter';
 import { BudgetProvider, useBudget } from './state/BudgetProvider';
 import { t } from './i18n';
 import { MonthBar } from './components/MonthBar';
+import { dateForDay } from './screens/dateDisplay';
 import { styles } from './screens/styles';
 import { SummaryScreen } from './screens/SummaryScreen';
 import { IncomeScreen } from './screens/IncomeScreen';
@@ -49,7 +50,6 @@ function BudgetScreen() {
 
   // Build a same-shaped day-of-month date within the displayed month, so
   // entries created here always belong to the month they're shown under.
-  const dateForDay = (day: number): string => `${monthKey}-${String(day).padStart(2, '0')}`;
 
   // Snapshot of the displayed month in the legacy file-export shape. File
   // open/save/export are user-initiated one-off actions, not persistence --
@@ -98,7 +98,7 @@ function BudgetScreen() {
             // category and would break income suggestions and recurring detection.
             category: OTHER_CATEGORY_ID,
             amount: income.amount,
-            date: income.date || dateForDay(1),
+            date: income.date || dateForDay(monthKey, 1),
           });
         });
         loadedBudget.expenses.forEach((expense) => {
@@ -107,7 +107,7 @@ function BudgetScreen() {
             name: expense.name,
             category: expense.category,
             amount: expense.amount,
-            date: expense.date || dateForDay(1),
+            date: expense.date || dateForDay(monthKey, 1),
           });
         });
         Alert.alert(t('screen.alertSuccessTitle', store.locale), t('screen.alertBudgetLoaded', store.locale));

@@ -26,3 +26,13 @@ export const formatDateDisplay = (dateStr: string, locale: Locale): string => {
   const dayOfWeek = getDayOfWeek(dateStr, locale);
   return `${day} (${dayOfWeek})`;
 };
+
+/**
+ * Compose a full entry date from the displayed month and a day.
+ *
+ * A MonthKey is "YYYY-MM", so an entry recorded while viewing a month always
+ * lands in that month rather than today's -- which is what lets you go back
+ * and fill in a past month.
+ */
+export const dateForDay = (monthKey: string, day: number): string =>
+  `${monthKey}-${String(day).padStart(2, '0')}`;

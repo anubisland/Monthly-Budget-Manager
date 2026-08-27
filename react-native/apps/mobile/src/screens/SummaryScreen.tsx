@@ -3,6 +3,7 @@ import { Text, View, ScrollView, TouchableOpacity, Alert, Dimensions } from 'rea
 import { Entry, formatMoney, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
+import { dateForDay } from './dateDisplay';
 import { styles } from './styles';
 import { Bars } from '../charts/Bars';
 import { Donut } from '../charts/Donut';
@@ -21,7 +22,6 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
 
   // Build a same-shaped day-of-month date within the displayed month, so
   // entries created here always belong to the month they're shown under.
-  const dateForDay = (day: number): string => `${monthKey}-${String(day).padStart(2, '0')}`;
 
   const clearCurrentMonth = () => {
     month.incomes.forEach((income) => remove('income', income.id));
@@ -45,16 +45,16 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
 
   const addSampleData = () => {
     const sampleIncomes: Entry[] = [
-      { id: makeId(), name: 'Salary', category: OTHER_CATEGORY_ID, amount: 5000, date: dateForDay(1) },
-      { id: makeId(), name: 'Freelance', category: OTHER_CATEGORY_ID, amount: 1500, date: dateForDay(15) },
+      { id: makeId(), name: 'Salary', category: OTHER_CATEGORY_ID, amount: 5000, date: dateForDay(monthKey, 1) },
+      { id: makeId(), name: 'Freelance', category: OTHER_CATEGORY_ID, amount: 1500, date: dateForDay(monthKey, 15) },
     ];
 
     const sampleExpenses: Entry[] = [
-      { id: makeId(), name: 'Rent', category: 'Rent', amount: 1200, date: dateForDay(1) },
-      { id: makeId(), name: 'Groceries', category: 'Food', amount: 400, date: dateForDay(3) },
-      { id: makeId(), name: 'Gas Bill', category: 'Fuel', amount: 80, date: dateForDay(5) },
-      { id: makeId(), name: 'Internet', category: 'Internet', amount: 60, date: dateForDay(10) },
-      { id: makeId(), name: 'Movies', category: 'Entertainment', amount: 25, date: dateForDay(12) },
+      { id: makeId(), name: 'Rent', category: 'Rent', amount: 1200, date: dateForDay(monthKey, 1) },
+      { id: makeId(), name: 'Groceries', category: 'Food', amount: 400, date: dateForDay(monthKey, 3) },
+      { id: makeId(), name: 'Gas Bill', category: 'Fuel', amount: 80, date: dateForDay(monthKey, 5) },
+      { id: makeId(), name: 'Internet', category: 'Internet', amount: 60, date: dateForDay(monthKey, 10) },
+      { id: makeId(), name: 'Movies', category: 'Entertainment', amount: 25, date: dateForDay(monthKey, 12) },
     ];
 
     sampleIncomes.forEach((income) => upsert('income', income));
