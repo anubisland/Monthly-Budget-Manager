@@ -215,3 +215,28 @@ describe('sign-crossing deltas', () => {
     expect(d.favorable).toBe(false);
   });
 });
+
+// FIX 2: two months holding the identical set of amounts, entered in a
+// different order, must compare as truly flat. Before totalsForMonth rounded
+// its output, float summation drift made compareMonths report a "changed"
+// status with a "-0.00" delta and a non-null (misleadingly "worse")
+// favorable flag for two months that are, in reality, identical.
+describe('identical months in different entry order compare as flat', () => {
+  it('reports status flat, absolute 0, and favorable null for expenses', () => {
+    const amountsA = [1291.72, 1543.48, 1631, 81.2, 837.47, 783.44];
+    const amountsB = [...amountsA].reverse();
+
+    let s = emptyStore();
+    amountsA.forEach((amount, i) => {
+      s = upsertEntry(s, '2026-08', 'expense', e({ id: `a${i}`, amount, date: '2026-08-01' }));
+    });
+    amountsB.forEach((amount, i) => {
+      s = upsertEntry(s, '2026-07', 'expense', e({ id: `b${i}`, amount, date: '2026-07-01' }));
+    });
+
+    const cmp = compareMonths(s, '2026-08');
+    expect(cmp.expenses.status).toBe('flat');
+    expect(cmp.expenses.absolute).toBe(0);
+    expect(cmp.expenses.favorable).toBeNull();
+  });
+});

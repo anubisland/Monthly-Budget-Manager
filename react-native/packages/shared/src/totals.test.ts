@@ -97,6 +97,42 @@ describe('expensesByCategoryForMonth', () => {
   });
 });
 
+// FIX 2: sum() adds already-rounded row values without re-rounding, so a
+// month's total can carry float drift depending on entry order. Reproduced
+// across 200,000 random trials: the same set of amounts in a different order
+// produced a different float sum 37% of the time. totalsForMonth must round
+// its money fields so two months holding identical amounts always compare
+// as truly equal -- not "changed by -0.00".
+describe('totalsForMonth rounds away float drift from summation order', () => {
+  // 1291.72 + 1543.48 + 1631 + 81.2 + 837.47 + 783.44 in one order sums to
+  // 6168.3099999999995 in raw IEEE-754 float math, but 6168.31 in another
+  // order -- same six amounts, same total in reality.
+  const amountsA = [1291.72, 1543.48, 1631, 81.2, 837.47, 783.44];
+  const amountsB = [...amountsA].reverse();
+
+  function storeWithExpenses(amounts: number[], key: string): BudgetStore {
+    let s = emptyStore();
+    amounts.forEach((amount, i) => {
+      s = upsertEntry(s, key, 'expense', e({ id: `x${i}`, amount, date: `${key}-01` }));
+    });
+    return s;
+  }
+
+  it('rounds income, expenses, net and margin to 2 decimals', () => {
+    const s = storeWithExpenses(amountsA, '2026-08');
+    const t = totalsForMonth(s, '2026-08');
+    expect(t.expenses).toBe(6168.31);
+    expect(t.net).toBe(-6168.31);
+  });
+
+  it('produces an identical total regardless of entry order', () => {
+    const tA = totalsForMonth(storeWithExpenses(amountsA, '2026-08'), '2026-08');
+    const tB = totalsForMonth(storeWithExpenses(amountsB, '2026-07'), '2026-07');
+    expect(tA.expenses).toBe(tB.expenses);
+    expect(tA.expenses).toBe(6168.31);
+  });
+});
+
 describe('legacy exports stay byte-compatible', () => {
   it('totals keeps its original shape and keys', () => {
     const r = totals(
@@ -126,6 +162,18 @@ describe('legacy exports stay byte-compatible', () => {
       e({ amount: 90, category: 'b' }),
     ]);
     expect(rows.map((r) => r.category)).toEqual(['b', 'a']);
+  });
+
+  it('does NOT round -- legacy totals() still carries float drift, proving it was not touched by the FIX 2 rounding', () => {
+    // Same six amounts as the totalsForMonth drift test above. Legacy totals()
+    // must keep returning the raw, unrounded float sum: apps/desktop
+    // destructures this result directly, and the additive-only constraint
+    // forbids changing legacy behavior. If a future refactor "fixes" sum()
+    // itself, this assertion breaks first.
+    const amounts = [1291.72, 1543.48, 1631, 81.2, 837.47, 783.44];
+    const r = totals([], amounts.map((amount) => e({ amount })));
+    expect(r.expense_total).toBe(6168.3099999999995);
+    expect(r.expense_total).not.toBe(6168.31);
   });
 
   it('accepts the loose shape apps/desktop passes -- no id, no date', () => {

@@ -34,13 +34,35 @@ function bucket(entries: AmountRow[], fallback: string): CategoryAmount[] {
     .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category));
 }
 
-/** Totals for one month only. This is what makes the app actually monthly. */
+/** Round to 2 decimals, the same money convention `parseAmount` uses. */
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
+
+/**
+ * Totals for one month only. This is what makes the app actually monthly.
+ *
+ * `sum()` adds already-rounded row values without re-rounding, so the raw
+ * total can carry IEEE-754 float drift that depends on entry order -- the
+ * same set of amounts in a different order can produce a different float
+ * (e.g. 6168.3099999999995 vs 6168.31). Rounding here, rather than in
+ * `sum()` or the legacy `totals()` export, keeps that drift out of the
+ * money fields callers compare (notably `compareMonths`) without touching
+ * `totals()`, which apps/desktop depends on byte-for-byte.
+ */
 export function totalsForMonth(store: BudgetStore, key: MonthKey): Totals {
   const m = getMonth(store, key);
-  const income = sum(m.incomes);
-  const expenses = sum(m.expenses);
-  const net = income - expenses;
-  return { income, expenses, net, margin: income > 0 ? (net / income) * 100 : 0 };
+  const income = round2(sum(m.incomes));
+  const expenses = round2(sum(m.expenses));
+  const net = round2(income - expenses);
+  // margin is deliberately NOT rounded here. It's derived purely from
+  // `net` and `income`, which are already canonical rounded values -- so
+  // dividing them is deterministic and order-independent on its own; no
+  // extra float drift can enter at this step. Rounding it to 2dp would
+  // throw away real precision that an existing consumer (the margin-delta
+  // test in compare.test.ts) depends on, for a case that doesn't need it.
+  const margin = income > 0 ? (net / income) * 100 : 0;
+  return { income, expenses, net, margin };
 }
 
 /** Expense breakdown for one month only, sorted by amount descending. */
