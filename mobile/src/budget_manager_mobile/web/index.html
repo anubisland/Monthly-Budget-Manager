@@ -52,6 +52,31 @@ header .hdr-btn:active{background:var(--card)}
 #notice.show{display:flex}
 #notice .nt-text{flex:1}
 #notice .nt-close{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 2px}
+/* Month comparison */
+.cmp-empty{font-size:12px;color:var(--ts);text-align:center;padding:8px 0}
+.cmp-sub{font-size:11px;color:var(--ts);margin-bottom:10px}
+.cmp-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(128,128,128,.12)}
+.cmp-row:last-child{border-bottom:none}
+.cmp-label{flex:1;font-size:13px;font-weight:600}
+.cmp-now{font-size:13px;font-weight:700}
+.cmp-was{font-size:11px;color:var(--ts);min-width:64px;text-align:end}
+.cmp-delta{font-size:11px;font-weight:700;padding:2px 7px;border-radius:8px;min-width:56px;text-align:center}
+.cmp-up{background:rgba(234,67,53,.14);color:var(--exp)}
+.cmp-down{background:rgba(0,191,166,.16);color:var(--inc)}
+.cmp-flat{background:rgba(128,128,128,.14);color:var(--ts)}
+.cmp-bars{display:flex;flex-direction:column;gap:3px;margin-top:3px}
+.cmp-bar-wrap{height:6px;background:rgba(128,128,128,.12);border-radius:3px;overflow:hidden}
+.cmp-bar{height:100%;border-radius:3px}
+/* Goal funding */
+.goal-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px}
+.goal-badge.done{background:var(--inc);color:#fff}
+.goal-badge.carried{background:rgba(128,128,128,.18);color:var(--ts)}
+.goal-fund{background:var(--pri);color:#fff;border:none;border-radius:var(--radius-sm);
+  padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.goal-fund:active{opacity:.8}
+.goal-fund[disabled]{background:rgba(128,128,128,.25);color:var(--ts);cursor:default}
+.goal-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
+.goal-foot .spacer{flex:1}
 main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
 .page{display:none;flex-direction:column;gap:12px;animation:fadeIn .25s ease}
 .page.active{display:flex}
@@ -280,6 +305,10 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
     <!-- BUDGET -->
     <section id="page-budget" class="page">
       <div class="card">
+        <div class="card-title" id="ct-compare">Month comparison</div>
+        <div id="compare-body"></div>
+      </div>
+      <div class="card">
         <div class="card-title" id="ct-inc-vs-exp">Income vs Expenses</div>
         <div id="inc-exp-compare"></div>
       </div>
@@ -453,9 +482,22 @@ async function setCurrency(c) {
 // ── API ──
 async function api(path, data) {
   let opts = {method: data ? 'POST' : 'GET'};
-  if (data) opts.body = JSON.stringify(data);
+  if (data) {
+    opts.body = JSON.stringify(data);
+    opts.headers = {'Content-Type': 'application/json'};
+  }
   let r = await fetch(path, opts);
-  return r.json();
+  let body = await r.json().catch(() => ({}));
+  // fetch only rejects on a network failure, so without this every 4xx and
+  // 5xx came back as an ordinary result: a rejected request would assign
+  // {error: ...} over the app state and change nothing on screen, and a
+  // failed *save* would look exactly like a successful one.
+  if (!r.ok) {
+    let err = new Error(body.error || ('request failed: ' + r.status));
+    err.status = r.status;
+    throw err;
+  }
+  return body;
 }
 async function refresh() {
   let d = await api('/api/data');
@@ -463,9 +505,21 @@ async function refresh() {
   state.selDate = state.today;
   render();
 }
+// Returns true when the change was accepted and saved. Callers that want a
+// success message check the result; the failure message is handled here so no
+// call site can forget it.
 async function postAndRefresh(path, data) {
-  await api(path, data);
+  try {
+    await api(path, data);
+  } catch (err) {
+    // 507 means the change was made but could not be written. That is the one
+    // the user must not miss, so it gets its own wording.
+    toast(err.status === 507 ? t('save_failed') : t('request_failed'));
+    await refresh();
+    return false;
+  }
   await refresh();
+  return true;
 }
 
 // ── Toast ──
@@ -609,6 +663,44 @@ async function addGoal() {
   document.getElementById('g-icon').value = '🎯';
   toast(t('added_toast'));
 }
+// Which goal's amount picker is open, or null. Kept outside the goal objects
+// because renderGoals rebuilds the list from scratch on every render.
+let openFundIdx = null;
+
+function toggleFund(idx) {
+  openFundIdx = (openFundIdx === idx) ? null : idx;
+  renderGoals();
+}
+
+// Preset amounts rather than a keyboard: adding to a goal should be one tap.
+// The presets are filtered against what the goal still needs, so a chip can
+// never offer more than the goal can take.
+function fundOptions(goal) {
+  let remaining = goal.remaining;
+  let presets = [50, 100, 250, 500, 1000, 2500].filter(v => v < remaining);
+  // Keep the four closest to the goal's scale rather than always the smallest.
+  if (presets.length > 4) presets = presets.slice(-4);
+  return presets.concat([remaining]);
+}
+
+function fundPicker(goal, idx) {
+  if (openFundIdx !== idx || goal.done) return '';
+  let chips = fundOptions(goal).map(v => {
+    let label = (v === goal.remaining)
+      ? t('fund_all') + ' (' + cs() + v.toLocaleString() + ')'
+      : cs() + v.toLocaleString();
+    return `<button class="chip" onclick="fundGoal(${idx}, ${v})">${label}</button>`;
+  }).join('');
+  return `<div class="chips" style="margin-top:8px">${chips}</div>`;
+}
+
+async function fundGoal(idx, amount) {
+  openFundIdx = null;
+  if (await postAndRefresh('/api/fund-goal', {index: idx, amount: amount})) {
+    toast(t('deposit_added'));
+  }
+}
+
 async function delGoal(idx) {
   await postAndRefresh('/api/delete-goal', {index: idx});
   toast(t('added_toast'));
@@ -617,6 +709,9 @@ async function delGoal(idx) {
 // ── i18n ──
 const TRANS = {
   en: {
+    request_failed: 'That could not be done', save_failed: 'Changed, but NOT saved - free some space and try again',
+    fund_all: 'All of it',
+    cmp_new: 'new', was: 'was', by_category: 'By category',
     // Load notices. Each names what happened and where the old file went.
     note_corrupt: 'Your saved file could not be read. It has been kept as data.corrupt.json and the app started empty.',
     note_unreadable: 'Your saved file could not be opened just now. Nothing has been changed, and saving is paused so it is not overwritten. Try reopening the app.',
@@ -656,6 +751,9 @@ const TRANS = {
     currency_label: 'Currency / العملة',
   },
   ar: {
+    request_failed: 'تعذّر تنفيذ ذلك', save_failed: 'تمّ التغيير ولكنه لم يُحفظ — أفرِغ مساحة وأعد المحاولة',
+    fund_all: 'المتبقّي كله',
+    cmp_new: 'جديد', was: 'كان', by_category: 'حسب التصنيف',
     note_corrupt: 'تعذّرت قراءة ملف بياناتك. حُفِظ باسم data.corrupt.json وبدأ التطبيق فارغًا.',
     note_unreadable: 'تعذّر فتح ملف بياناتك الآن. لم يُغيّر شيء، وأُوقِف الحفظ لئلا يُكتب فوقه. جرّب إعادة فتح التطبيق.',
     note_future_version: 'ملف بياناتك كُتِب بإصدار أحدث من هذا. حُفِظ باسم data.corrupt.json ولم يُكتب فوقه.',
@@ -852,6 +950,101 @@ function saveBudget() {
   postAndRefresh('/api/set-budget', {total_budget: v});
   toast(t('saved_toast'));
 }
+// ── Month comparison ──
+
+// A percentage against a tiny base is arithmetically right and useless to read:
+// 1 last month against 1000 this month is "+99,900%". Below this floor the
+// change is reported as an amount instead.
+const CMP_MIN_BASE = 10;
+
+// Must match goals.SAVINGS_CATEGORY on the Python side: it is the category a
+// goal deposit is filed under.
+const SAVINGS_CATEGORY = 'Savings';
+
+function deltaOf(now, was) {
+  let diff = Math.round((now - was) * 100) / 100;
+  if (Math.abs(diff) < 0.005) return {diff: 0, kind: 'flat', text: t('no_change')};
+  let kind = diff > 0 ? 'up' : 'down';
+  let sign = diff > 0 ? '+' : '−';
+  let text = (was === 0)
+    ? t('cmp_new')
+    : (Math.abs(was) < CMP_MIN_BASE
+        ? sign + cs() + Math.abs(diff).toLocaleString()
+        : sign + Math.abs(diff / was * 100).toFixed(0) + '%');
+  return {diff: diff, kind: kind, text: text};
+}
+
+// Rising expenses are bad and rising income is good, so the colour follows the
+// meaning rather than the sign. Reusing one palette for both would paint a
+// raise in the same red as overspending.
+function deltaClass(kind, higherIsBetter) {
+  if (kind === 'flat') return 'cmp-flat';
+  let good = (kind === 'up') === higherIsBetter;
+  return good ? 'cmp-down' : 'cmp-up';
+}
+
+function cmpRow(label, now, was, higherIsBetter) {
+  let d = deltaOf(now, was);
+  let max = Math.max(Math.abs(now), Math.abs(was), 1);
+  let bar = (v, color) =>
+    `<div class="cmp-bar-wrap"><div class="cmp-bar" style="width:${Math.abs(v) / max * 100}%;background:${color}"></div></div>`;
+  return `
+    <div class="cmp-row">
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="cmp-label">${label}</span>
+          <span class="cmp-now">${cs()}${now.toLocaleString()}</span>
+          <span class="cmp-delta ${deltaClass(d.kind, higherIsBetter)}">${d.text}</span>
+        </div>
+        <div class="cmp-bars">
+          ${bar(now, 'var(--pri)')}
+          ${bar(was, 'rgba(128,128,128,.45)')}
+        </div>
+        <div class="cmp-was">${t('was')} ${cs()}${was.toLocaleString()}</div>
+      </div>
+    </div>`;
+}
+
+function renderComparison() {
+  let el = document.getElementById('compare-body');
+  document.getElementById('ct-compare').textContent = t('comparison');
+
+  let prev = state.previous;
+  if (!prev) {
+    // Deliberately not a table of zeros: a comparison against nothing is not a
+    // finding, and showing one would invite the user to read meaning into it.
+    el.innerHTML = '<div class="cmp-empty">' + t('no_previous') + '</div>';
+    return;
+  }
+
+  let html = '<div class="cmp-sub">' + t('vs_previous') + ' · ' + monthKeyLabel(prev.month_key) + '</div>';
+  html += cmpRow(t('income'), state.total_income, prev.total_income, true);
+  html += cmpRow(t('expenses'), state.total_expenses, prev.total_expenses, false);
+  html += cmpRow(t('net'), state.net, prev.net, true);
+
+  // Categories that moved most, so the row explaining the change is on top
+  // rather than buried under whichever category happens to be alphabetically
+  // first.
+  let names = new Set([...Object.keys(state.categories), ...Object.keys(prev.categories)]);
+  let cats = [...names].map(name => ({
+    name: name,
+    now: (state.categories[name] || {}).amount || 0,
+    was: prev.categories[name] || 0,
+  })).filter(c => c.now || c.was);
+  cats.sort((a, b) => Math.abs(b.now - b.was) - Math.abs(a.now - a.was));
+
+  if (cats.length) {
+    html += '<div class="cmp-sub" style="margin-top:12px">' + t('by_category') + '</div>';
+    // Savings is where goal deposits land, so more of it is an achievement,
+    // not an overspend. Colouring it like rent would paint every contribution
+    // to a goal in the same red as a blown budget.
+    cats.slice(0, 6).forEach(c => {
+      html += cmpRow(tc(c.name), c.now, c.was, c.name === SAVINGS_CATEGORY);
+    });
+  }
+  el.innerHTML = html;
+}
+
 // ── Load notices ──
 // The server reports how the last load went. Anything other than a clean read
 // means the user's file was changed, moved or partly discarded, and they are
@@ -908,6 +1101,7 @@ async function goToThisMonth() {
 function render() {
   renderMonthBar();
   renderNotice();
+  renderComparison();
 
   // Budget overview
   renderBudgetOverview();
@@ -1082,18 +1276,35 @@ function renderGoals() {
     return;
   }
   state.goals.forEach((goal, idx) => {
-    let pct = goal.target > 0 ? Math.min(goal.current/goal.target*100, 100) : 0;
+    // The server computes progress by summing this goal's deposits across every
+    // month, so the bar shows accumulated funding rather than a stored number
+    // nothing could ever change.
+    let pct = goal.pct || 0;
+    let badges = '';
+    if (goal.done) badges += `<span class="goal-badge done">${t('goal_done')}</span>`;
+    else if (goal.carried_over) badges += `<span class="goal-badge carried">${t('carried_over')}</span>`;
+    let thisMonth = goal.this_month
+      ? `<span class="goal-text">+${cs()}${goal.this_month.toLocaleString()} ${t('added_this_month')}</span>`
+      : '';
     g.innerHTML += `
       <div class="card goal-card">
         <div class="goal-header">
           <span style="font-size:20px">${goal.icon}</span>
           <span class="goal-name">${goal.name}</span>
+          ${badges}
           <button class="goal-del" onclick="delGoal(${idx})">✕</button>
         </div>
         <div class="goal-progress">
-          <div class="goal-bar-wrap"><div class="goal-bar" style="width:${pct}%;background:var(--pri)"></div></div>
+          <div class="goal-bar-wrap"><div class="goal-bar" style="width:${pct}%;background:${goal.done ? 'var(--inc)' : 'var(--pri)'}"></div></div>
         </div>
-        <div class="goal-text">${cs()}${goal.current.toFixed(0)} / ${cs()}${goal.target.toFixed(0)} · ${pct.toFixed(0)}%</div>
+        <div class="goal-text">${cs()}${goal.current.toLocaleString()} / ${cs()}${goal.target.toLocaleString()} · ${pct.toFixed(0)}%</div>
+        <div class="goal-foot">
+          ${thisMonth}
+          <span class="spacer"></span>
+          <span class="goal-text">${t('remaining')} ${cs()}${goal.remaining.toLocaleString()}</span>
+          <button class="goal-fund" onclick="toggleFund(${idx})" ${goal.done ? 'disabled' : ''}>${t('fund_goal')}</button>
+        </div>
+        ${fundPicker(goal, idx)}
       </div>`;
   });
 }
