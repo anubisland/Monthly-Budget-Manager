@@ -172,6 +172,7 @@ class App(toga.App):
             'dark': self.dark, 'lang': self.lang, 'currency': self.currency,
             'today': self.today_iso(),
             'note': self.data.note,
+            'dropped': self.data.dropped,
         }
 
     def _categories(self, bm):

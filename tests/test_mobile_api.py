@@ -305,3 +305,66 @@ def test_a_save_failure_reaches_the_caller_instead_of_being_swallowed(app):
     app.save_error = OSError("disk full")
     with pytest.raises(OSError):
         post(app, "/api/add-income", {"name": "Salary", "amount": 8000})
+
+
+def test_a_rejected_edit_leaves_the_row_completely_untouched(app):
+    """It used to setattr each field as it validated, so an edit with a good
+    name and a bad amount renamed the row and *then* answered 400. The next
+    unrelated request wrote that rename to disk."""
+    post(app, "/api/add-expense", {"name": "Rent", "amount": 1000, "category": "Rent"})
+
+    with pytest.raises(api.ApiError):
+        post(app, "/api/edit-expense", {"index": 0, "name": "Renamed", "amount": "not-a-number"})
+
+    assert app.data.month.expenses[0].name == "Rent", "the earlier field must not have landed"
+
+    post(app, "/api/add-income", {"name": "Salary", "amount": 5000})
+    on_disk = json.loads(app.data._path.read_text("utf-8"))
+    names = [e["name"] for e in on_disk["months"][app.data.current]["expenses"]]
+    assert names == ["Rent"], "and it must not reach disk on a later save either"
+
+
+def test_a_supplied_but_malformed_date_is_refused_not_silently_replaced(app):
+    """`validate.date_text(...) or _default_date(app)` could not tell an absent
+    date from a garbage one, so a typo was quietly filed as today."""
+    with pytest.raises(api.ApiError) as caught:
+        post(app, "/api/add-expense", {"name": "Rent", "amount": 3000, "date": "05/08/2026"})
+    assert "date" in caught.value.message
+    assert app.data.month.expenses == []
+
+
+@pytest.mark.parametrize("absent", [{}, {"date": ""}, {"date": None}])
+def test_an_absent_date_is_still_defaulted(app, absent):
+    post(app, "/api/add-expense", {"name": "Rent", "amount": 3000, **absent})
+    assert app.data.month.expenses[0].date == "2026-08-27"
+
+
+def test_the_add_and_edit_routes_agree_on_what_a_date_is(app):
+    """They disagreed: add silently rewrote a bad date, edit rejected it."""
+    post(app, "/api/add-expense", {"name": "Rent", "amount": 3000})
+    for route in ("/api/add-expense", "/api/edit-expense"):
+        payload = {"name": "Rent", "amount": 3000, "date": "2026-13-45"}
+        if route.startswith("/api/edit"):
+            payload["index"] = 0
+        with pytest.raises(api.ApiError):
+            post(app, route, payload)
+
+
+def test_a_recreated_goal_does_not_inherit_the_deleted_one_s_progress(app):
+    """Deposits are matched by name and survive the goal's deletion, so reusing
+    the name would open a brand-new goal at 40% with no explanation."""
+    post(app, "/api/add-goal", {"name": "Car", "target": 1000})
+    post(app, "/api/fund-goal", {"index": 0, "amount": 400})
+    post(app, "/api/delete-goal", {"index": 0})
+
+    with pytest.raises(api.ApiError) as caught:
+        post(app, "/api/add-goal", {"name": "Car", "target": 1000})
+    assert "deposits" in caught.value.message
+    assert app.data.goals == []
+
+
+def test_a_name_with_no_past_deposits_can_be_reused_freely(app):
+    post(app, "/api/add-goal", {"name": "Car", "target": 1000})
+    post(app, "/api/delete-goal", {"index": 0})
+    post(app, "/api/add-goal", {"name": "Car", "target": 2000})
+    assert app.data.goals[0].target == 2000.0

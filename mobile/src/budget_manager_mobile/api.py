@@ -74,7 +74,23 @@ def _entry_fields(app, d: Dict):
     amount = validate.amount(d.get("amount"))
     if amount is None:
         raise ApiError("amount must be a positive number")
-    return name, amount, validate.date_text(d.get("date")) or _default_date(app)
+    return name, amount, _entry_date(app, d)
+
+
+def _entry_date(app, d: Dict) -> str:
+    """The row's date: defaulted when absent, rejected when supplied and wrong.
+
+    ``validate.date_text(...) or _default_date(app)`` could not tell those two
+    apart, so a mistyped date was quietly replaced with today's — and the same
+    value the add form accepted, the edit route refused.
+    """
+    supplied = d.get("date")
+    if supplied in (None, ""):
+        return _default_date(app)
+    parsed = validate.date_text(supplied)
+    if parsed is None:
+        raise ApiError("date must be YYYY-MM-DD")
+    return parsed
 
 
 def _default_date(app) -> str:
@@ -127,12 +143,20 @@ def _apply_edits(row, d: Dict, fields) -> None:
         "category": lambda v: validate.text(v, limit=40),
         "date": lambda v: validate.date_text(v),
     }
+    # Validate every supplied field first, and only then write. Writing as we
+    # went left a rejected edit half-applied in memory: the request answered
+    # 400 and skipped the save, but the next unrelated request persisted the
+    # part that had already landed.
+    accepted = {}
     for field in fields:
         if field not in d:
             continue
         value = validators[field](d[field])
         if value is None:
             raise ApiError(f"invalid {field}")
+        accepted[field] = value
+
+    for field, value in accepted.items():
         setattr(row, field, value)
 
 
@@ -165,6 +189,12 @@ def _add_goal(app, d: Dict) -> None:
         raise ApiError("a goal needs a positive target")
     if any(g.name == name for g in app.data.goals):
         raise ApiError("a goal with that name already exists")
+    # Deposits are matched to a goal by name, and deleting a goal deliberately
+    # leaves its deposits in the months they were spent in. Reusing the name
+    # would therefore hand the new goal the old one's progress — it would open
+    # at 40% funded with no explanation.
+    if goals.deposits(name, app.data.months) > 0:
+        raise ApiError("that name still has past deposits; choose another")
 
     icon = validate.text(d.get("icon"), limit=8) or "🎯"
     app.data.goals.append(Goal(name=name, target=target, icon=icon))

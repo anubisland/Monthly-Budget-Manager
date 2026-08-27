@@ -272,3 +272,145 @@ def test_a_zero_target_goal_is_not_reported_as_an_achievement():
 
 def test_remaining_never_goes_negative():
     assert Goal("Car", 1000.0, 1500.0).remaining() == 0.0
+
+
+# ── one bad row must not take its month with it ──────────────────────────────
+# Both reviewers found this independently: from_dict builds every row in one
+# comprehension, so a single malformed row raised, the whole month was replaced
+# with an empty one, nothing was recorded, and the next save dropped the now
+# blank month from the document. A user's July vanished over one typo.
+
+def _write_v2(tmp_path, months, goals=None):
+    path = tmp_path / "data.json"
+    path.write_text(json.dumps({
+        "version": 2, "current": "2026-08", "months": months, "goals": goals or [],
+    }, ensure_ascii=False), "utf-8")
+    return path
+
+
+GOOD_JULY = {
+    "incomes": [{"name": "Salary", "amount": 5000.0, "date": "2026-07-01"},
+                {"name": "Bonus", "amount": 900.0, "date": "2026-07-20"}],
+    "expenses": [{"name": "Rent", "amount": 1800.0, "category": "Rent", "date": "2026-07-05"}],
+    "total_budget": 3000.0,
+}
+
+
+def test_a_row_missing_its_amount_does_not_empty_the_month(tmp_path):
+    july = {**GOOD_JULY, "expenses": GOOD_JULY["expenses"] + [{"name": "Rent", "category": "Rent"}]}
+    data = BudgetData(_write_v2(tmp_path, {"2026-07": july}), today=AUGUST)
+    data.load()
+
+    assert data.months["2026-07"].total_income() == 5900.0
+    assert data.months["2026-07"].total_expenses() == 1800.0
+    assert data.months["2026-07"].total_budget == 3000.0
+    assert data.dropped == 1
+
+
+def test_a_row_with_an_unexpected_key_does_not_empty_the_month(tmp_path):
+    """Income(**row) raises TypeError on a key it does not take."""
+    july = {**GOOD_JULY, "incomes": [{"name": "Salary", "amount": 5000.0, "note": "extra"}]}
+    data = BudgetData(_write_v2(tmp_path, {"2026-07": july}), today=AUGUST)
+    data.load()
+
+    assert data.months["2026-07"].total_income() == 5000.0, "the row survives; the stray key is ignored"
+    assert data.months["2026-07"].total_expenses() == 1800.0
+
+
+def test_a_damaged_month_is_never_erased_by_the_next_save(tmp_path):
+    july = {**GOOD_JULY, "expenses": [{"name": "Rent"}]}
+    path = _write_v2(tmp_path, {"2026-06": {"incomes": [{"name": "Jun", "amount": 10.0}]},
+                                "2026-07": july})
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+    data.save()
+
+    on_disk = json.loads(path.read_text("utf-8"))
+    assert sorted(on_disk["months"]) == ["2026-06", "2026-07"], "July must still be there"
+    assert on_disk["months"]["2026-07"]["incomes"][0]["amount"] == 5000.0
+
+
+def test_dropping_a_row_is_reported_and_the_original_kept(tmp_path):
+    path = _write_v2(tmp_path, {"2026-07": {**GOOD_JULY, "expenses": [{"name": "Rent"}]}})
+    original = path.read_text("utf-8")
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+    assert data.dropped == 1, "the count is reported on load, and cleared by the save"
+
+    data.save()
+    assert (tmp_path / "data.backup.json").read_text("utf-8") == original
+
+
+@pytest.mark.parametrize("bad", [None, "text", 42, {"a": 1}])
+def test_a_non_list_rows_container_is_reported_not_silently_empty(tmp_path, bad):
+    data = BudgetData(_write_v2(tmp_path, {"2026-07": {**GOOD_JULY, "incomes": bad}}), today=AUGUST)
+    data.load()
+    assert data.months["2026-07"].total_expenses() == 1800.0, "expenses survive"
+    assert data.dropped >= 1
+
+
+# ── a byte-level corruption must not stop the app from starting ──────────────
+
+def test_a_file_that_is_not_valid_utf8_is_quarantined_not_raised(tmp_path):
+    """UnicodeDecodeError comes from read_text and is a ValueError, so it
+    escaped both guards and propagated out of startup: the app would not open."""
+    path = tmp_path / "data.json"
+    path.write_bytes(b'{"version": 2, "current": "2026-08", "months": {}, "goals": []}\xff')
+
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+
+    assert data.note == "corrupt"
+    assert (tmp_path / "data.corrupt.json").exists()
+
+
+def test_a_read_that_fails_at_the_io_level_leaves_the_file_alone(tmp_path, monkeypatch):
+    """A locked or contended file says nothing about its contents.
+
+    Quarantining it would turn a transient error into permanent loss, and
+    saving over it would finish the job.
+    """
+    path = _write_v2(tmp_path, {"2026-07": GOOD_JULY})
+    original = path.read_text("utf-8")
+
+    real_read = type(path).read_text
+
+    def flaky(self, *args, **kwargs):
+        if self == path:
+            raise OSError(11, "Resource temporarily unavailable")
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(type(path), "read_text", flaky)
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+    monkeypatch.undo()
+
+    assert data.note == "unreadable"
+    assert not (tmp_path / "data.corrupt.json").exists(), "a good file must not be moved aside"
+    assert path.read_text("utf-8") == original
+
+    with pytest.raises(OSError):
+        data.save()
+    assert path.read_text("utf-8") == original, "and a save must not overwrite it"
+
+
+def test_a_resolved_notice_is_cleared_so_it_does_not_linger_all_session(tmp_path):
+    """A banner that stays up after the condition is gone trains the user to
+    dismiss the next one without reading it."""
+    path = _write_v1(tmp_path)
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+    assert data.note == "migrated-v1"
+
+    data.save()
+    assert data.note is None and data.dropped == 0
+
+
+def test_a_quarantine_notice_is_not_cleared_by_a_save(tmp_path):
+    """Unlike a migration, this one describes a file the user may want back."""
+    path = tmp_path / "data.json"
+    path.write_text("{ not json", "utf-8")
+    data = BudgetData(path, today=AUGUST)
+    data.load()
+    data.save()
+    assert data.note == "corrupt"

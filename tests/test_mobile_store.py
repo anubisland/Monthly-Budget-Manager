@@ -213,3 +213,21 @@ def test_a_failed_write_leaves_the_previous_contents_intact(tmp_path, monkeypatc
         store.write_doc(path, store.empty_doc("2026-08"))
 
     assert store.read_doc(path, "2026-01") == (good, None), "the old month must survive"
+
+
+# ── month keys must be canonical, not merely parseable ───────────────────────
+
+@pytest.mark.parametrize("bad", ["2026-0012", "2026-008", "26-08", "02026-08", "2026-8"])
+def test_a_non_canonical_month_key_is_refused(bad):
+    """Keys are compared as strings everywhere downstream.
+
+    "2026-0012" parses as December 2026 but sorts *before* "2026-08", so it
+    slips past the future check into a month the arrows can never leave — with
+    real money filed into it.
+    """
+    assert not store.is_month_key(bad)
+
+
+def test_month_key_always_produces_a_canonical_key():
+    assert store.is_month_key(store.month_key(2026, 8))
+    assert store.month_key(2026, 8) == "2026-08"

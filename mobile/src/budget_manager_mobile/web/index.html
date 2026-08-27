@@ -24,6 +24,34 @@ header{display:flex;align-items:center;justify-content:space-between;padding:12p
 header h1{font-size:20px;font-weight:700;color:var(--pri)}
 header .hdr-btn{background:none;border:none;font-size:20px;padding:6px;cursor:pointer;color:var(--ts);border-radius:50%}
 header .hdr-btn:active{background:var(--card)}
+
+/* Month bar: always visible, above every tab. Uses the same card surface,
+   radius and shadow as the rest of the app so it reads as part of it. */
+#month-bar{display:flex;align-items:center;gap:4px;margin:4px 16px 0;padding:4px;
+  background:var(--card);border-radius:var(--radius-sm);box-shadow:var(--shadow)}
+#month-bar .mb-arrow{flex:0 0 40px;height:34px;background:none;border:none;
+  font-size:22px;line-height:1;color:var(--pri);cursor:pointer;border-radius:var(--radius-sm)}
+#month-bar .mb-arrow:active{background:rgba(128,128,128,.12)}
+#month-bar .mb-arrow[disabled]{color:var(--ts);opacity:.35;cursor:default}
+#month-bar .mb-label{flex:1;height:34px;background:none;border:none;cursor:pointer;
+  font-size:14px;font-weight:700;color:var(--tx);display:flex;align-items:center;
+  justify-content:center;gap:6px;border-radius:var(--radius-sm)}
+#month-bar .mb-label:active{background:rgba(128,128,128,.08)}
+#month-bar .mb-past{font-size:10px;font-weight:600;color:#fff;background:var(--warn);
+  padding:2px 6px;border-radius:8px}
+/* Flexbox already reverses the main axis under dir="rtl", so the buttons land
+   in the right places on their own — reversing again here would undo it. Only
+   the glyphs need flipping: a left-pointing chevron means "back" in English and
+   "forward" in Arabic. */
+[dir="rtl"] #month-bar .mb-arrow{transform:scaleX(-1)}
+/* Load notices. Shown once, dismissible, and never for the ordinary case —
+   a banner the user sees every launch is a banner they stop reading. */
+#notice{display:none;margin:8px 16px 0;padding:10px 12px;border-radius:var(--radius-sm);
+  font-size:12px;line-height:1.5;background:var(--warn);color:#fff;
+  display:none;align-items:flex-start;gap:8px}
+#notice.show{display:flex}
+#notice .nt-text{flex:1}
+#notice .nt-close{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 2px}
 main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
 .page{display:none;flex-direction:column;gap:12px;animation:fadeIn .25s ease}
 .page.active{display:flex}
@@ -160,6 +188,17 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       <button class="hdr-btn" id="hdr-more" style="display:none">←</button>
     </div>
   </header>
+
+  <div id="month-bar">
+    <button class="mb-arrow" id="month-prev" onclick="stepMonth(-1)">&#8249;</button>
+    <button class="mb-label" id="month-label" onclick="goToThisMonth()"></button>
+    <button class="mb-arrow" id="month-next" onclick="stepMonth(1)">&#8250;</button>
+  </div>
+
+  <div id="notice">
+    <span class="nt-text" id="notice-text"></span>
+    <button class="nt-close" onclick="dismissNotice()">&times;</button>
+  </div>
 
   <main id="main">
     <!-- DASHBOARD -->
@@ -360,6 +399,30 @@ let CATS = Object.keys(CAT_COLORS);
 const CAT_TRANS = {
   ar: { Food:'طعام', Rent:'إيجار', Fuel:'وقود', Electricity:'كهرباء', Internet:'إنترنت', Water:'مياه', Transport:'مواصلات', Healthcare:'رعاية صحية', Entertainment:'ترفيه', Education:'تعليم', Clothing:'ملابس', Savings:'ادخار', Debt:'ديون', Subscriptions:'اشتراكات', Gifts:'هدايا', Misc:'متنوعات', Uncategorized:'بدون تصنيف' }
 };
+// ── Month names ──
+// Kept beside the other translation tables rather than derived from
+// toLocaleDateString: the WebView's available locales differ by platform, and a
+// month silently rendering in the wrong language is worse than a fixed list.
+const MONTH_NAMES = {
+  en: ['January','February','March','April','May','June',
+       'July','August','September','October','November','December'],
+  ar: ['يناير','فبراير','مارس','أبريل','مايو','يونيو',
+       'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'],
+};
+
+function monthName(month) {
+  let names = MONTH_NAMES[state.lang] || MONTH_NAMES.en;
+  return names[Math.min(Math.max(month, 1), 12) - 1];
+}
+
+// "2026-08" -> "August 2026". Used for the previous month in the comparison,
+// where only the key is known.
+function monthKeyLabel(key) {
+  if (!key) return '';
+  let parts = String(key).split('-');
+  return monthName(parseInt(parts[1], 10)) + ' ' + parts[0];
+}
+
 function tc(cat) { return (CAT_TRANS[state.lang] && CAT_TRANS[state.lang][cat]) || cat; }
 const INC_TRANS = {
   ar: { 'Salary/Wage':'راتب/أجر', 'Freelance':'عمل حر', 'Bonus':'مكافأة', 'Extra Pay':'دفعة إضافية', 'Gift':'هدية', 'Investment':'استثمار', 'Side Work':'عمل جانبي', 'Other':'آخر' }
@@ -554,6 +617,18 @@ async function delGoal(idx) {
 // ── i18n ──
 const TRANS = {
   en: {
+    // Load notices. Each names what happened and where the old file went.
+    note_corrupt: 'Your saved file could not be read. It has been kept as data.corrupt.json and the app started empty.',
+    note_unreadable: 'Your saved file could not be opened just now. Nothing has been changed, and saving is paused so it is not overwritten. Try reopening the app.',
+    note_future_version: 'Your saved file was written by a newer version of this app. It has been kept as data.corrupt.json rather than overwritten.',
+    note_migrated_v1: 'Your data was upgraded to the new monthly format. A copy of the old file was kept as data.backup.json.',
+    note_partial: '{n} damaged row(s) could not be read and were left out. A copy of the original file was kept as data.backup.json.',
+    // Month bar, comparison and goal funding.
+    past_month: 'past', vs_previous: 'vs previous month',
+    comparison: 'Month comparison', no_previous: 'No earlier month to compare with yet',
+    no_change: 'no change', fund_goal: 'Add to goal', goal_done: 'Achieved',
+    carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
+    goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
     safe_to_spend: 'Safe to Spend', income: 'Income', expenses: 'Expenses', net: 'Net',
     active_goal: 'Active Goal', budget_progress: 'Budget', recent: 'Recent',
@@ -581,6 +656,16 @@ const TRANS = {
     currency_label: 'Currency / العملة',
   },
   ar: {
+    note_corrupt: 'تعذّرت قراءة ملف بياناتك. حُفِظ باسم data.corrupt.json وبدأ التطبيق فارغًا.',
+    note_unreadable: 'تعذّر فتح ملف بياناتك الآن. لم يُغيّر شيء، وأُوقِف الحفظ لئلا يُكتب فوقه. جرّب إعادة فتح التطبيق.',
+    note_future_version: 'ملف بياناتك كُتِب بإصدار أحدث من هذا. حُفِظ باسم data.corrupt.json ولم يُكتب فوقه.',
+    note_migrated_v1: 'تمّت ترقية بياناتك إلى نظام الأشهر الجديد، وحُفِظت نسخة من الملف القديم باسم data.backup.json.',
+    note_partial: 'تعذّرت قراءة {n} سطرًا تالفًا فاستُبعِد، وحُفِظت نسخة من الملف الأصلي باسم data.backup.json.',
+    past_month: 'ماضٍ', vs_previous: 'مقابل الشهر السابق',
+    comparison: 'مقارنة الشهرين', no_previous: 'لا يوجد شهر أسبق للمقارنة بعد',
+    no_change: 'لا تغيير', fund_goal: 'أضف للهدف', goal_done: 'تحقّق',
+    carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
+    goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
     safe_to_spend: 'صافي الرصيد', income: 'الدخل', expenses: 'المصروفات', net: 'الصافي',
     active_goal: 'الهدف النشط', budget_progress: 'الميزانية', recent: 'آخر الحركات',
@@ -767,7 +852,63 @@ function saveBudget() {
   postAndRefresh('/api/set-budget', {total_budget: v});
   toast(t('saved_toast'));
 }
+// ── Load notices ──
+// The server reports how the last load went. Anything other than a clean read
+// means the user's file was changed, moved or partly discarded, and they are
+// the only one who can judge whether that matters.
+let noticeDismissed = null;
+
+function renderNotice() {
+  let el = document.getElementById('notice');
+  let note = state.note;
+  if (!note || note === noticeDismissed) { el.classList.remove('show'); return; }
+  // Notes use hyphens ("future-version"); translation keys use underscores.
+  // t() falls back to the key itself, so a mismatch would print
+  // "note_future-version" at the user rather than a sentence.
+  let text = t('note_' + note.replace(/-/g, '_'));
+  // A migration can also drop rows. Reporting only the migration would leave
+  // the user unaware that anything went missing, which is the more important
+  // half of the message.
+  if (state.dropped > 0) {
+    let dropped = t('note_partial').replace('{n}', state.dropped);
+    text = note === 'partial' ? dropped : text + ' ' + dropped;
+  }
+  document.getElementById('notice-text').textContent = text;
+  el.classList.add('show');
+}
+
+function dismissNotice() {
+  noticeDismissed = state.note;
+  document.getElementById('notice').classList.remove('show');
+}
+
+// ── Month bar ──
+function renderMonthBar() {
+  document.getElementById('month-label').innerHTML =
+    monthName(state.month) + ' ' + state.year +
+    (state.is_current_month ? '' : ' <span class="mb-past">' + t('past_month') + '</span>');
+  // Disabled rather than hidden: a button that vanishes moves the label and
+  // makes the bar jump between months.
+  document.getElementById('month-prev').disabled = false;
+  document.getElementById('month-next').disabled = !state.can_go_forward;
+}
+
+async function stepMonth(delta) {
+  if (delta > 0 && !state.can_go_forward) return;
+  await postAndRefresh('/api/step-month', {delta: delta});
+}
+
+// Tapping the label returns to the present, which is the one month always
+// reachable in a single gesture however far back you have gone.
+async function goToThisMonth() {
+  if (state.is_current_month) return;
+  await postAndRefresh('/api/set-month', {month: state.today.slice(0, 7)});
+}
+
 function render() {
+  renderMonthBar();
+  renderNotice();
+
   // Budget overview
   renderBudgetOverview();
   
