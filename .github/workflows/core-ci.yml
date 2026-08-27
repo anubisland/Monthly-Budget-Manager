@@ -41,3 +41,6 @@ jobs:
 
       - name: Build adapters package
         run: npm run build -w @monthly-budget/adapters
+
+      - name: Typecheck desktop app (additive-only guard)
+        run: npx tsc --noEmit -p apps/desktop/tsconfig.json
