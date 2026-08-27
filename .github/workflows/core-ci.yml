@@ -44,3 +44,27 @@ jobs:
 
       - name: Typecheck desktop app (additive-only guard)
         run: npx tsc --noEmit -p apps/desktop/tsconfig.json
+
+  mobile:
+    name: Typecheck & Test (mobile app)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: react-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: react-native/package-lock.json
+
+      - name: Install dependencies
+        run: npm install --workspaces --include-workspace-root
+
+      - name: Typecheck
+        run: npm run typecheck -w @monthly-budget/mobile
+
+      - name: Test with coverage
+        run: npm run test:coverage -w @monthly-budget/mobile
