@@ -73,6 +73,53 @@ export function barLayout(
   });
 }
 
+/**
+ * Bars grouped by category, two or more series per group.
+ *
+ * Every group is scaled against ONE maximum across the whole data set. Scaling
+ * each group to its own maximum would make every group look the same height,
+ * which defeats the only reason to draw a grouped chart.
+ *
+ * `react-native-chart-kit` could not do this, which is why it was replaced.
+ */
+export function groupedBarLayout(
+  groups: number[][],
+  opts: {
+    width: number;
+    height: number;
+    groupGap?: number;
+    barGap?: number;
+    max?: number;
+  },
+): BarRect[][] {
+  if (groups.length === 0) return [];
+  const groupGap = opts.groupGap ?? 12;
+  const barGap = opts.barGap ?? 2;
+
+  const safe = groups.map((g) => g.map(finite));
+  const dataMax = Math.max(...safe.flat(), 0);
+  const max = opts.max !== undefined && opts.max > 0 ? opts.max : dataMax;
+
+  const slot = opts.width / groups.length;
+  const inner = Math.max(0, slot - groupGap);
+
+  return safe.map((group, gi) => {
+    const n = Math.max(1, group.length);
+    const barWidth = Math.max(0, (inner - barGap * (n - 1)) / n);
+    const left = gi * slot + groupGap / 2;
+
+    return group.map((v, si) => {
+      const height = max > 0 ? (v / max) * opts.height : 0;
+      return {
+        x: left + si * (barWidth + barGap),
+        y: opts.height - height,
+        width: barWidth,
+        height,
+      };
+    });
+  });
+}
+
 function polar(cx: number, cy: number, r: number, angle: number): [number, number] {
   return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
 }

@@ -1,4 +1,4 @@
-import { niceTicks, barLayout, donutArcs } from './scale';
+import { niceTicks, barLayout, donutArcs, groupedBarLayout } from './scale';
 import { colorFor, CATEGORY_COLORS } from './palette';
 
 describe('niceTicks', () => {
@@ -189,6 +189,109 @@ describe('donutArcs', () => {
     expect(arcs).toHaveLength(1);
     expect(arcs[0].fraction).toBeCloseTo(1, 6);
     expect(arcs[0].d).not.toContain('NaN');
+  });
+});
+
+describe('groupedBarLayout', () => {
+  const opts = { width: 300, height: 200, groupGap: 12, barGap: 2 };
+
+  it('returns one inner array per group', () => {
+    expect(groupedBarLayout([[1, 2], [3, 4], [5, 6]], opts)).toHaveLength(3);
+  });
+
+  it('returns one rect per series in each group', () => {
+    for (const g of groupedBarLayout([[1, 2], [3, 4]], opts)) {
+      expect(g).toHaveLength(2);
+    }
+  });
+
+  it('scales every group against the SAME maximum, so groups are comparable', () => {
+    // The whole point of a grouped chart is comparing across groups. Scaling
+    // each group to its own max would make every group look identical.
+    const g = groupedBarLayout([[50, 100], [25, 50]], opts);
+    expect(g[0][1].height).toBe(200);
+    expect(g[1][1].height).toBe(100);
+    expect(g[0][0].height).toBe(100);
+  });
+
+  it('anchors every bar to the bottom', () => {
+    for (const group of groupedBarLayout([[1, 2], [3, 4]], opts)) {
+      for (const b of group) {
+        expect(b.y + b.height).toBeCloseTo(opts.height, 5);
+      }
+    }
+  });
+
+  it('keeps every bar inside the box', () => {
+    for (const group of groupedBarLayout([[1, 9], [4, 2], [7, 3]], opts)) {
+      for (const b of group) {
+        expect(b.x).toBeGreaterThanOrEqual(0);
+        expect(b.x + b.width).toBeLessThanOrEqual(opts.width + 0.001);
+        expect(b.height).toBeLessThanOrEqual(opts.height + 0.001);
+      }
+    }
+  });
+
+  it('never overlaps two bars', () => {
+    const flat = groupedBarLayout([[1, 2], [3, 4], [5, 6]], opts).flat();
+    const sorted = [...flat].sort((a, b) => a.x - b.x);
+    for (let i = 1; i < sorted.length; i++) {
+      expect(sorted[i].x).toBeGreaterThanOrEqual(sorted[i - 1].x + sorted[i - 1].width - 0.001);
+    }
+  });
+
+  it('orders bars within a group left to right by series index', () => {
+    const g = groupedBarLayout([[1, 2]], opts);
+    expect(g[0][0].x).toBeLessThan(g[0][1].x);
+  });
+
+  it('honours an explicit max, so it can share an axis with the tick labels', () => {
+    const g = groupedBarLayout([[50]], { ...opts, max: 200 });
+    expect(g[0][0].height).toBe(50);
+  });
+
+  it('gives all-zero groups zero height rather than NaN', () => {
+    for (const b of groupedBarLayout([[0, 0], [0, 0]], opts).flat()) {
+      expect(b.height).toBe(0);
+      expect(Number.isNaN(b.height)).toBe(false);
+    }
+  });
+
+  it('survives non-finite values, like the other layouts', () => {
+    for (const b of groupedBarLayout([[NaN, 1], [Infinity, -5]], opts).flat()) {
+      for (const n of [b.x, b.y, b.width, b.height]) {
+        expect(Number.isFinite(n)).toBe(true);
+      }
+    }
+  });
+
+  it('returns an empty array for no groups', () => {
+    expect(groupedBarLayout([], opts)).toEqual([]);
+  });
+
+  it('handles a single group of a single bar', () => {
+    const g = groupedBarLayout([[42]], opts);
+    expect(g).toHaveLength(1);
+    expect(g[0][0].height).toBe(200);
+  });
+
+  it('handles groups of differing length without producing NaN', () => {
+    // Ragged input should not happen from compareMonths, but a chart that
+    // renders garbage is worse than one that renders something sane.
+    for (const b of groupedBarLayout([[1, 2], [3]], opts).flat()) {
+      expect(Number.isFinite(b.width)).toBe(true);
+      expect(b.width).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('defaults the groupGap and barGap when none are given', () => {
+    const g = groupedBarLayout([[1, 2]], { width: 300, height: 200 });
+    expect(g).toHaveLength(1);
+    expect(g[0]).toHaveLength(2);
+    for (const b of g.flat()) {
+      expect(Number.isFinite(b.width)).toBe(true);
+      expect(b.width).toBeGreaterThan(0);
+    }
   });
 });
 
