@@ -9,6 +9,8 @@ module.exports = {
   collectCoverageFrom: [
     'src/state/**/*.ts',
     'src/i18n/**/*.ts',
+    'src/charts/**/*.ts',
+    'src/components/**/*.ts',
     '!src/**/*.test.ts',
   ],
   coverageThreshold: {
