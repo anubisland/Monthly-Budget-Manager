@@ -54,11 +54,24 @@ describe('openSuggestions', () => {
     expect(rent.amount).toBe(1600);
   });
 
-  it('gives a day, falling back to the first when the template has none', () => {
-    for (const s of openSuggestions(history(), '2026-08')) {
-      expect(s.day).toBeGreaterThanOrEqual(1);
-      expect(s.day).toBeLessThanOrEqual(31);
+  it('carries the template day when there is one', () => {
+    const rent = openSuggestions(history(), '2026-08').find((x) => x.name === 'Rent')!;
+    expect(rent.day).toBe(1);   // from the 2026-07-01 entry
+    const pay = openSuggestions(history(), '2026-08').find((x) => x.name === 'Salary')!;
+    expect(pay.day).toBe(25);   // from the 2026-07-25 entry
+  });
+
+  // Previously this only asserted 1 <= day <= 31, which passes whatever the
+  // code does. A template built from month-only dates has dayOfMonth null, and
+  // nothing exercised the fallback -- so the assertion was vacuous.
+  it('falls back to the first when the template has no known day', () => {
+    let s = emptyStore();
+    for (const m of ['2026-06', '2026-07']) {
+      // A month-only date, which migrated data can hold: no day is recorded.
+      s = upsertEntry(s, m, 'expense', { id: `v${m}`, name: 'Vague', category: 'food', amount: 40, date: m });
     }
+    const vague = openSuggestions(s, '2026-08').find((x) => x.name === 'Vague')!;
+    expect(vague.day).toBe(1);
   });
 
   it('caps how many it offers, so the strip cannot fill the screen', () => {
@@ -105,5 +118,30 @@ describe('suggestionToEntry', () => {
     const first = openSuggestions(s, '2026-08')[0];
     const after = upsertEntry(s, '2026-08', first.kind, suggestionToEntry(first, '2026-08', seq()));
     expect(openSuggestions(after, '2026-08').map((x) => x.id)).not.toContain(first.id);
+  });
+});
+
+// The default idFactory was never exercised -- every test injected a
+// deterministic one. Shape only, so it cannot depend on when the suite runs.
+describe('the default id factory', () => {
+  it('produces a distinct non-empty id when none is injected', () => {
+    const [a, b] = openSuggestions(history(), '2026-08');
+    const ea = suggestionToEntry(a, '2026-08');
+    const eb = suggestionToEntry(b, '2026-08');
+    expect(ea.id.length).toBeGreaterThan(0);
+    expect(eb.id.length).toBeGreaterThan(0);
+    expect(ea.id).not.toBe(eb.id);
+  });
+});
+
+describe('the default limit', () => {
+  it('caps at six when no limit is given', () => {
+    let s = emptyStore();
+    for (const m of ['2026-06', '2026-07']) {
+      for (let i = 0; i < 10; i++) {
+        s = upsertEntry(s, m, 'expense', { id: `d${m}${i}`, name: `D${i}`, category: 'food', amount: 5 + i, date: `${m}-01` });
+      }
+    }
+    expect(openSuggestions(s, '2026-08')).toHaveLength(6);
   });
 });
