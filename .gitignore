@@ -127,3 +127,4 @@ react-native/**/*.msixbundle
 # Temporary RN bootstraps build files, but allow source files
 react-native/apps/**/TempBudgetApp/build/
 react-native/apps/**/TempBudgetApp/DerivedData/MERGE_REQUEST.md
+PR_BODY.md

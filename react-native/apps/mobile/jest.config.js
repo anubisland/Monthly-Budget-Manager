@@ -5,6 +5,16 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.test.ts', '**/*.test.tsx'],
   // ts before js, so a stray compiled artifact can never shadow source.
+  // Resolve the shared package to its SOURCE, not its built dist/.
+  //
+  // Its package.json main points at dist/index.js, which is gitignored -- so a
+  // fresh CI checkout has none and every suite here fails to resolve it. Worse
+  // locally: a stale dist makes these tests silently pass against old code.
+  // Pointing at src removes both failure modes, and matches how
+  // tsconfig.base.json already resolves the package via `paths`.
+  moduleNameMapper: {
+    '^@monthly-budget/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+  },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'json', 'node'],
   collectCoverageFrom: [
     'src/state/**/*.ts',
