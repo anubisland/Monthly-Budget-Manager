@@ -1,12 +1,12 @@
 """
 Tests for monthly_budget.i18n — translation engine.
 """
-from pathlib import Path
 import sys
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from monthly_budget.i18n import I18n, _SUPPORTED_LANGUAGES
+from monthly_budget.i18n import _SUPPORTED_LANGUAGES, I18n
 
 
 class TestI18nBasic:

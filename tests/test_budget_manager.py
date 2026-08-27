@@ -677,8 +677,14 @@ class TestRecurringTransactions:
     def test_recurring_multiple_same_month(self):
         from monthly_budget.core import RecurringTransaction, apply_recurring_for_month
         rts = [
-            RecurringTransaction(category="Rent", description="Rent", amount=1500, frequency="monthly", day=1, start_date="2025-01"),
-            RecurringTransaction(category="Netflix", description="Streaming", amount=15, frequency="monthly", day=10, start_date="2025-01"),
+            RecurringTransaction(
+                category="Rent", description="Rent", amount=1500,
+                frequency="monthly", day=1, start_date="2025-01",
+            ),
+            RecurringTransaction(
+                category="Netflix", description="Streaming", amount=15,
+                frequency="monthly", day=10, start_date="2025-01",
+            ),
         ]
         expenses = apply_recurring_for_month(rts, 2025, 6)
         assert len(expenses) == 2
