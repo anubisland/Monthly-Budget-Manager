@@ -27,6 +27,8 @@ interface BudgetContextValue extends BudgetState {
   goTo(monthKey: MonthKey): void;
   upsert(kind: EntryKind, entry: Entry): void;
   remove(kind: EntryKind, id: string): void;
+  acceptSuggestion(kind: EntryKind, entry: Entry): void;
+  dismissSuggestion(templateId: string): void;
   dismissError(): void;
   dismissNotice(): void;
   setLocale(locale: Locale): void;
@@ -100,6 +102,8 @@ export function BudgetProvider({
       goTo: (monthKey) => dispatch({ type: 'goTo', monthKey }),
       upsert: (kind, entry) => dispatch({ type: 'upsert', kind, entry }),
       remove: (kind, id) => dispatch({ type: 'remove', kind, id }),
+      acceptSuggestion: (kind, entry) => dispatch({ type: 'acceptSuggestion', kind, entry }),
+      dismissSuggestion: (templateId) => dispatch({ type: 'dismissSuggestion', templateId }),
       dismissError: () => dispatch({ type: 'dismissError' }),
       dismissNotice: () => dispatch({ type: 'dismissNotice' }),
       setLocale: (locale) => dispatch({ type: 'setLocale', locale }),

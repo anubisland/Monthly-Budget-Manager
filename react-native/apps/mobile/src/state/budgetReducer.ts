@@ -5,6 +5,7 @@ import {
   prevKey,
   removeEntry,
   upsertEntry,
+  dismissSuggestion,
   type BudgetStore,
   type Entry,
   type EntryKind,
@@ -34,6 +35,8 @@ export type BudgetAction =
   | { type: 'goTo'; monthKey: MonthKey }
   | { type: 'upsert'; kind: EntryKind; entry: Entry }
   | { type: 'remove'; kind: EntryKind; id: string }
+  | { type: 'acceptSuggestion'; kind: EntryKind; entry: Entry }
+  | { type: 'dismissSuggestion'; templateId: string }
   | { type: 'saveFailed'; error: string }
   | { type: 'dismissError' }
   | { type: 'dismissNotice' }
@@ -99,6 +102,22 @@ export function budgetReducer(state: BudgetState, action: BudgetAction): BudgetS
       return {
         ...state,
         store: removeEntry(state.store, state.monthKey, action.kind, action.id),
+      };
+
+    case 'acceptSuggestion':
+      if (!canPersist(state)) return state;
+      return {
+        ...state,
+        store: upsertEntry(state.store, state.monthKey, action.kind, action.entry),
+      };
+
+    case 'dismissSuggestion':
+      // Against the DISPLAYED month, not today: declining rent while looking
+      // at September must not silence it for August.
+      if (!canPersist(state)) return state;
+      return {
+        ...state,
+        store: dismissSuggestion(state.store, state.monthKey, action.templateId),
       };
 
     case 'saveFailed':

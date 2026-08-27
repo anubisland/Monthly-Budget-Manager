@@ -1,7 +1,7 @@
 import { loadStore, saveStore, isUsable } from './storage';
 import { MemoryKV } from './kv';
 import { STORE_KEY, BACKUP_KEY, CORRUPT_KEY, LEGACY_KEYS } from './keys';
-import { emptyStore, upsertEntry, monthsWithData, totalsForMonth } from '@monthly-budget/shared';
+import { emptyStore, upsertEntry, monthsWithData, totalsForMonth, dismissSuggestion } from '@monthly-budget/shared';
 
 const TODAY = new Date(2026, 7, 26);
 
@@ -608,5 +608,32 @@ describe('backup survives when only the store write fails', () => {
     const second = await loadStore(kv, { today: TODAY });
     expect(second.status).toBe('migrated');
     expect(monthsWithData(second.store)).toEqual(['2026-07', '2026-08']);
+  });
+});
+
+describe('the dismissed field survives a round trip', () => {
+  it('is restored exactly as saved', async () => {
+    const kv = new MemoryKV();
+    let s = emptyStore({ currency: 'SAR', locale: 'ar' });
+    s = dismissSuggestion(s, '2026-08', 'expense:housing:rent');
+    await saveStore(kv, s);
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('loaded');
+    expect(r.store.dismissed).toEqual({ '2026-08': ['expense:housing:rent'] });
+  });
+
+  it('a store saved before this field existed still loads', async () => {
+    const legacy = { version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: {} };
+    const kv = new MemoryKV({ [STORE_KEY]: JSON.stringify(legacy) });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('loaded');
+  });
+
+  it('rejects a malformed dismissed field rather than loading it', async () => {
+    for (const bad of ['nope', 42, [], { '2026-08': 'not-an-array' }]) {
+      const raw = JSON.stringify({ version: 1, currency: 'SAR', locale: 'ar', recurring: [], months: {}, dismissed: bad });
+      const r = await loadStore(new MemoryKV({ [STORE_KEY]: raw }), { today: TODAY });
+      expect(r.status).toBe('corrupt');
+    }
   });
 });

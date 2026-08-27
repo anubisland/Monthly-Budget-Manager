@@ -234,6 +234,41 @@ describe('the real-clock default', () => {
   });
 });
 
+describe('recurring suggestions', () => {
+  const ready = () =>
+    budgetReducer(initialBudgetState(TODAY), { type: 'loaded', store: emptyStore(), notice: null });
+  const entry = { id: 'a', name: 'Rent', category: 'housing', amount: 1500, date: '2026-08-01' };
+
+  it('accepting one adds the entry to the displayed month', () => {
+    const s = budgetReducer(ready(), { type: 'acceptSuggestion', kind: 'expense', entry });
+    expect(monthsWithData(s.store)).toEqual(['2026-08']);
+  });
+
+  it('dismissing one records it against the displayed month', () => {
+    const s = budgetReducer(ready(), { type: 'dismissSuggestion', templateId: 'x' });
+    expect(s.store.dismissed!['2026-08']).toEqual(['x']);
+  });
+
+  it('dismisses against the DISPLAYED month, not today', () => {
+    let s = budgetReducer(ready(), { type: 'goPrev' });
+    s = budgetReducer(s, { type: 'dismissSuggestion', templateId: 'x' });
+    expect(s.store.dismissed!['2026-07']).toEqual(['x']);
+    expect(s.store.dismissed!['2026-08']).toBeUndefined();
+  });
+
+  it('ignores both before the load completes', () => {
+    const s = initialBudgetState(TODAY);
+    expect(budgetReducer(s, { type: 'dismissSuggestion', templateId: 'x' })).toBe(s);
+    expect(budgetReducer(s, { type: 'acceptSuggestion', kind: 'expense', entry })).toBe(s);
+  });
+
+  it('produces a new store object, so the autosave effect writes it', () => {
+    const before = ready();
+    const after = budgetReducer(before, { type: 'dismissSuggestion', templateId: 'x' });
+    expect(after.store).not.toBe(before.store);
+  });
+});
+
 describe('setLocale', () => {
   const ready = () =>
     budgetReducer(initialBudgetState(TODAY), { type: 'loaded', store: emptyStore(), notice: null });

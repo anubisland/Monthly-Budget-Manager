@@ -82,6 +82,17 @@ export function isUsable(candidate: unknown): candidate is BudgetStore {
   // verifies -- currency and locale are required fields of that type.
   if (typeof c.currency !== 'string') return false;
   if (c.locale !== 'ar' && c.locale !== 'en') return false;
+  // `dismissed` postdates this field: every store already on a device
+  // predates it, so its absence must still load. A present value must be a
+  // map of arrays -- reject anything else rather than trusting it blindly.
+  if (c.dismissed !== undefined) {
+    if (typeof c.dismissed !== 'object' || c.dismissed === null || Array.isArray(c.dismissed)) {
+      return false;
+    }
+    for (const v of Object.values(c.dismissed as Record<string, unknown>)) {
+      if (!Array.isArray(v)) return false;
+    }
+  }
   return Object.values(c.months as Record<string, unknown>).every(isMonthEntry);
 }
 
