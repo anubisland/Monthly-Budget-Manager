@@ -13,11 +13,14 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { BudgetDoc, Entry, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
-import { BarChart, PieChart } from 'react-native-chart-kit';
+import { BudgetDoc, Entry, formatMoney, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
 import { ReactNativeAdapter } from './ReactNativeAdapter';
 import { BudgetProvider, useBudget } from './state/BudgetProvider';
 import { t } from './i18n';
+import { MonthBar } from './components/MonthBar';
+import { Bars } from './charts/Bars';
+import { Donut } from './charts/Donut';
+import { colorFor } from './charts/palette';
 
 // Predefined expense categories from Python GUI
 const EXPENSE_CATEGORIES = [
@@ -52,7 +55,7 @@ function BudgetScreen() {
   const {
     status, monthKey, month, totals: stats, byCategory: categoryStats,
     store, error, notice,
-    goTo, upsert, remove, dismissError, dismissNotice,
+    goTo, goPrev, goNext, goCurrent, upsert, remove, dismissError, dismissNotice,
   } = useBudget();
 
   // The displayed month, derived from the single source of truth (monthKey)
@@ -435,33 +438,13 @@ function BudgetScreen() {
         {/* Income vs Expenses Bar Chart */}
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>Income vs Expenses</Text>
-          <BarChart
-            data={{
-              labels: ['Income', 'Expenses'],
-              datasets: [{
-                data: [stats.income, stats.expenses]
-              }]
-            }}
+          <Bars
             width={screenWidth - 32}
-            height={220}
-            yAxisLabel="$"
-            yAxisSuffix=""
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
-              style: {
-                borderRadius: 8
-              },
-              propsForLabels: {
-                fontSize: 12
-              }
-            }}
-            style={styles.chart}
-            showValuesOnTopOfBars
+            data={[
+              { label: t('totals.income', store.locale), value: stats.income, colorIndex: 0 },
+              { label: t('totals.expenses', store.locale), value: stats.expenses, colorIndex: 3 },
+            ]}
+            formatValue={(v) => formatMoney(v, store.currency, store.locale)}
           />
         </View>
 
@@ -469,28 +452,17 @@ function BudgetScreen() {
         {categoryStats.length > 0 && (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Expense Categories (Pie Chart)</Text>
-            <PieChart
-              data={categoryStats.map((cat, index) => ({
-                name: cat.category,
-                amount: cat.amount,
-                color: [
-                  '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-                  '#FF9F40', '#FF6384', '#C9CBCF', '#4BC0C0', '#36A2EB'
-                ][index % 10],
-                legendFontColor: '#495057',
-                legendFontSize: 12,
-              }))}
-              width={screenWidth - 32}
-              height={220}
-              chartConfig={{
-                color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
-              }}
-              accessor="amount"
-              backgroundColor="transparent"
-              paddingLeft="15"
-              style={styles.chart}
-            />
+            <View style={styles.donutRow}>
+              <Donut data={categoryStats.map((cat) => ({ label: cat.category, value: cat.amount }))} />
+              <View style={styles.legend}>
+                {categoryStats.map((cat, index) => (
+                  <View key={cat.category} style={styles.legendItem}>
+                    <View style={[styles.legendSwatch, { backgroundColor: colorFor(index) }]} />
+                    <Text style={styles.legendText}>{cat.category}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
           </View>
         )}
 
@@ -498,36 +470,15 @@ function BudgetScreen() {
         {categoryStats.length > 0 && (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Expense Categories (Bar Chart)</Text>
-            <BarChart
-              data={{
-                labels: categoryStats.slice(0, 8).map(cat =>
-                  cat.category.length > 8 ? cat.category.substring(0, 8) + '...' : cat.category
-                ),
-                datasets: [{
-                  data: categoryStats.slice(0, 8).map(cat => cat.amount)
-                }]
-              }}
+            <Bars
               width={screenWidth - 32}
               height={280}
-              yAxisLabel="$"
-              yAxisSuffix=""
-              chartConfig={{
-                backgroundColor: '#ffffff',
-                backgroundGradientFrom: '#ffffff',
-                backgroundGradientTo: '#ffffff',
-                decimalPlaces: 0,
-                color: (opacity = 1) => `rgba(220, 53, 69, ${opacity})`,
-                labelColor: (opacity = 1) => `rgba(33, 37, 41, ${opacity})`,
-                style: {
-                  borderRadius: 8
-                },
-                propsForLabels: {
-                  fontSize: 10
-                }
-              }}
-              style={styles.chart}
-              showValuesOnTopOfBars
-              fromZero
+              data={categoryStats.slice(0, 8).map((cat, index) => ({
+                label: cat.category,
+                value: cat.amount,
+                colorIndex: index,
+              }))}
+              formatValue={(v) => formatMoney(v, store.currency, store.locale)}
             />
             {categoryStats.length > 8 && (
               <Text style={styles.chartNote}>
@@ -742,6 +693,14 @@ function BudgetScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      <MonthBar
+        monthKey={monthKey}
+        locale={store.locale}
+        onPrev={goPrev}
+        onNext={goNext}
+        onCurrent={goCurrent}
+      />
 
       <View style={styles.tabContainer}>
         {[
@@ -964,6 +923,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontStyle: 'italic',
+  },
+  donutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  legend: {
+    marginLeft: 16,
+    flexShrink: 1,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  legendSwatch: {
+    width: 12,
+    height: 12,
+    borderRadius: 3,
+    marginRight: 8,
+  },
+  legendText: {
+    fontSize: 13,
+    color: '#495057',
+    flexShrink: 1,
   },
   categoryCard: {
     backgroundColor: '#fff',
