@@ -172,3 +172,64 @@ describe('initialBudgetState determinism', () => {
     expect(a.notice).toBe(b.notice);
   });
 });
+
+// TypeScript's exhaustive switch makes `default` unreachable from typed code,
+// so it reads as dead. It is not: if a member is added to BudgetAction and the
+// switch is not updated, that action silently becomes a no-op rather than a
+// compile error. Pinning the fallback documents which of the two it is.
+describe('unknown actions', () => {
+  it('returns the state unchanged rather than producing undefined', () => {
+    const s = budgetReducer(initialBudgetState(TODAY), { type: 'loaded', store: emptyStore(), notice: null });
+    const after = budgetReducer(s, { type: 'not-a-real-action' } as never);
+    expect(after).toBe(s);
+  });
+});
+
+// Only goNext's REFUSAL was covered. Its success arm -- actually advancing --
+// had no test, so a regression that froze forward navigation entirely would
+// have passed. Reaching a past month and walking back is the whole point of P8.
+describe('goNext actually advances', () => {
+  const ready = () => budgetReducer(initialBudgetState(TODAY), { type: 'loaded', store: emptyStore(), notice: null });
+
+  it('steps forward from a past month', () => {
+    let s = ready();
+    for (let i = 0; i < 3; i++) s = budgetReducer(s, { type: 'goPrev' });
+    expect(s.monthKey).toBe('2026-05');
+    s = budgetReducer(s, { type: 'goNext' });
+    expect(s.monthKey).toBe('2026-06');
+  });
+
+  it('walks back up to the current month and then stops', () => {
+    let s = ready();
+    for (let i = 0; i < 3; i++) s = budgetReducer(s, { type: 'goPrev' });
+    for (let i = 0; i < 3; i++) s = budgetReducer(s, { type: 'goNext' });
+    expect(s.monthKey).toBe('2026-08');
+    expect(budgetReducer(s, { type: 'goNext' }).monthKey).toBe('2026-08');
+  });
+
+  it('crosses a year boundary forwards', () => {
+    let s = budgetReducer(ready(), { type: 'goTo', monthKey: '2025-12' });
+    expect(s.monthKey).toBe('2025-12');
+    expect(budgetReducer(s, { type: 'goNext' }).monthKey).toBe('2026-01');
+  });
+});
+
+// The remove guard's blocked arm was untested; only upsert's was.
+describe('remove is guarded while loading too', () => {
+  it('ignores a remove before the load completes', () => {
+    const s = initialBudgetState(TODAY);
+    expect(budgetReducer(s, { type: 'remove', kind: 'expense', id: 'a' })).toBe(s);
+  });
+});
+
+// Every other test injects a date, per the project's determinism rule, leaving
+// the real-clock default unexercised. Assert only the SHAPE -- never a value,
+// which would make the suite depend on when it runs.
+describe('the real-clock default', () => {
+  it('produces a well-formed current month key when no date is injected', () => {
+    const s = initialBudgetState();
+    expect(s.monthKey).toMatch(/^\d{4}-\d{2}$/);
+    expect(s.status).toBe('loading');
+    expect(budgetReducer(s, { type: 'goNext' }).monthKey).toBe(s.monthKey);
+  });
+});
