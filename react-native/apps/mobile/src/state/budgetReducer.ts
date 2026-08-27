@@ -8,6 +8,7 @@ import {
   type BudgetStore,
   type Entry,
   type EntryKind,
+  type Locale,
   type MonthKey,
   emptyStore,
 } from '@monthly-budget/shared';
@@ -35,7 +36,8 @@ export type BudgetAction =
   | { type: 'remove'; kind: EntryKind; id: string }
   | { type: 'saveFailed'; error: string }
   | { type: 'dismissError' }
-  | { type: 'dismissNotice' };
+  | { type: 'dismissNotice' }
+  | { type: 'setLocale'; locale: Locale };
 
 export function initialBudgetState(today: Date = new Date()): BudgetState {
   return {
@@ -109,6 +111,13 @@ export function budgetReducer(state: BudgetState, action: BudgetAction): BudgetS
 
     case 'dismissNotice':
       return { ...state, notice: null };
+
+    case 'setLocale':
+      // Guarded like every other mutation: a locale set before the load
+      // completes would be built on the empty initial store and then
+      // persisted over real data.
+      if (!canPersist(state)) return state;
+      return { ...state, store: { ...state.store, locale: action.locale } };
 
     default:
       return state;

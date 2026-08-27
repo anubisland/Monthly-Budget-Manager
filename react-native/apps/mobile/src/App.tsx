@@ -13,7 +13,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { BudgetDoc, Entry, formatMoney, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
+import { BudgetDoc, Entry, formatMoney, Locale, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
 import { ReactNativeAdapter } from './ReactNativeAdapter';
 import { BudgetProvider, useBudget } from './state/BudgetProvider';
 import { t } from './i18n';
@@ -21,6 +21,7 @@ import { MonthBar } from './components/MonthBar';
 import { Bars } from './charts/Bars';
 import { Donut } from './charts/Donut';
 import { colorFor } from './charts/palette';
+import { rowDirection, textAlign, writingDirection } from './components/direction';
 
 // Predefined expense categories from Python GUI
 const EXPENSE_CATEGORIES = [
@@ -29,11 +30,15 @@ const EXPENSE_CATEGORIES = [
   "Debt", "Subscriptions", "Gifts", "Misc"
 ];
 
-// Helper function to get day of week
-const getDayOfWeek = (dateStr: string): string => {
+// Helper function to get the translated day-of-week abbreviation
+const DAY_KEYS = [
+  'screen.daySun', 'screen.dayMon', 'screen.dayTue', 'screen.dayWed',
+  'screen.dayThu', 'screen.dayFri', 'screen.daySat',
+] as const;
+
+const getDayOfWeek = (dateStr: string, locale: Locale): string => {
   const date = new Date(dateStr);
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return days[date.getDay()];
+  return t(DAY_KEYS[date.getDay()], locale);
 };
 
 // Helper function to get day of month
@@ -43,11 +48,11 @@ const getDayOfMonth = (dateStr: string): number => {
 };
 
 // Helper function to format date for display
-const formatDateDisplay = (dateStr: string): string => {
+const formatDateDisplay = (dateStr: string, locale: Locale): string => {
   if (!dateStr) return '';
   const date = new Date(dateStr);
   const day = date.getDate();
-  const dayOfWeek = getDayOfWeek(dateStr);
+  const dayOfWeek = getDayOfWeek(dateStr, locale);
   return `${day} (${dayOfWeek})`;
 };
 
@@ -55,7 +60,7 @@ function BudgetScreen() {
   const {
     status, monthKey, month, totals: stats, byCategory: categoryStats,
     store, error, notice,
-    goTo, goPrev, goNext, goCurrent, upsert, remove, dismissError, dismissNotice,
+    goTo, goPrev, goNext, goCurrent, upsert, remove, dismissError, dismissNotice, setLocale,
   } = useBudget();
 
   // The displayed month, derived from the single source of truth (monthKey)
@@ -102,12 +107,12 @@ function BudgetScreen() {
 
   const clearAllData = () => {
     Alert.alert(
-      'Clear This Month',
-      'Clear every income and expense recorded for the month you are viewing? Other months are not affected. This cannot be undone.',
+      t('screen.clearThisMonth', store.locale),
+      t('screen.alertClearMessage', store.locale),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('screen.cancel', store.locale), style: 'cancel' },
         {
-          text: 'Clear',
+          text: t('screen.alertClearConfirm', store.locale),
           style: 'destructive',
           onPress: clearCurrentMonth,
         },
@@ -136,15 +141,15 @@ function BudgetScreen() {
   // File operations
   const createNewBudget = () => {
     Alert.alert(
-      'Create New Budget',
-      'This will clear the month you are viewing. Other months are not affected. Are you sure?',
+      t('screen.alertCreateNewTitle', store.locale),
+      t('screen.alertCreateNewMessage', store.locale),
       [
         {
-          text: 'Cancel',
+          text: t('screen.cancel', store.locale),
           style: 'cancel',
         },
         {
-          text: 'Create New',
+          text: t('screen.alertCreateNewConfirm', store.locale),
           style: 'destructive',
           onPress: clearCurrentMonth,
         },
@@ -178,10 +183,10 @@ function BudgetScreen() {
             date: expense.date || dateForDay(1),
           });
         });
-        Alert.alert('Success', 'Budget loaded successfully!');
+        Alert.alert(t('screen.alertSuccessTitle', store.locale), t('screen.alertBudgetLoaded', store.locale));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to open budget file');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertOpenFailed', store.locale));
     }
   };
 
@@ -189,7 +194,7 @@ function BudgetScreen() {
     try {
       await adapter.saveJSON(currentMonthAsDoc());
     } catch (error) {
-      Alert.alert('Error', 'Failed to save budget file');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertSaveFailed', store.locale));
     }
   };
 
@@ -197,19 +202,19 @@ function BudgetScreen() {
     try {
       await adapter.exportXLSX(currentMonthAsDoc());
     } catch (error) {
-      Alert.alert('Error', 'Failed to export budget file');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertExportFailed', store.locale));
     }
   };
 
   const addIncome = () => {
     if (!newIncome.name.trim() || !newIncome.amount.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertFillFields', store.locale));
       return;
     }
 
     const amount = parseFloat(newIncome.amount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertInvalidAmount', store.locale));
       return;
     }
 
@@ -241,13 +246,13 @@ function BudgetScreen() {
 
   const addExpense = () => {
     if (!newExpense.name.trim() || !newExpense.category.trim() || !newExpense.amount.trim()) {
-      Alert.alert('Error', 'Please fill in all fields');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertFillFields', store.locale));
       return;
     }
 
     const amount = parseFloat(newExpense.amount);
     if (isNaN(amount) || amount <= 0) {
-      Alert.alert('Error', 'Please enter a valid amount');
+      Alert.alert(t('screen.alertErrorTitle', store.locale), t('screen.alertInvalidAmount', store.locale));
       return;
     }
 
@@ -296,7 +301,9 @@ function BudgetScreen() {
     <Modal visible={showCategoryPicker} transparent animationType="slide">
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Select Category</Text>
+          <Text style={[styles.modalTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+            {t('screen.selectCategory', store.locale)}
+          </Text>
           <FlatList
             data={EXPENSE_CATEGORIES}
             keyExtractor={(item) => item}
@@ -313,7 +320,7 @@ function BudgetScreen() {
             style={styles.cancelButton}
             onPress={() => setShowCategoryPicker(false)}
           >
-            <Text style={styles.cancelButtonText}>Cancel</Text>
+            <Text style={styles.cancelButtonText}>{t('screen.cancel', store.locale)}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -321,18 +328,25 @@ function BudgetScreen() {
   );
 
   const renderMonthYearPicker = () => {
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
+    // Month names come from the shared taxonomy's monthLabel(), never a
+    // hardcoded English list -- monthLabel() always appends the year, so it
+    // is stripped back off here since the year has its own picker column.
+    const monthName = (monthNumber: number): string => {
+      const key = `${displayYear}-${String(monthNumber).padStart(2, '0')}`;
+      const withYear = monthLabel(key, store.locale);
+      return withYear.replace(new RegExp(`\\s*${displayYear}$`), '');
+    };
+    const months = Array.from({ length: 12 }, (_, i) => monthName(i + 1));
     const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - 5 + i);
 
     return (
       <Modal visible={showMonthYearPicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Select Month & Year</Text>
-            <Text style={styles.sectionSubtitle}>Month</Text>
+            <Text style={[styles.modalTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+              {t('screen.selectMonthYear', store.locale)}
+            </Text>
+            <Text style={styles.sectionSubtitle}>{t('screen.month', store.locale)}</Text>
             <FlatList
               data={months}
               keyExtractor={(item, index) => index.toString()}
@@ -352,7 +366,7 @@ function BudgetScreen() {
               )}
               style={{ maxHeight: 200 }}
             />
-            <Text style={styles.sectionSubtitle}>Year</Text>
+            <Text style={styles.sectionSubtitle}>{t('screen.year', store.locale)}</Text>
             <FlatList
               data={years}
               keyExtractor={(item) => item.toString()}
@@ -376,7 +390,7 @@ function BudgetScreen() {
               style={styles.cancelButton}
               onPress={() => setShowMonthYearPicker(false)}
             >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
+              <Text style={styles.cancelButtonText}>{t('screen.cancel', store.locale)}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -389,7 +403,9 @@ function BudgetScreen() {
 
     return (
       <ScrollView style={styles.content}>
-        <Text style={styles.sectionTitle}>Budget Summary</Text>
+        <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+          {t('screen.budgetSummary', store.locale)}
+        </Text>
 
         {/* Month/Year Selector */}
         <TouchableOpacity
@@ -399,33 +415,33 @@ function BudgetScreen() {
           <Text style={styles.monthTitle}>
             {monthLabel(monthKey, store.locale)}
           </Text>
-          <Text style={styles.changeText}>Tap to change</Text>
+          <Text style={styles.changeText}>{t('screen.tapToChange', store.locale)}</Text>
         </TouchableOpacity>
 
         <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Total Income</Text>
+          <View style={[styles.statCard, { flexDirection: rowDirection(store.locale) }]}>
+            <Text style={styles.statLabel}>{t('screen.totalIncome', store.locale)}</Text>
             <Text style={[styles.statValue, styles.incomeColor]}>
-              ${stats.income.toFixed(2)}
+              {formatMoney(stats.income, store.currency, store.locale)}
             </Text>
           </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Total Expenses</Text>
+          <View style={[styles.statCard, { flexDirection: rowDirection(store.locale) }]}>
+            <Text style={styles.statLabel}>{t('screen.totalExpenses', store.locale)}</Text>
             <Text style={[styles.statValue, styles.expenseColor]}>
-              ${stats.expenses.toFixed(2)}
+              {formatMoney(stats.expenses, store.currency, store.locale)}
             </Text>
           </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Profit/Loss</Text>
+          <View style={[styles.statCard, { flexDirection: rowDirection(store.locale) }]}>
+            <Text style={styles.statLabel}>{t('screen.profitLoss', store.locale)}</Text>
             <Text style={[styles.statValue, stats.net >= 0 ? styles.profitColor : styles.lossColor]}>
-              ${stats.net.toFixed(2)}
+              {formatMoney(stats.net, store.currency, store.locale)}
             </Text>
           </View>
 
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>Profit Margin</Text>
+          <View style={[styles.statCard, { flexDirection: rowDirection(store.locale) }]}>
+            <Text style={styles.statLabel}>{t('screen.profitMargin', store.locale)}</Text>
             <Text style={[styles.statValue, stats.margin >= 0 ? styles.profitColor : styles.lossColor]}>
               {stats.margin.toFixed(1)}%
             </Text>
@@ -433,11 +449,13 @@ function BudgetScreen() {
         </View>
 
         {/* Charts Section */}
-        <Text style={styles.sectionTitle}>Charts</Text>
+        <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+          {t('screen.charts', store.locale)}
+        </Text>
 
         {/* Income vs Expenses Bar Chart */}
         <View style={styles.chartContainer}>
-          <Text style={styles.chartTitle}>Income vs Expenses</Text>
+          <Text style={styles.chartTitle}>{t('screen.incomeVsExpenses', store.locale)}</Text>
           <Bars
             width={screenWidth - 32}
             data={[
@@ -451,12 +469,12 @@ function BudgetScreen() {
         {/* Expense Categories Pie Chart */}
         {categoryStats.length > 0 && (
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Expense Categories (Pie Chart)</Text>
-            <View style={styles.donutRow}>
+            <Text style={styles.chartTitle}>{t('screen.expenseCategoriesPie', store.locale)}</Text>
+            <View style={[styles.donutRow, { flexDirection: rowDirection(store.locale) }]}>
               <Donut data={categoryStats.map((cat) => ({ label: cat.category, value: cat.amount }))} />
               <View style={styles.legend}>
                 {categoryStats.map((cat, index) => (
-                  <View key={cat.category} style={styles.legendItem}>
+                  <View key={cat.category} style={[styles.legendItem, { flexDirection: rowDirection(store.locale) }]}>
                     <View style={[styles.legendSwatch, { backgroundColor: colorFor(index) }]} />
                     <Text style={styles.legendText}>{cat.category}</Text>
                   </View>
@@ -469,7 +487,7 @@ function BudgetScreen() {
         {/* Expense Categories Bar Chart */}
         {categoryStats.length > 0 && (
           <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Expense Categories (Bar Chart)</Text>
+            <Text style={styles.chartTitle}>{t('screen.expenseCategoriesBar', store.locale)}</Text>
             <Bars
               width={screenWidth - 32}
               height={280}
@@ -482,7 +500,7 @@ function BudgetScreen() {
             />
             {categoryStats.length > 8 && (
               <Text style={styles.chartNote}>
-                Showing top 8 categories. See full breakdown below.
+                {t('screen.showingTopCategories', store.locale, { count: 8 })}
               </Text>
             )}
           </View>
@@ -490,11 +508,13 @@ function BudgetScreen() {
 
         {categoryStats.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Expenses by Category</Text>
+            <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+              {t('screen.expensesByCategory', store.locale)}
+            </Text>
             {categoryStats.map((cat, index) => (
-              <View key={index} style={styles.categoryCard}>
+              <View key={index} style={[styles.categoryCard, { flexDirection: rowDirection(store.locale) }]}>
                 <Text style={styles.categoryName}>{cat.category}</Text>
-                <Text style={styles.categoryAmount}>${cat.amount.toFixed(2)}</Text>
+                <Text style={styles.categoryAmount}>{formatMoney(cat.amount, store.currency, store.locale)}</Text>
                 <Text style={styles.categoryPercent}>{cat.percent.toFixed(1)}%</Text>
               </View>
             ))}
@@ -502,13 +522,25 @@ function BudgetScreen() {
         )}
 
         {/* Data Management Section */}
-        <Text style={styles.sectionTitle}>Data Management</Text>
+        <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+          {t('screen.dataManagement', store.locale)}
+        </Text>
         <View style={styles.dataManagementContainer}>
           <TouchableOpacity style={styles.sampleButton} onPress={addSampleData}>
-            <Text style={styles.sampleButtonText}>Add Sample Data</Text>
+            <Text style={styles.sampleButtonText}>{t('screen.addSampleData', store.locale)}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.clearButton} onPress={clearAllData}>
-            <Text style={styles.clearButtonText}>Clear This Month</Text>
+            <Text style={styles.clearButtonText}>{t('screen.clearThisMonth', store.locale)}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.languageButton}
+            onPress={() => setLocale(store.locale === 'ar' ? 'en' : 'ar')}
+            accessibilityRole="button"
+            accessibilityLabel={`${t('screen.switchLanguage', store.locale)}: ${store.locale === 'ar' ? 'English' : 'العربية'}`}
+          >
+            <Text style={styles.languageButtonText}>
+              {store.locale === 'ar' ? 'English' : 'العربية'}
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -517,43 +549,45 @@ function BudgetScreen() {
 
   const renderIncomes = () => (
     <ScrollView style={styles.content}>
-      <Text style={styles.sectionTitle}>Income Management</Text>
+      <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+        {t('screen.incomeManagement', store.locale)}
+      </Text>
 
       <View style={styles.formContainer}>
         <TextInput
-          style={styles.input}
-          placeholder="Income name (e.g., Salary)"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.incomeNamePlaceholder', store.locale)}
           value={newIncome.name}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, name: text }))}
         />
         <TextInput
-          style={styles.input}
-          placeholder="Amount"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.amountPlaceholder', store.locale)}
           value={newIncome.amount}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, amount: text }))}
           keyboardType="numeric"
         />
         <TextInput
-          style={styles.input}
-          placeholder="Day of month (1-31, optional)"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.dayOfMonthPlaceholder', store.locale)}
           value={newIncome.day}
           onChangeText={(text) => setNewIncome(prev => ({ ...prev, day: text }))}
           keyboardType="numeric"
         />
         <TouchableOpacity style={styles.addButton} onPress={addIncome}>
-          <Text style={styles.addButtonText}>Add Income</Text>
+          <Text style={styles.addButtonText}>{t('screen.addIncome', store.locale)}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.listTitle}>Current Incomes</Text>
+      <Text style={styles.listTitle}>{t('screen.currentIncomes', store.locale)}</Text>
       {month.incomes.map((income) => (
-        <View key={income.id} style={styles.listItem}>
+        <View key={income.id} style={[styles.listItem, { flexDirection: rowDirection(store.locale) }]}>
           <View style={styles.listItemContent}>
             <Text style={styles.listItemName}>{income.name}</Text>
-            <Text style={styles.listItemAmount}>${income.amount.toFixed(2)}</Text>
+            <Text style={styles.listItemAmount}>{formatMoney(income.amount, store.currency, store.locale)}</Text>
             {income.date && (
               <Text style={styles.listItemDate}>
-                {formatDateDisplay(income.date)}
+                {formatDateDisplay(income.date, store.locale)}
               </Text>
             )}
           </View>
@@ -561,7 +595,7 @@ function BudgetScreen() {
             style={styles.deleteButton}
             onPress={() => deleteIncome(income.id)}
           >
-            <Text style={styles.deleteButtonText}>Delete</Text>
+            <Text style={styles.deleteButtonText}>{t('screen.delete', store.locale)}</Text>
           </TouchableOpacity>
         </View>
       ))}
@@ -570,20 +604,22 @@ function BudgetScreen() {
 
   const renderExpenses = () => (
     <ScrollView style={styles.content}>
-      <Text style={styles.sectionTitle}>Expense Management</Text>
+      <Text style={[styles.sectionTitle, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+        {t('screen.expenseManagement', store.locale)}
+      </Text>
 
       <View style={styles.formContainer}>
         <TextInput
-          style={styles.input}
-          placeholder="Expense name"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.expenseNamePlaceholder', store.locale)}
           value={newExpense.name}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, name: text }))}
         />
 
-        <View style={styles.categoryInputContainer}>
+        <View style={[styles.categoryInputContainer, { flexDirection: rowDirection(store.locale) }]}>
           <TextInput
-            style={[styles.input, styles.categoryInput]}
-            placeholder="Category"
+            style={[styles.input, styles.categoryInput, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+            placeholder={t('screen.categoryPlaceholder', store.locale)}
             value={newExpense.category}
             onChangeText={(text) => setNewExpense(prev => ({ ...prev, category: text }))}
           />
@@ -591,39 +627,39 @@ function BudgetScreen() {
             style={styles.pickButton}
             onPress={() => setShowCategoryPicker(true)}
           >
-            <Text style={styles.pickButtonText}>Pick</Text>
+            <Text style={styles.pickButtonText}>{t('screen.pick', store.locale)}</Text>
           </TouchableOpacity>
         </View>
 
         <TextInput
-          style={styles.input}
-          placeholder="Amount"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.amountPlaceholder', store.locale)}
           value={newExpense.amount}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, amount: text }))}
           keyboardType="numeric"
         />
         <TextInput
-          style={styles.input}
-          placeholder="Day of month (1-31, optional)"
+          style={[styles.input, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}
+          placeholder={t('screen.dayOfMonthPlaceholder', store.locale)}
           value={newExpense.day}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, day: text }))}
           keyboardType="numeric"
         />
         <TouchableOpacity style={styles.addButton} onPress={addExpense}>
-          <Text style={styles.addButtonText}>Add Expense</Text>
+          <Text style={styles.addButtonText}>{t('screen.addExpense', store.locale)}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.listTitle}>Current Expenses</Text>
+      <Text style={styles.listTitle}>{t('screen.currentExpenses', store.locale)}</Text>
       {month.expenses.map((expense) => (
-        <View key={expense.id} style={styles.listItem}>
+        <View key={expense.id} style={[styles.listItem, { flexDirection: rowDirection(store.locale) }]}>
           <View style={styles.listItemContent}>
             <Text style={styles.listItemName}>{expense.name}</Text>
             <Text style={styles.listItemCategory}>{expense.category}</Text>
-            <Text style={styles.listItemAmount}>${expense.amount.toFixed(2)}</Text>
+            <Text style={styles.listItemAmount}>{formatMoney(expense.amount, store.currency, store.locale)}</Text>
             {expense.date && (
               <Text style={styles.listItemDate}>
-                {formatDateDisplay(expense.date)}
+                {formatDateDisplay(expense.date, store.locale)}
               </Text>
             )}
           </View>
@@ -631,7 +667,7 @@ function BudgetScreen() {
             style={styles.deleteButton}
             onPress={() => deleteExpense(expense.id)}
           >
-            <Text style={styles.deleteButtonText}>Delete</Text>
+            <Text style={styles.deleteButtonText}>{t('screen.delete', store.locale)}</Text>
           </TouchableOpacity>
         </View>
       ))}
@@ -643,8 +679,8 @@ function BudgetScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
 
       {error && (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorBannerText}>
+        <View style={[styles.errorBanner, { flexDirection: rowDirection(store.locale) }]}>
+          <Text style={[styles.errorBannerText, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
             {t('status.saveFailed', store.locale)} ({error})
           </Text>
           <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissError}>
@@ -654,8 +690,10 @@ function BudgetScreen() {
       )}
 
       {notice === 'migrated' && (
-        <View style={styles.noticeBanner}>
-          <Text style={styles.noticeBannerText}>{t('status.migrated', store.locale)}</Text>
+        <View style={[styles.noticeBanner, { flexDirection: rowDirection(store.locale) }]}>
+          <Text style={[styles.noticeBannerText, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+            {t('status.migrated', store.locale)}
+          </Text>
           <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissNotice}>
             <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>
           </TouchableOpacity>
@@ -663,8 +701,10 @@ function BudgetScreen() {
       )}
 
       {notice === 'corrupt' && (
-        <View style={styles.noticeBanner}>
-          <Text style={styles.noticeBannerText}>{t('status.loadCorrupt', store.locale)}</Text>
+        <View style={[styles.noticeBanner, { flexDirection: rowDirection(store.locale) }]}>
+          <Text style={[styles.noticeBannerText, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
+            {t('status.loadCorrupt', store.locale)}
+          </Text>
           <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissNotice}>
             <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>
           </TouchableOpacity>
@@ -672,24 +712,24 @@ function BudgetScreen() {
       )}
 
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Monthly Budget Manager</Text>
+        <Text style={styles.headerTitle}>{t('screen.headerTitle', store.locale)}</Text>
 
         {/* File Operations Row */}
-        <View style={styles.fileOperationsContainer}>
+        <View style={[styles.fileOperationsContainer, { flexDirection: rowDirection(store.locale) }]}>
           <TouchableOpacity style={styles.fileButton} onPress={createNewBudget}>
-            <Text style={styles.fileButtonText}>New</Text>
+            <Text style={styles.fileButtonText}>{t('screen.fileNew', store.locale)}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.fileButton} onPress={openBudget}>
-            <Text style={styles.fileButtonText}>Open</Text>
+            <Text style={styles.fileButtonText}>{t('screen.fileOpen', store.locale)}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.fileButton} onPress={saveBudget}>
-            <Text style={styles.fileButtonText}>Save</Text>
+            <Text style={styles.fileButtonText}>{t('screen.fileSave', store.locale)}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.fileButton} onPress={exportBudget}>
-            <Text style={styles.fileButtonText}>Export</Text>
+            <Text style={styles.fileButtonText}>{t('screen.fileExport', store.locale)}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -702,11 +742,11 @@ function BudgetScreen() {
         onCurrent={goCurrent}
       />
 
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { flexDirection: rowDirection(store.locale) }]}>
         {[
-          { key: 'summary', label: 'Summary' },
-          { key: 'income', label: 'Income' },
-          { key: 'expense', label: 'Expenses' },
+          { key: 'summary', label: t('screen.tabSummary', store.locale) },
+          { key: 'income', label: t('kind.income', store.locale) },
+          { key: 'expense', label: t('totals.expenses', store.locale) },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -1183,6 +1223,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   clearButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  languageButton: {
+    backgroundColor: '#495057',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  languageButtonText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',

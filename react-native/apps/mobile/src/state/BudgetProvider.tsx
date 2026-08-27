@@ -5,6 +5,7 @@ import {
   totalsForMonth,
   type Entry,
   type EntryKind,
+  type Locale,
   type MonthKey,
 } from '@monthly-budget/shared';
 import { asyncStorageKV, type KVStore } from './kv';
@@ -28,6 +29,7 @@ interface BudgetContextValue extends BudgetState {
   remove(kind: EntryKind, id: string): void;
   dismissError(): void;
   dismissNotice(): void;
+  setLocale(locale: Locale): void;
 }
 
 const BudgetContext = createContext<BudgetContextValue | null>(null);
@@ -100,6 +102,7 @@ export function BudgetProvider({
       remove: (kind, id) => dispatch({ type: 'remove', kind, id }),
       dismissError: () => dispatch({ type: 'dismissError' }),
       dismissNotice: () => dispatch({ type: 'dismissNotice' }),
+      setLocale: (locale) => dispatch({ type: 'setLocale', locale }),
     }),
     [state],
   );

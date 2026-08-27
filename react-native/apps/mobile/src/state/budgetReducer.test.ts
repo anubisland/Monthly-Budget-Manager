@@ -233,3 +233,36 @@ describe('the real-clock default', () => {
     expect(budgetReducer(s, { type: 'goNext' }).monthKey).toBe(s.monthKey);
   });
 });
+
+describe('setLocale', () => {
+  const ready = () =>
+    budgetReducer(initialBudgetState(TODAY), { type: 'loaded', store: emptyStore(), notice: null });
+
+  it('changes the stored locale', () => {
+    const s = budgetReducer(ready(), { type: 'setLocale', locale: 'en' });
+    expect(s.store.locale).toBe('en');
+  });
+
+  it('is persisted like any other change, not held only in memory', () => {
+    // A new store object means the autosave effect sees a change and writes it.
+    const before = ready();
+    const after = budgetReducer(before, { type: 'setLocale', locale: 'en' });
+    expect(after.store).not.toBe(before.store);
+  });
+
+  it('leaves the months untouched', () => {
+    let s = ready();
+    s = budgetReducer(s, {
+      type: 'upsert', kind: 'expense',
+      entry: { id: 'a', name: 'Rent', category: 'housing', amount: 1500, date: '2026-08-01' },
+    });
+    const months = s.store.months;
+    s = budgetReducer(s, { type: 'setLocale', locale: 'en' });
+    expect(s.store.months).toEqual(months);
+  });
+
+  it('is ignored before the load completes', () => {
+    const s = initialBudgetState(TODAY);
+    expect(budgetReducer(s, { type: 'setLocale', locale: 'en' })).toBe(s);
+  });
+});

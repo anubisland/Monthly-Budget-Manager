@@ -27,4 +27,77 @@ export const en = {
 
   'action.retry': 'Try again',
   'action.dismiss': 'Dismiss',
+
+  'screen.tabSummary': 'Summary',
+  'screen.headerTitle': 'Monthly Budget Manager',
+  'screen.fileNew': 'New',
+  'screen.fileOpen': 'Open',
+  'screen.fileSave': 'Save',
+  'screen.fileExport': 'Export',
+
+  'screen.budgetSummary': 'Budget Summary',
+  'screen.tapToChange': 'Tap to change',
+  'screen.totalIncome': 'Total Income',
+  'screen.totalExpenses': 'Total Expenses',
+  'screen.profitLoss': 'Profit/Loss',
+  'screen.profitMargin': 'Profit Margin',
+
+  'screen.charts': 'Charts',
+  'screen.incomeVsExpenses': 'Income vs Expenses',
+  'screen.expenseCategoriesPie': 'Expense Categories (Pie Chart)',
+  'screen.expenseCategoriesBar': 'Expense Categories (Bar Chart)',
+  'screen.showingTopCategories': 'Showing top {count} categories. See full breakdown below.',
+
+  'screen.expensesByCategory': 'Expenses by Category',
+
+  'screen.dataManagement': 'Data Management',
+  'screen.addSampleData': 'Add Sample Data',
+  'screen.clearThisMonth': 'Clear This Month',
+  'screen.switchLanguage': 'Switch language',
+
+  'screen.incomeManagement': 'Income Management',
+  'screen.incomeNamePlaceholder': 'Income name (e.g., Salary)',
+  'screen.amountPlaceholder': 'Amount',
+  'screen.dayOfMonthPlaceholder': 'Day of month (1-31, optional)',
+  'screen.addIncome': 'Add Income',
+  'screen.currentIncomes': 'Current Incomes',
+
+  'screen.expenseManagement': 'Expense Management',
+  'screen.expenseNamePlaceholder': 'Expense name',
+  'screen.categoryPlaceholder': 'Category',
+  'screen.pick': 'Pick',
+  'screen.addExpense': 'Add Expense',
+  'screen.currentExpenses': 'Current Expenses',
+  'screen.delete': 'Delete',
+
+  'screen.selectCategory': 'Select Category',
+  'screen.cancel': 'Cancel',
+
+  'screen.selectMonthYear': 'Select Month & Year',
+  'screen.month': 'Month',
+  'screen.year': 'Year',
+
+  'screen.alertClearMessage':
+    'Clear every income and expense recorded for the month you are viewing? Other months are not affected. This cannot be undone.',
+  'screen.alertClearConfirm': 'Clear',
+  'screen.alertCreateNewTitle': 'Create New Budget',
+  'screen.alertCreateNewMessage':
+    'This will clear the month you are viewing. Other months are not affected. Are you sure?',
+  'screen.alertCreateNewConfirm': 'Create New',
+  'screen.alertSuccessTitle': 'Success',
+  'screen.alertBudgetLoaded': 'Budget loaded successfully!',
+  'screen.alertErrorTitle': 'Error',
+  'screen.alertOpenFailed': 'Failed to open budget file',
+  'screen.alertSaveFailed': 'Failed to save budget file',
+  'screen.alertExportFailed': 'Failed to export budget file',
+  'screen.alertFillFields': 'Please fill in all fields',
+  'screen.alertInvalidAmount': 'Please enter a valid amount',
+
+  'screen.daySun': 'Sun',
+  'screen.dayMon': 'Mon',
+  'screen.dayTue': 'Tue',
+  'screen.dayWed': 'Wed',
+  'screen.dayThu': 'Thu',
+  'screen.dayFri': 'Fri',
+  'screen.daySat': 'Sat',
 } as const;
