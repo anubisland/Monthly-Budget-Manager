@@ -1,4 +1,4 @@
-import { compareKeys, type MonthKey } from './month';
+import { compareKeys, isValidMonthKey, type MonthKey } from './month';
 import { parseAmount } from './money';
 import type { BudgetStore, Entry, EntryKind, MonthEntry } from './model';
 
@@ -24,6 +24,28 @@ function listKey(kind: EntryKind): 'incomes' | 'expenses' {
   return kind === 'income' ? 'incomes' : 'expenses';
 }
 
+const FULL_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Make an entry's date consistent with the month it is filed under.
+ *
+ * The amount was already normalised here; the date was not, and recurring.ts
+ * compares date strings directly to decide which entry is most recent -- so a
+ * malformed date silently misorders a template, and a date from another month
+ * ranks against the wrong one.
+ *
+ * A bad date is repaired rather than rejected: discarding an entry because its
+ * date looked odd would lose real money over a formatting problem. The day of
+ * month is deliberately NOT range-checked -- the day does not decide filing,
+ * and rewriting it would silently move someone's entry.
+ */
+function coherentDate(date: string, key: MonthKey): string {
+  const trimmed = typeof date === 'string' ? date : '';
+  if (FULL_DATE.test(trimmed) && trimmed.slice(0, 7) === key) return trimmed;
+  if (trimmed === key && isValidMonthKey(trimmed)) return trimmed;
+  return `${key}-01`;
+}
+
 /** Add or replace an entry by id. Returns a new store; never mutates. */
 export function upsertEntry(
   store: BudgetStore,
@@ -33,7 +55,11 @@ export function upsertEntry(
 ): BudgetStore {
   const month = getMonth(store, key);
   const field = listKey(kind);
-  const normalized: Entry = { ...entry, amount: Math.max(0, parseAmount(entry.amount)) };
+  const normalized: Entry = {
+    ...entry,
+    amount: Math.max(0, parseAmount(entry.amount)),
+    date: coherentDate(entry.date, key),
+  };
   const existing = month[field];
   const at = existing.findIndex((e) => e.id === normalized.id);
   const list =

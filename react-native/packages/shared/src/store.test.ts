@@ -161,6 +161,64 @@ describe('makeId', () => {
   });
 });
 
+// upsertEntry normalises the amount but accepted any string as a date.
+// recurring.ts compares those strings directly to pick the most recent entry,
+// so a malformed date silently misorders a template -- and the month an entry
+// is filed under would disagree with the date printed on it.
+describe('date validation', () => {
+  it('accepts a full YYYY-MM-DD date', () => {
+    const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ date: '2026-08-14' }));
+    expect(getMonth(s, '2026-08').expenses[0].date).toBe('2026-08-14');
+  });
+
+  // Month-only dates do NOT come from migration -- migrate.ts converts those
+  // to YYYY-MM-01. They must be accepted because the model permits them and
+  // recurring.test.ts relies on one to exercise its dayOfMonth: null case.
+  it('accepts a month-only date, which the model permits', () => {
+    const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ date: '2026-08' }));
+    expect(getMonth(s, '2026-08').expenses[0].date).toBe('2026-08');
+  });
+
+  it.each([
+    ['empty', ''],
+    ['a word', 'not-a-date'],
+    ['a slashed date', '2026/08/14'],
+    ['month 13', '2026-13-01'],
+    ['month 00', '2026-00-01'],
+    ['a two-digit year', '26-08-14'],
+    ['an ISO timestamp', '2026-08-14T00:00:00Z'],
+    ['a trailing space', '2026-08-14 '],
+  ])('repairs %s by falling back to the month it is filed under', (_label, date) => {
+    const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ date }));
+    // The entry is kept -- discarding a user's money because a date was odd
+    // would be worse -- but the date is made consistent with its month.
+    expect(getMonth(s, '2026-08').expenses).toHaveLength(1);
+    expect(getMonth(s, '2026-08').expenses[0].date).toBe('2026-08-01');
+  });
+
+  it('repairs a date that disagrees with the month it is filed under', () => {
+    // Filing a January date under August would make recurring.ts rank it
+    // against the wrong month.
+    const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ date: '2026-01-05' }));
+    expect(getMonth(s, '2026-08').expenses[0].date).toBe('2026-08-01');
+  });
+
+  it('repairs a non-string date, defending against data that bypassed the type system', () => {
+    // Entry.date is typed as string, but upsertEntry has no runtime guarantee
+    // of that -- storage or migration could hand it something else.
+    const s = upsertEntry(emptyStore(), '2026-08', 'expense', entry({ date: undefined as unknown as string }));
+    expect(getMonth(s, '2026-08').expenses[0].date).toBe('2026-08-01');
+  });
+
+  it('leaves a day that is out of range for the month alone', () => {
+    // 2026-02-30 does not exist, but the day is not what files an entry --
+    // validating calendar days is the caller's job, and rewriting it here
+    // would silently move someone's entry.
+    const s = upsertEntry(emptyStore(), '2026-02', 'expense', entry({ date: '2026-02-30' }));
+    expect(getMonth(s, '2026-02').expenses[0].date).toBe('2026-02-30');
+  });
+});
+
 // The update path maps over the existing list, passing non-matching entries
 // through untouched. Every other update test uses a single-entry month, so the
 // pass-through arm never ran: editing one expense in a busy month was never
