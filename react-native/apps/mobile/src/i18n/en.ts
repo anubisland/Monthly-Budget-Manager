@@ -121,6 +121,16 @@ export const en = {
   'entry.cancel': 'Cancel',
   'entry.save': 'Save',
 
+  'screen.tabCompare': 'Compare',
+  'compare.heading': '{current} vs {previous}',
+  'compare.noPrevious': 'No previous month to compare against yet.',
+  'compare.seriesCurrent': 'This month',
+  'compare.seriesPrevious': 'Last month',
+  'compare.statusNew': 'New',
+  'compare.statusGone': 'Gone',
+  'compare.pointsSuffix': 'pts',
+  'compare.categoriesHeading': 'By category',
+
   'category.housing': 'Housing',
   'category.food': 'Food',
   'category.transport': 'Transport',

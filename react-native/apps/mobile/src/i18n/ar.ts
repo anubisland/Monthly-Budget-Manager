@@ -123,6 +123,16 @@ export const ar: Record<keyof typeof en, string> = {
   'entry.cancel': 'إلغاء',
   'entry.save': 'حفظ',
 
+  'screen.tabCompare': 'مقارنة',
+  'compare.heading': '{current} مقابل {previous}',
+  'compare.noPrevious': 'لا يوجد شهر سابق للمقارنة بعد.',
+  'compare.seriesCurrent': 'هذا الشهر',
+  'compare.seriesPrevious': 'الشهر الماضي',
+  'compare.statusNew': 'جديد',
+  'compare.statusGone': 'اختفى',
+  'compare.pointsSuffix': 'نقطة',
+  'compare.categoriesHeading': 'حسب الفئة',
+
   'category.housing': 'السكن',
   'category.food': 'الطعام',
   'category.transport': 'المواصلات',
