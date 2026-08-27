@@ -19,6 +19,12 @@ import importlib.util
 import sys
 from pathlib import Path
 
+#: Loaded in dependency order: each imports only the ones before it.
+_MOBILE_MODULES = (
+    "store", "validate", "errors", "decode",
+    "budget_data", "goals", "recurring", "automation", "api",
+)
+
 _MOBILE_SRC = Path(__file__).resolve().parents[1] / "mobile" / "src"
 _PKG = _MOBILE_SRC / "budget_manager_mobile"
 
@@ -44,7 +50,7 @@ def _load_mobile_modules():
         _load_by_path("monthly_budget.core", _PKG / "monthly_budget" / "core.py")
         loaded = {
             name: _load_by_path(name, _PKG / f"{name}.py")
-            for name in ("store", "validate", "errors", "decode", "budget_data", "goals", "recurring", "automation", "api")
+            for name in _MOBILE_MODULES
         }
     finally:
         sys.path.remove(added)
@@ -90,7 +96,7 @@ def load_app_module():
         _load_by_path("monthly_budget", _PKG / "monthly_budget" / "__init__.py")
         for sub in ("core", "i18n"):
             _load_by_path(f"monthly_budget.{sub}", _PKG / "monthly_budget" / f"{sub}.py")
-        for name in ("store", "validate", "errors", "decode", "budget_data", "goals", "recurring", "automation", "api"):
+        for name in _MOBILE_MODULES:
             sys.modules[name] = _MODULES[name]
         return _load_by_path("budget_app", _PKG / "app.py")
     finally:
