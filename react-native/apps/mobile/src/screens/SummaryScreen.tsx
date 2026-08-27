@@ -3,6 +3,7 @@ import { Text, View, ScrollView, TouchableOpacity, Alert, Dimensions } from 'rea
 import { Entry, formatMoney, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
+import { categoryLabel } from '../i18n/categoryLabel';
 import { dateForDay } from './dateDisplay';
 import { styles } from './styles';
 import { Bars } from '../charts/Bars';
@@ -136,12 +137,12 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>{t('screen.expenseCategoriesPie', store.locale)}</Text>
           <View style={[styles.donutRow, { flexDirection: rowDirection(store.locale) }]}>
-            <Donut data={categoryStats.map((cat) => ({ label: cat.category, value: cat.amount }))} />
+            <Donut data={categoryStats.map((cat) => ({ label: categoryLabel(cat.category, store.locale), value: cat.amount }))} />
             <View style={styles.legend}>
               {categoryStats.map((cat, index) => (
                 <View key={cat.category} style={[styles.legendItem, { flexDirection: rowDirection(store.locale) }]}>
                   <View style={[styles.legendSwatch, { backgroundColor: colorFor(index) }]} />
-                  <Text style={styles.legendText}>{cat.category}</Text>
+                  <Text style={styles.legendText}>{categoryLabel(cat.category, store.locale)}</Text>
                 </View>
               ))}
             </View>
@@ -157,7 +158,7 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
             width={screenWidth - 32}
             height={280}
             data={categoryStats.slice(0, 8).map((cat, index) => ({
-              label: cat.category,
+              label: categoryLabel(cat.category, store.locale),
               value: cat.amount,
               colorIndex: index,
             }))}
@@ -178,7 +179,7 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
           </Text>
           {categoryStats.map((cat, index) => (
             <View key={index} style={[styles.categoryCard, { flexDirection: rowDirection(store.locale) }]}>
-              <Text style={styles.categoryName}>{cat.category}</Text>
+              <Text style={styles.categoryName}>{categoryLabel(cat.category, store.locale)}</Text>
               <Text style={styles.categoryAmount}>{formatMoney(cat.amount, store.currency, store.locale)}</Text>
               <Text style={styles.categoryPercent}>{cat.percent.toFixed(1)}%</Text>
             </View>

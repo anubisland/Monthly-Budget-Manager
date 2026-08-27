@@ -3,6 +3,7 @@ import { Text, View, ScrollView, TouchableOpacity } from 'react-native';
 import { formatMoney } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
+import { categoryLabel } from '../i18n/categoryLabel';
 import { styles } from './styles';
 import { formatDateDisplay } from './dateDisplay';
 import { rowDirection, textAlign, writingDirection } from '../components/direction';
@@ -33,7 +34,7 @@ export function ExpenseScreen() {
           <View key={expense.id} style={[styles.listItem, { flexDirection: rowDirection(store.locale) }]}>
             <View style={styles.listItemContent}>
               <Text style={styles.listItemName}>{expense.name}</Text>
-              <Text style={styles.listItemCategory}>{expense.category}</Text>
+              <Text style={styles.listItemCategory}>{categoryLabel(expense.category, store.locale)}</Text>
               <Text style={styles.listItemAmount}>{formatMoney(expense.amount, store.currency, store.locale)}</Text>
               {expense.date && (
                 <Text style={styles.listItemDate}>
