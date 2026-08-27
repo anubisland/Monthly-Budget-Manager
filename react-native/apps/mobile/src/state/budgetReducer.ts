@@ -34,6 +34,7 @@ export type BudgetAction =
   | { type: 'goCurrent' }
   | { type: 'goTo'; monthKey: MonthKey }
   | { type: 'upsert'; kind: EntryKind; entry: Entry }
+  | { type: 'upsertToMonth'; monthKey: MonthKey; kind: EntryKind; entry: Entry }
   | { type: 'remove'; kind: EntryKind; id: string }
   | { type: 'acceptSuggestion'; kind: EntryKind; entry: Entry }
   | { type: 'dismissSuggestion'; templateId: string }
@@ -95,6 +96,17 @@ export function budgetReducer(state: BudgetState, action: BudgetAction): BudgetS
       return {
         ...state,
         store: upsertEntry(state.store, state.monthKey, action.kind, action.entry),
+      };
+
+    case 'upsertToMonth':
+      // Like 'upsert', but files the entry under an explicit month rather
+      // than the displayed one -- for callers (import) that already know
+      // which month an entry belongs to and must not have it silently
+      // refiled under whatever month happens to be on screen.
+      if (!canPersist(state)) return state;
+      return {
+        ...state,
+        store: upsertEntry(state.store, action.monthKey, action.kind, action.entry),
       };
 
     case 'remove':

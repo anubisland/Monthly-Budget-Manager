@@ -9,7 +9,13 @@ import {
   Modal,
   FlatList,
 } from 'react-native';
-import { BudgetDoc, monthLabel, OTHER_CATEGORY_ID, makeId } from '@monthly-budget/shared';
+import {
+  BudgetDoc,
+  monthLabel,
+  monthKey as monthKeyForDate,
+  OTHER_CATEGORY_ID,
+  makeId,
+} from '@monthly-budget/shared';
 import { ReactNativeAdapter } from './ReactNativeAdapter';
 import { BudgetProvider, useBudget } from './state/BudgetProvider';
 import { t } from './i18n';
@@ -25,7 +31,7 @@ import { rowDirection, textAlign, writingDirection } from './components/directio
 function BudgetScreen() {
   const {
     status, monthKey, month, store, error, notice,
-    goTo, goPrev, goNext, goCurrent, upsert, remove, dismissError, dismissNotice,
+    goTo, goPrev, goNext, goCurrent, upsert, upsertToMonth, remove, dismissError, dismissNotice,
   } = useBudget();
 
   // The displayed month, derived from the single source of truth (monthKey)
@@ -85,13 +91,22 @@ function BudgetScreen() {
     );
   };
 
+  // File each imported entry into the month its own date names, not the
+  // displayed month -- otherwise opening a backup from another month would
+  // have upsertEntry's coherentDate silently rewrite every entry onto day 1
+  // of whatever month happens to be on screen. Mirrors migrateV0toV1, which
+  // trusts the entry's own date over any surrounding label for the same
+  // reason. Falls back to the displayed month only when the entry carries
+  // no usable date of its own.
+  const targetMonthKey = (date: string | undefined) => (date && monthKeyForDate(date)) || monthKey;
+
   const openBudget = async () => {
     try {
       const loadedBudget = await adapter.openJSON();
       if (loadedBudget) {
         clearCurrentMonth();
         loadedBudget.incomes.forEach((income) => {
-          upsert('income', {
+          upsertToMonth(targetMonthKey(income.date), 'income', {
             id: makeId(),
             name: income.name,
             // Income has no category picker in this screen yet (Phase 4 adds one).
@@ -103,7 +118,7 @@ function BudgetScreen() {
           });
         });
         loadedBudget.expenses.forEach((expense) => {
-          upsert('expense', {
+          upsertToMonth(targetMonthKey(expense.date), 'expense', {
             id: makeId(),
             name: expense.name,
             category: expense.category,

@@ -118,6 +118,28 @@ describe('entry actions', () => {
   });
 });
 
+describe('upsertToMonth (FIX 4: filing an imported entry under its own month)', () => {
+  const ready = () => budgetReducer(init(), { type: 'loaded', store: emptyStore(), notice: null });
+  const entry = { id: 'a', name: 'Rent', category: 'housing', amount: 1500, date: '2026-07-01' };
+
+  it('files the entry under the given month, not the displayed one', () => {
+    // Displayed month is August (see `init`/TODAY above), but the entry is
+    // explicitly filed under July.
+    const s = budgetReducer(ready(), {
+      type: 'upsertToMonth', monthKey: '2026-07', kind: 'expense', entry,
+    });
+    expect(monthsWithData(s.store)).toEqual(['2026-07']);
+  });
+
+  it('IGNORES an upsertToMonth action while still loading (P2)', () => {
+    const s = budgetReducer(init(), {
+      type: 'upsertToMonth', monthKey: '2026-07', kind: 'expense', entry,
+    });
+    expect(s.status).toBe('loading');
+    expect(monthsWithData(s.store)).toEqual([]);
+  });
+});
+
 describe('error handling (P7)', () => {
   const ready = () => budgetReducer(init(), { type: 'loaded', store: emptyStore(), notice: null });
 
