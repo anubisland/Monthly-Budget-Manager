@@ -19,6 +19,7 @@ import { styles } from './screens/styles';
 import { SummaryScreen } from './screens/SummaryScreen';
 import { IncomeScreen } from './screens/IncomeScreen';
 import { ExpenseScreen } from './screens/ExpenseScreen';
+import { CompareScreen } from './compare/CompareScreen';
 import { rowDirection, textAlign, writingDirection } from './components/direction';
 
 function BudgetScreen() {
@@ -32,7 +33,7 @@ function BudgetScreen() {
   const displayYear = Number(monthKey.slice(0, 4));
   const displayMonth = Number(monthKey.slice(5, 7));
 
-  const [activeTab, setActiveTab] = useState<'summary' | 'income' | 'expense'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'compare' | 'income' | 'expense'>('summary');
   const [showMonthYearPicker, setShowMonthYearPicker] = useState(false);
 
   const adapter = new ReactNativeAdapter();
@@ -280,6 +281,7 @@ function BudgetScreen() {
       <View style={[styles.tabContainer, { flexDirection: rowDirection(store.locale) }]}>
         {[
           { key: 'summary', label: t('screen.tabSummary', store.locale) },
+          { key: 'compare', label: t('screen.tabCompare', store.locale) },
           { key: 'income', label: t('kind.income', store.locale) },
           { key: 'expense', label: t('totals.expenses', store.locale) },
         ].map((tab) => (
@@ -296,6 +298,7 @@ function BudgetScreen() {
       </View>
 
       {activeTab === 'summary' && <SummaryScreen onOpenMonthPicker={() => setShowMonthYearPicker(true)} />}
+      {activeTab === 'compare' && <CompareScreen />}
       {activeTab === 'income' && <IncomeScreen />}
       {activeTab === 'expense' && <ExpenseScreen />}
 
