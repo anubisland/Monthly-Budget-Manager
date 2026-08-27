@@ -1,4 +1,4 @@
-import { nameSuggestions } from '@monthly-budget/shared';
+import { nameSuggestions, type EntryKind} from '@monthly-budget/shared';
 import React, { useReducer } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useBudget } from '../state/BudgetProvider';
@@ -25,14 +25,23 @@ const STEP_TITLES: Record<EntryStep, 'entry.stepKind' | 'entry.stepCategory' | '
  * -- every transition is a dispatched action, and the reducer, which is
  * fully tested, is what decides what comes next.
  */
-export function AddEntrySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+export function AddEntrySheet({
+  visible,
+  onClose,
+  initialKind,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  /** Pre-selects the kind, so opening from a tab that implies it skips a step. */
+  initialKind?: EntryKind;
+}) {
   const { store, monthKey, upsert } = useBudget();
-  const [draft, dispatch] = useReducer(draftReducer, undefined, emptyDraft);
+  const [draft, dispatch] = useReducer(draftReducer, initialKind ?? null, emptyDraft);
   const locale = store.locale;
   const options = stepOptions(draft, store);
 
   const handleClose = () => {
-    dispatch({ type: 'reset' });
+    dispatch({ type: 'reset', kind: initialKind ?? null });
     onClose();
   };
 

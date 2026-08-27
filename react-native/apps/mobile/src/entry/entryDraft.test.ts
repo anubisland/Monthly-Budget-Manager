@@ -355,3 +355,42 @@ describe('a category with nothing to suggest goes straight to typing', () => {
     expect(d.name).toBe('Boiler');
   });
 });
+
+// Opening the sheet from the expenses tab should not ask whether this is an
+// expense. That would be a redundant tap in the exact flow this phase exists
+// to shorten.
+describe('a draft can start with the kind already known', () => {
+  it('skips the kind step when given one', () => {
+    const d = emptyDraft('expense');
+    expect(d.kind).toBe('expense');
+    expect(d.step).toBe('category');
+  });
+
+  it('still starts at the kind step when given none', () => {
+    expect(emptyDraft().step).toBe('kind');
+    expect(emptyDraft(null).step).toBe('kind');
+  });
+
+  it('going back from the category step stays put when the kind was given', () => {
+    // There is nothing behind the category step in this mode, and landing on a
+    // kind step the screen already answered would be confusing.
+    const d = draftReducer(emptyDraft('income'), { type: 'back' });
+    expect(d.kind).toBe('income');
+    expect(['kind', 'category']).toContain(d.step);
+  });
+
+  it('reset returns to the starting point, not to the kind step', () => {
+    let d = emptyDraft('expense');
+    d = draftReducer(d, { type: 'pickCategory', category: 'housing', hasSuggestions: true });
+    d = draftReducer(d, { type: 'pickName', name: 'Rent' });
+    d = draftReducer(d, { type: 'reset', kind: 'expense' });
+    expect(d).toEqual(emptyDraft('expense'));
+    expect(d.step).toBe('category');
+  });
+
+  it('reset without a kind returns to the kind step', () => {
+    const d = draftReducer(emptyDraft('expense'), { type: 'reset' });
+    expect(d.step).toBe('kind');
+    expect(d.kind).toBeNull();
+  });
+});

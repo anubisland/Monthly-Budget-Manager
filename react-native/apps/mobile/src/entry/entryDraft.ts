@@ -36,14 +36,21 @@ export type DraftAction =
   | { type: 'confirmAmount' }
   | { type: 'pickDay'; day: number }
   | { type: 'back' }
-  | { type: 'reset' };
+  | { type: 'reset'; kind?: EntryKind | null };
 
 const ORDER: EntryStep[] = ['kind', 'category', 'name', 'amount', 'date'];
 
-export function emptyDraft(): EntryDraft {
+/**
+ * A fresh draft.
+ *
+ * `kind` may be supplied when the screen already implies it -- opening the
+ * sheet from the expenses tab should not ask whether this is an expense. The
+ * flow then starts at the category step, one tap shorter.
+ */
+export function emptyDraft(kind: EntryKind | null = null): EntryDraft {
   return {
-    step: 'kind',
-    kind: null,
+    step: kind ? 'category' : 'kind',
+    kind,
     category: '',
     name: '',
     nameIsCustom: false,
@@ -128,7 +135,10 @@ export function draftReducer(draft: EntryDraft, action: DraftAction): EntryDraft
       return { ...draft, step: stepBefore(draft.step) };
 
     case 'reset':
-      return emptyDraft();
+      // Reset must return to where this sheet STARTED, not to the kind step --
+      // a sheet opened from the expenses tab should not begin asking about the
+      // kind the second time it is used.
+      return emptyDraft(action.kind ?? null);
 
     default:
       return draft;

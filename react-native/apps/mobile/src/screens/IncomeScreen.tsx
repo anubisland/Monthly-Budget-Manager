@@ -50,7 +50,11 @@ export function IncomeScreen() {
         ))}
       </ScrollView>
 
-      <AddEntrySheet visible={sheetVisible} onClose={() => setSheetVisible(false)} />
+      <AddEntrySheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        initialKind="income"
+      />
     </>
   );
 }
