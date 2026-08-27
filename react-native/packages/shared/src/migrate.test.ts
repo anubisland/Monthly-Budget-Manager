@@ -1,5 +1,6 @@
 import { migrateV0toV1, needsMigration } from './migrate';
 import { getMonth, monthsWithData } from './store';
+import { totalsForMonth } from './totals';
 
 /**
  * A v0 document whose meta says August but whose entries span July and
@@ -247,5 +248,69 @@ describe('migrateV0toV1', () => {
     });
     expect(entriesMoved).toBe(0);
     expect(monthsWithData(store)).toEqual([]);
+  });
+
+  // --- FIX 1: a corrupt v1 store must not crash the app on startup. ---
+
+  describe('validates a v1-tagged payload before passing it through', () => {
+    it('falls back to a usable empty v1 store when the v1 payload is just a bare version tag', () => {
+      const { store } = migrateV0toV1({ version: 1 });
+      expect(() => monthsWithData(store)).not.toThrow();
+      expect(() => totalsForMonth(store, '2026-08')).not.toThrow();
+      expect(monthsWithData(store)).toEqual([]);
+    });
+
+    it('still passes a well-formed v1 store through unchanged, with migrated: false', () => {
+      const already = { version: 1, currency: 'USD', locale: 'en', months: {}, recurring: [] };
+      const r = migrateV0toV1(already);
+      expect(r.migrated).toBe(false);
+      expect(r.store).toEqual(already);
+      expect(r.store).toBe(already);
+    });
+
+    it('falls back to an empty store when months is null', () => {
+      const { store } = migrateV0toV1({ version: 1, months: null });
+      expect(() => monthsWithData(store)).not.toThrow();
+      expect(monthsWithData(store)).toEqual([]);
+    });
+
+    it('falls back to an empty store when months is an array instead of an object', () => {
+      const { store } = migrateV0toV1({ version: 1, months: [] });
+      expect(() => monthsWithData(store)).not.toThrow();
+      expect(monthsWithData(store)).toEqual([]);
+    });
+
+    it('falls back to an empty store when recurring is not an array', () => {
+      const { store } = migrateV0toV1({ version: 1, months: {}, recurring: 'nope' });
+      expect(() => monthsWithData(store)).not.toThrow();
+      expect(monthsWithData(store)).toEqual([]);
+    });
+
+    it('defaults currency and locale rather than leaving them undefined', () => {
+      const { store } = migrateV0toV1({ version: 1, months: {}, recurring: [] });
+      expect(store.currency).toBeDefined();
+      expect(store.locale).toBeDefined();
+    });
+
+    it('keeps a present currency and defaults only the missing locale', () => {
+      const { store } = migrateV0toV1({ version: 1, currency: 'EGP', months: {}, recurring: [] });
+      expect(store.currency).toBe('EGP');
+      expect(store.locale).toBeDefined();
+    });
+
+    it('keeps a present locale and defaults only the missing currency', () => {
+      const { store } = migrateV0toV1({ version: 1, locale: 'en', months: {}, recurring: [] });
+      expect(store.locale).toBe('en');
+      expect(store.currency).toBeDefined();
+    });
+
+    it('defaults to the injected currency/locale options rather than the hard-coded fallback', () => {
+      const { store } = migrateV0toV1(
+        { version: 1, months: {}, recurring: [] },
+        { currency: 'EGP', locale: 'en' },
+      );
+      expect(store.currency).toBe('EGP');
+      expect(store.locale).toBe('en');
+    });
   });
 });

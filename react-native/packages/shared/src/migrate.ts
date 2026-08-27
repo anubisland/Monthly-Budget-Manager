@@ -70,6 +70,41 @@ function resolve(
 }
 
 /**
+ * Validate a payload already tagged `version: 1` before trusting it as a
+ * `BudgetStore`.
+ *
+ * The storage layer hands migration whatever was persisted, so a truncated
+ * or corrupt write that still carries `version: 1` must not pass straight
+ * through -- `months` must be a non-null object and `recurring` an array,
+ * or every reader downstream (`monthsWithData`, `totalsForMonth`, ...)
+ * throws the moment it touches them. `currency`/`locale` are cosmetic, so
+ * they default rather than fail validation.
+ *
+ * Returns the SAME object (not a rebuilt copy) when it is usable, so a
+ * well-formed store round-trips with every field intact. Returns null when
+ * it is not, so the caller can fall back to the standard empty-store path.
+ */
+function asUsableV1Store(
+  raw: Record<string, unknown>,
+  opts?: { currency?: string; locale?: 'ar' | 'en' },
+): BudgetStore | null {
+  if (!isRecord(raw.months) || !Array.isArray(raw.recurring)) return null;
+
+  const hasCurrency = typeof raw.currency === 'string';
+  const hasLocale = raw.locale === 'ar' || raw.locale === 'en';
+  if (hasCurrency && hasLocale) {
+    // Already well-formed: pass the original object through unchanged.
+    return raw as unknown as BudgetStore;
+  }
+
+  return {
+    ...(raw as unknown as BudgetStore),
+    currency: hasCurrency ? (raw.currency as string) : (opts?.currency ?? 'SAR'),
+    locale: hasLocale ? (raw.locale as 'ar' | 'en') : (opts?.locale ?? 'ar'),
+  };
+}
+
+/**
  * Migrate a v0 single-document payload into a v1 month-keyed store.
  *
  * Pure: returns the backup string but writes nothing. Unusable input yields
@@ -91,7 +126,14 @@ export function migrateV0toV1(
   }
 
   if (isRecord(raw) && raw.version === 1) {
-    return { store: raw as unknown as BudgetStore, backup, migrated: false, entriesMoved: 0 };
+    const validated = asUsableV1Store(raw, opts);
+    if (validated) {
+      return { store: validated, backup, migrated: false, entriesMoved: 0 };
+    }
+    // version: 1 but the shape underneath is unusable (truncated/corrupt
+    // payload) -- fall through to the same safe empty-store path as any
+    // other unusable input, rather than handing the app a store that will
+    // throw the instant something reads `.months` or `.recurring`.
   }
 
   let store = emptyStore({ currency: opts?.currency, locale: opts?.locale });
