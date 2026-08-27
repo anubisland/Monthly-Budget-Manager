@@ -125,4 +125,5 @@ react-native/**/*.msixbundle
 
 # Temporary RN bootstraps build files, but allow source files
 react-native/apps/**/TempBudgetApp/build/
-react-native/apps/**/TempBudgetApp/DerivedData/
+react-native/apps/**/TempBudgetApp/DerivedData/node_modules/
+**/node_modules/
