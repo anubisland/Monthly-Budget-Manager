@@ -6,10 +6,10 @@ than through the app.
 """
 
 import json
+
 import pytest
 
 from tests.mobile_app_modules import store  # noqa: E402
-
 
 # ── month keys ───────────────────────────────────────────────────────────────
 
@@ -63,7 +63,11 @@ def test_v1_without_a_usable_label_falls_back_rather_than_dropping_the_budget():
     assert list(doc["months"]) == ["2026-08"], "a labelless budget must not vanish"
 
 
-@pytest.mark.parametrize("label", [{"year": None, "month": None}, {"year": 2026, "month": 99}, {"year": "abc", "month": 7}])
+@pytest.mark.parametrize("label", [
+    {"year": None, "month": None},
+    {"year": 2026, "month": 99},
+    {"year": "abc", "month": 7},
+])
 def test_v1_malformed_labels_fall_back_instead_of_raising(label):
     doc, _ = store.migrate({**label, "budget": {"incomes": [{"name": "x", "amount": 1.0}]}}, "2026-08")
     assert list(doc["months"]) == ["2026-08"]

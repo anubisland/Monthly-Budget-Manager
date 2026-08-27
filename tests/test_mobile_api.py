@@ -5,7 +5,6 @@ previous handler carried are asserted here by name.
 """
 
 import json
-from datetime import date
 
 import pytest
 

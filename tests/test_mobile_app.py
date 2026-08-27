@@ -108,20 +108,22 @@ def test_entries_survive_a_restart_of_the_whole_app(tmp_path):
         post(first, "/api/step-month", {"delta": -1})
         post(first, "/api/add-income", {"name": "يوليو", "amount": 7000})
     finally:
-        first._server.shutdown(); first._server.server_close()
+        first._server.shutdown()
+        first._server.server_close()
 
     second = app_module.App("Test", "test.app", data_dir=tmp_path)
     second.startup()
     try:
         _, state = get(second)
         assert state["total_income"] == 7000.0, "the month being viewed is remembered"
-        assert second.data.known_months() == ["2026-07", "2026-08"] or             len(second.data.known_months()) == 2, "both months survived"
+        assert len(second.data.known_months()) == 2, "both months survived"
         other = second.data.months[[k for k in second.data.known_months()
                                     if k != state["month_key"]][0]]
         assert other.total_income() == 8000.0, "the month navigated away from is intact"
         assert other.total_expenses() == 3800.0
     finally:
-        second._server.shutdown(); second._server.server_close()
+        second._server.shutdown()
+        second._server.server_close()
 
 
 def test_a_goal_funded_over_two_months_reads_back_correctly(tmp_path):
@@ -142,7 +144,8 @@ def test_a_goal_funded_over_two_months_reads_back_correctly(tmp_path):
         assert goal["done"] is False
         assert state["total_expenses"] == 200.0, "only this month's deposit is spent here"
     finally:
-        live._server.shutdown(); live._server.server_close()
+        live._server.shutdown()
+        live._server.server_close()
 
 
 def test_the_comparison_section_has_no_predecessor_until_there_is_one(live):

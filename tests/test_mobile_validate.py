@@ -8,7 +8,6 @@ import pytest
 
 from tests.mobile_app_modules import validate
 
-
 # ── amounts ──────────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("raw,expected", [
