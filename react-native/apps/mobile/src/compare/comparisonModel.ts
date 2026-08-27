@@ -34,6 +34,10 @@ export interface DeltaView {
  *    returns null here and the view says "new" instead.
  *  - the metric is `margin`, which is already a percentage. Its change is in
  *    percentage points, so a percent-of-a-percent means nothing.
+ *  - the percentage is enormous. A category holding 0.01 last month and 100
+ *    this month is a true +999,900%, and nobody reads that as information --
+ *    it reads as a broken screen. Past a tenfold change the absolute number
+ *    carries the meaning and the percentage is noise.
  *
  * `tone` follows the core's `favorable` flag rather than deciding again --
  * duplicating that judgement is how the two drift apart. `direction` is kept
@@ -41,7 +45,15 @@ export interface DeltaView {
  * time, and conflating them puts a falling arrow on a growing bar.
  */
 export function deltaView(delta: Delta, metric: Metric): DeltaView {
-  const misleading = delta.previous < 0 || delta.previous === 0 || metric === 'margin';
+  // Past a tenfold change the percentage stops informing and starts looking
+  // like a rendering fault. Chosen rather than derived: any threshold here is
+  // a judgement, so it is named once and tested rather than left implicit.
+  const AMPLIFIED = 999;
+  const misleading =
+    delta.previous < 0 ||
+    delta.previous === 0 ||
+    metric === 'margin' ||
+    (delta.percent !== null && Math.abs(delta.percent) > AMPLIFIED);
   return {
     absolute: delta.absolute,
     percent: delta.percent,

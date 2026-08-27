@@ -182,3 +182,43 @@ describe('comparisonView', () => {
     }
   });
 });
+
+// A fourth misleading case the brief missed, found while implementing. A
+// category holding 0.01 last month and 100 this month is a true +999,900%, and
+// nobody reads that as information -- it reads as a broken screen.
+describe('showPercent — an enormous percentage informs nobody', () => {
+  it('hides a percentage past a tenfold change', () => {
+    const v = deltaView(makeDelta(100, 0.01, 'income'), 'income');
+    expect(v.percent).toBeCloseTo(999900, 0);
+    expect(v.showPercent).toBe(false);
+    // The absolute change still carries the meaning.
+    expect(v.absolute).toBeCloseTo(99.99, 2);
+    expect(v.tone).toBe('good');
+  });
+
+  it.each([
+    ['1 to 100', 1, 100],
+    ['0.5 to 1000', 0.5, 1000],
+    ['0.02 to 50', 0.02, 50],
+  ])('hides it for %s', (_l, previous, current) => {
+    expect(deltaView(makeDelta(current, previous, 'income'), 'income').showPercent).toBe(false);
+  });
+
+  it('still shows an ordinary change', () => {
+    expect(deltaView(makeDelta(120, 100, 'income'), 'income').showPercent).toBe(true);
+    expect(deltaView(makeDelta(1000, 100, 'income'), 'income').showPercent).toBe(true); // +900%
+  });
+
+  it('applies to a large DROP as well as a rise', () => {
+    // 100 down to 0.01 is -99.99%, well inside the range -- the threshold is
+    // about the magnitude of the percentage, and a fall can never exceed 100%.
+    expect(deltaView(makeDelta(0.01, 100, 'income'), 'income').showPercent).toBe(true);
+  });
+
+  it('hides it for an amplified expense too, with the right tone', () => {
+    const v = deltaView(makeDelta(500, 0.05, 'expenses'), 'expenses');
+    expect(v.showPercent).toBe(false);
+    expect(v.tone).toBe('bad');
+    expect(v.direction).toBe('up');
+  });
+});
