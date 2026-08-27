@@ -1,6 +1,9 @@
-import json, io, sys, threading, http.server, socket, os
-from dataclasses import dataclass, asdict
-from datetime import datetime, timedelta
+import json
+import sys
+import threading
+import http.server
+import socket
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -8,16 +11,14 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 import toga
 from toga.style import Pack
-from monthly_budget.core import BudgetMonth
 from monthly_budget.i18n import I18n
 
+import api
+import goals as goals_module
+import store
+from budget_data import BudgetData
+
 _web_dir = Path(__file__).parent / 'web'
-
-
-@dataclass
-class Goal:
-    name: str; target: float; current: float = 0.0
-    icon: str = "🎯"; target_month: str = ""
 
 
 CAT_COLORS = {
@@ -34,56 +35,39 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
 
     def do_GET(self):
         p = urlparse(self.path).path
-        if p == '/api/data':
-            return self._json(self.app._get_api_data())
-        if p == '/api/backup':
-            return self._json(self.app._get_api_data())
+        if p in ('/api/data', '/api/backup'):
+            return self._json(self.app.api_state())
         f = _web_dir / (p.lstrip('/') or 'index.html')
-        if f.exists() and f.is_file():
+        if f.exists() and f.is_file() and _web_dir in f.resolve().parents:
             return self._file(f)
-        return self._json({"error":"not found"}, 404)
+        return self._json({"error": "not found"}, 404)
 
     def do_POST(self):
-        d = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-        p = urlparse(self.path).path; a = self.app
-        if p == '/api/add-income':
-            a.bm.add_income(d['name'], d['amount'], d.get('date',''))
-        elif p == '/api/add-expense':
-            a.bm.add_expense(d['name'], d['amount'], d.get('category','Uncategorized'), d.get('date',''))
-        elif p == '/api/delete-income':
-            idx = d['index']; a.bm.incomes.pop(idx)
-        elif p == '/api/delete-expense':
-            idx = d['index']; a.bm.expenses.pop(idx)
-        elif p == '/api/edit-income':
-            idx = d['index']; inc = a.bm.incomes[idx]
-            if 'name' in d: inc.name = d['name']
-            if 'amount' in d: inc.amount = float(d['amount'])
-            if 'date' in d: inc.date = d['date']
-        elif p == '/api/edit-expense':
-            idx = d['index']; exp = a.bm.expenses[idx]
-            if 'name' in d: exp.name = d['name']
-            if 'amount' in d: exp.amount = float(d['amount'])
-            if 'category' in d: exp.category = d['category']
-            if 'date' in d: exp.date = d['date']
-        elif p == '/api/add-goal':
-            a.goals.append(Goal(**{k:d[k] for k in ['name','target','current','icon','target_month'] if k in d}))
-        elif p == '/api/delete-goal':
-            idx = d.get('index', -1)
-            if 0 <= idx < len(a.goals): a.goals.pop(idx)
-        elif p == '/api/set-budget':
-            a.bm.total_budget = float(d.get('total_budget', 0.0))
-        elif p == '/api/toggle-theme':
-            a._dark = not a._dark; a._save_settings()
-            return self._json(self.app._get_api_data())
-        elif p == '/api/set-language':
-            a._lang = d['lang']; a._i18n.set_language(d['lang']); a._save_settings()
-        elif p == '/api/set-currency':
-            a._currency = d['currency']; a._save_settings()
-        elif p == '/api/reset':
-            a.bm = BudgetMonth(); a.goals = []; a._save_data()
-            return self._json(self.app._get_api_data())
-        a._save_data()
-        return self._json(self.app._get_api_data())
+        """Read, dispatch, answer. All three can fail, and each says why.
+
+        Routing and validation live in api.py; this method's only job is
+        turning an HTTP request into a call and an exception into a status.
+        """
+        try:
+            payload = api.read_payload(self._body())
+            api.dispatch(self.app, urlparse(self.path).path, payload)
+        except api.ApiError as err:
+            return self._json({"error": err.message}, err.status)
+        except OSError as err:
+            # A failed save. The previous code discarded this, so a full disk
+            # was indistinguishable from a successful write.
+            print(f"[budget] save failed: {err}")
+            return self._json({"error": "could not save", "detail": str(err)}, 507)
+        return self._json(self.app.api_state())
+
+    def _body(self):
+        try:
+            length = int(self.headers.get('Content-Length') or 0)
+        except (TypeError, ValueError):
+            raise api.ApiError("bad Content-Length")
+        if length < 0 or length > 1_000_000:
+            raise api.ApiError("body too large", 413)
+        return self.rfile.read(length) if length else b""
 
     def _json(self, data, status=200):
         self.send_response(status)
@@ -111,13 +95,14 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
 
 class App(toga.App):
     def startup(self):
-        self._dark = False; self._lang = "en"; self._currency = "USD"
-        self._year = datetime.now().year; self._month = datetime.now().month
-        self.bm = BudgetMonth(); self.goals = []
+        self.dark = False; self.lang = "en"; self.currency = "USD"
         self._i18n = I18n.get_instance()
         self._setup_storage()
         self._load_settings()
-        self._load_data()
+        self.data = BudgetData(self._dp)
+        self.data.load()
+        if self.data.note:
+            print(f"[budget] data loaded with note: {self.data.note}")
         self._start_server()
         self.main_window = toga.MainWindow(title="Budget")
         self._web = toga.WebView(
@@ -128,70 +113,159 @@ class App(toga.App):
         print(f"[budget] WebView loading http://127.0.0.1:{self._port}/")
         self.main_window.show()
 
+    @property
+    def bm(self):
+        """The budget for the month on screen.
+
+        Kept as a property so month-keying was not a rewrite: everything that
+        used to touch a single budget now touches the current one.
+        """
+        return self.data.month
+
+    def today_iso(self):
+        return datetime.now().strftime('%Y-%m-%d')
+
+    def set_dark(self, value):
+        self.dark = bool(value)
+
+    def set_language(self, lang):
+        self.lang = lang
+        self._i18n.set_language(lang)
+
+    def set_currency(self, currency):
+        self.currency = currency
+
     def _start_server(self):
         handler = BudgetAPIHandler; handler.app = self
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(('127.0.0.1', 0))
         self._port = s.getsockname()[1]; s.close()
         print(f"[budget] Server starting on port {self._port}")
-        server = http.server.HTTPServer(('127.0.0.1', self._port), handler)
-        t = threading.Thread(target=server.serve_forever, daemon=True)
+        # Held so the server can be shut down deliberately rather than only by
+        # the process exiting.
+        self._server = http.server.HTTPServer(('127.0.0.1', self._port), handler)
+        t = threading.Thread(target=self._server.serve_forever, daemon=True)
         t.start()
         print(f"[budget] Server started on port {self._port}")
 
-    def _get_api_data(self):
-        cats = {}
-        for c, a in self.bm.expenses_by_category().items():
-            cats[c] = {'amount': a, 'color': CAT_COLORS.get(c, '#B2BEC3')}
+    def api_state(self):
+        """Everything the WebView renders from, for the month on screen."""
+        bm = self.data.month
+        year, month = store.parse_month_key(self.data.current)
         return {
-            'year': self._year, 'month': self._month,
-            'incomes': [{'name':i.name,'amount':i.amount,'date':i.date or ''} for i in self.bm.incomes],
-            'expenses': [{'name':e.name,'amount':e.amount,'category':e.category,'date':e.date or ''} for e in self.bm.expenses],
-            'total_income': self.bm.total_income(),
-            'total_expenses': self.bm.total_expenses(),
-            'net': self.bm.net(),
-            'margin': self.bm.profit_margin(),
-            'categories': cats,
-            'total_budget': self.bm.total_budget,
-            'goals': [{'name':g.name,'target':g.target,'current':g.current,'icon':g.icon,'target_month':g.target_month} for g in self.goals],
-            'dark': self._dark, 'lang': self._lang, 'currency': self._currency,
-            'today': datetime.now().strftime('%Y-%m-%d'),
+            'year': year, 'month': month,
+            'month_key': self.data.current,
+            'is_current_month': self.data.current == self.data.this_month(),
+            'can_go_back': self.data.can_go_back(),
+            'can_go_forward': self.data.can_go_forward(),
+            'known_months': self.data.known_months(),
+            'previous': self._previous_summary(),
+            'incomes': [{'name': i.name, 'amount': i.amount, 'date': i.date or ''} for i in bm.incomes],
+            'expenses': [{'name': e.name, 'amount': e.amount, 'category': e.category, 'date': e.date or ''} for e in bm.expenses],
+            'total_income': bm.total_income(),
+            'total_expenses': bm.total_expenses(),
+            'net': bm.net(),
+            'margin': bm.profit_margin(),
+            'categories': self._categories(bm),
+            'total_budget': bm.total_budget,
+            'goals': self._goals_state(),
+            'dark': self.dark, 'lang': self.lang, 'currency': self.currency,
+            'today': self.today_iso(),
+            'note': self.data.note,
+        }
+
+    def _categories(self, bm):
+        return {
+            c: {'amount': a, 'color': CAT_COLORS.get(c, '#B2BEC3')}
+            for c, a in bm.expenses_by_category().items()
+        }
+
+    def _goals_state(self):
+        """Each goal with its derived progress, so the UI does no arithmetic."""
+        result = []
+        for g in self.data.goals:
+            status = goals_module.status(g, self.data.months, self.data.current)
+            result.append({
+                'name': g.name, 'target': g.target, 'icon': g.icon,
+                'current': status['funded'],
+                'remaining': status['remaining'],
+                'pct': status['pct'],
+                'done': status['done'],
+                'this_month': status['this_month'],
+                'carried_over': status['carried_over'],
+                'target_month': g.target_month,
+            })
+        return result
+
+    def _previous_summary(self):
+        """The month before the one on screen, for the comparison section.
+
+        None when there is no earlier month with data — a comparison against
+        nothing is zeros dressed up as a finding.
+        """
+        key = self.data.previous()
+        bm = self.data.months.get(key)
+        if bm is None or (not bm.incomes and not bm.expenses):
+            return None
+        return {
+            'month_key': key,
+            'total_income': bm.total_income(),
+            'total_expenses': bm.total_expenses(),
+            'net': bm.net(),
+            'categories': {c: a for c, a in bm.expenses_by_category().items()},
         }
 
     def _setup_storage(self):
-        try: d = Path(self.paths.data)
-        except: d = Path.home()/".budget_mobile"
-        d.mkdir(parents=True,exist_ok=True)
-        self._dd=d; self._sp=d/"settings.json"; self._dp=d/"data.json"
+        """Decide where the data lives, and make sure we can write there.
+
+        A bare ``except`` here used to swallow anything at all, including the
+        interpreter shutting down, and the following mkdir was unguarded — so a
+        read-only directory crashed the app at startup instead of falling back.
+        """
+        self._dd = self._writable_dir()
+        self._sp = self._dd / "settings.json"
+        self._dp = self._dd / "data.json"
+        print(f"[budget] data directory: {self._dd}")
+
+    def _writable_dir(self):
+        candidates = []
+        try:
+            candidates.append(Path(self.paths.data))
+        except (AttributeError, TypeError, OSError):
+            pass
+        candidates.append(Path.home() / ".budget_mobile")
+
+        for candidate in candidates:
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+                return candidate
+            except OSError as err:
+                print(f"[budget] cannot use {candidate}: {err}")
+        raise RuntimeError("no writable directory for the budget data")
 
     def _load_settings(self):
         try:
             s=json.loads(self._sp.read_text("utf-8"))
-            self._dark=s.get("dark",False); self._lang=s.get("lang","en"); self._currency=s.get("currency","USD")
-            self._i18n.set_language(self._lang)
-        except: pass
+            self.dark = bool(s.get("dark", False))
+            self.lang = s.get("lang") if s.get("lang") in ("en", "ar") else "en"
+            self.currency = s.get("currency") or "USD"
+            self._i18n.set_language(self.lang)
+        except (OSError, ValueError, AttributeError) as err:
+            print(f"[budget] settings not loaded ({err}); using defaults")
 
-    def _save_settings(self):
-        try: self._sp.write_text(json.dumps({"dark":self._dark,"lang":self._lang,"currency":self._currency}),"utf-8")
-        except: pass
-
-    def _load_data(self):
+    def save_settings(self):
+        """Theme, language and currency. A failure here is not data loss, but
+        it is still worth a line in the log rather than nothing at all."""
         try:
-            d=json.loads(self._dp.read_text("utf-8"))
-            self.bm=BudgetMonth(); self.bm.from_dict(d.get("budget",{}))
-            self.goals=[Goal(**g) for g in d.get("goals",[])]
-            self._year=d.get("year",self._year); self._month=d.get("month",self._month)
-        except: pass
+            self._sp.write_text(json.dumps({
+                "dark": self.dark, "lang": self.lang, "currency": self.currency,
+            }), "utf-8")
+        except OSError as err:
+            print(f"[budget] could not save settings: {err}")
 
-    def _save_data(self):
-        try:
-            self._dp.write_text(json.dumps({
-                "year":self._year,"month":self._month,
-                "budget":self.bm.to_dict(),
-                "goals":[asdict(g) for g in self.goals]
-            }, indent=2, ensure_ascii=False), "utf-8")
-        except: pass
-
+    def save_data(self):
+        """Write the data file. Deliberately unguarded: see do_POST."""
+        self.data.save()
 
 def main():
     return App("Budget Manager","com.example.budget_manager_mobile")
