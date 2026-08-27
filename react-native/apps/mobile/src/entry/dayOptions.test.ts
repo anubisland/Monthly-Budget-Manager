@@ -1,3 +1,4 @@
+import { currentMonthKey } from '@monthly-budget/shared';
 import { daysInMonth, dayShortcuts } from './dayOptions';
 
 const AUG_26 = new Date(2026, 7, 26);
@@ -94,6 +95,46 @@ describe('dayShortcuts in another month', () => {
         expect(s.day).toBeLessThanOrEqual(max);
         expect(s.day).toBeGreaterThanOrEqual(1);
       }
+    }
+  });
+});
+
+// The regex accepts any two digits, so '2026-13' and '2026-00' reach the
+// range guard rather than the malformed-key branch. Without the guard,
+// new Date(2026, 13, 0) would silently roll into the next year and report a
+// day count for the wrong month.
+describe('a month number outside 1..12', () => {
+  it.each(['2026-00', '2026-13', '2026-99'])('falls back to 31 for %s', (key) => {
+    expect(daysInMonth(key)).toBe(31);
+  });
+
+  it('still offers usable shortcuts rather than a dead end', () => {
+    const s = dayShortcuts('2026-13', AUG_26);
+    expect(s.length).toBeGreaterThan(0);
+    expect(s.map((x) => x.key)).toContain('firstOfMonth');
+    expect(s.map((x) => x.key)).toContain('lastOfMonth');
+  });
+});
+
+// Every other test injects a date, per the project's determinism rule, leaving
+// the real-clock default unexercised. These hold whenever the suite runs: they
+// compare against the same clock the function uses rather than pinning a value.
+describe('the real-clock default', () => {
+  it('offers today for the real current month', () => {
+    const keys = dayShortcuts(currentMonthKey()).map((s) => s.key);
+    expect(keys).toContain('today');
+  });
+
+  it('does not offer today for a month that is not the current one', () => {
+    expect(dayShortcuts('1999-05').map((s) => s.key)).not.toContain('today');
+  });
+
+  it('never offers a day outside the month, whatever today is', () => {
+    const key = currentMonthKey();
+    const max = daysInMonth(key);
+    for (const s of dayShortcuts(key)) {
+      expect(s.day).toBeGreaterThanOrEqual(1);
+      expect(s.day).toBeLessThanOrEqual(max);
     }
   });
 });
