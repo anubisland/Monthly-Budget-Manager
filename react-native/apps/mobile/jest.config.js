@@ -14,6 +14,7 @@ module.exports = {
     'src/entry/**/*.ts',
     'src/compare/**/*.ts',
     'src/suggest/**/*.ts',
+    'src/screens/dateDisplay.ts',
     // A StyleSheet holds no logic and can only be imported by a .tsx, which
     // testEnvironment: node cannot render -- collecting it reports an
     // unreachable zero rather than a real gap.
