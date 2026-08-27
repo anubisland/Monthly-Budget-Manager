@@ -317,3 +317,41 @@ describe('a stale name surviving a category change via back', () => {
     expect(d.nameIsCustom).toBe(false);
   });
 });
+
+// With nothing to suggest, the name step would render only an "other" chip --
+// a dead end for the first entry ever made in a category. The caller holds the
+// store and so knows whether suggestions exist; it says so here, which keeps
+// the decision in the reducer where a test can reach it. It was briefly a
+// render-time useEffect in the component instead, where nothing could test it.
+describe('a category with nothing to suggest goes straight to typing', () => {
+  const pick = (hasSuggestions?: boolean) => {
+    const d = draftReducer(emptyDraft(), { type: 'pickKind', kind: 'expense' });
+    return draftReducer(d, { type: 'pickCategory', category: 'housing', hasSuggestions });
+  };
+
+  it('reveals the text field when there is nothing to suggest', () => {
+    const d = pick(false);
+    expect(d.nameIsCustom).toBe(true);
+    expect(d.step).toBe('name');
+  });
+
+  it('shows the suggestion chips when there is something to suggest', () => {
+    expect(pick(true).nameIsCustom).toBe(false);
+  });
+
+  it('shows the chips when the caller says nothing either way', () => {
+    // An omitted flag must not be read as "no suggestions" -- that would send
+    // every entry straight to the keyboard, defeating the whole point.
+    expect(pick(undefined).nameIsCustom).toBe(false);
+  });
+
+  it('does not disturb nameIsCustom when the same category is re-picked', () => {
+    let d = draftReducer(emptyDraft(), { type: 'pickKind', kind: 'expense' });
+    d = draftReducer(d, { type: 'pickCategory', category: 'housing', hasSuggestions: true });
+    d = draftReducer(d, { type: 'chooseCustomName' });
+    d = draftReducer(d, { type: 'setName', name: 'Boiler' });
+    d = draftReducer(d, { type: 'pickCategory', category: 'housing', hasSuggestions: true });
+    expect(d.nameIsCustom).toBe(true);
+    expect(d.name).toBe('Boiler');
+  });
+});

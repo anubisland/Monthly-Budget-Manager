@@ -1,3 +1,4 @@
+import { nameSuggestions } from '@monthly-budget/shared';
 import React, { useReducer } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useBudget } from '../state/BudgetProvider';
@@ -62,7 +63,15 @@ export function AddEntrySheet({ visible, onClose }: { visible: boolean; onClose:
         <View style={styles.body}>
           {draft.step === 'kind' && <KindStep locale={locale} dispatch={dispatch} />}
           {draft.step === 'category' && (
-            <CategoryStep draft={draft} options={options} locale={locale} dispatch={dispatch} />
+            <CategoryStep
+              draft={draft}
+              options={options}
+              locale={locale}
+              dispatch={dispatch}
+              hasNames={(categoryId) =>
+                nameSuggestions(store, draft.kind!, categoryId).length > 0
+              }
+            />
           )}
           {draft.step === 'name' && (
             <NameStep draft={draft} options={options} locale={locale} dispatch={dispatch} />

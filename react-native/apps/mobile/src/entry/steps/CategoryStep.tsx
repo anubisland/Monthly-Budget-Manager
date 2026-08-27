@@ -26,11 +26,18 @@ export function CategoryStep({
   options,
   locale,
   dispatch,
+  hasNames,
 }: {
   draft: EntryDraft;
   options: { categories: readonly Category[] };
   locale: Locale;
   dispatch: (action: DraftAction) => void;
+  /**
+   * Whether a category already has item names to suggest. Supplied by the
+   * sheet, which holds the store, so the reducer can send someone straight to
+   * the text field instead of showing a name step with nothing on it.
+   */
+  hasNames: (categoryId: string) => boolean;
 }) {
   return (
     <View style={[styles.grid, { flexDirection: rowDirection(locale) }]}>
@@ -40,7 +47,13 @@ export function CategoryStep({
           icon={category.icon}
           label={categoryLabel(category, locale)}
           selected={draft.category === category.id}
-          onPress={() => dispatch({ type: 'pickCategory', category: category.id })}
+          onPress={() =>
+            dispatch({
+              type: 'pickCategory',
+              category: category.id,
+              hasSuggestions: hasNames(category.id),
+            })
+          }
         />
       ))}
     </View>

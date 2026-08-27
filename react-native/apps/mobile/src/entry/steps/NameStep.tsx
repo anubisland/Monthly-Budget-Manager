@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import type { Locale } from '@monthly-budget/shared';
 import type { DraftAction, EntryDraft } from '../entryDraft';
@@ -27,12 +27,6 @@ export function NameStep({
   dispatch: (action: DraftAction) => void;
 }) {
   const hasSuggestions = options.names.length > 0;
-
-  useEffect(() => {
-    if (!hasSuggestions && !draft.nameIsCustom) {
-      dispatch({ type: 'chooseCustomName' });
-    }
-  }, [hasSuggestions, draft.nameIsCustom, dispatch]);
 
   if (draft.nameIsCustom) {
     return (

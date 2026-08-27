@@ -26,7 +26,7 @@ export interface EntryDraft {
 
 export type DraftAction =
   | { type: 'pickKind'; kind: EntryKind }
-  | { type: 'pickCategory'; category: string }
+  | { type: 'pickCategory'; category: string; hasSuggestions?: boolean }
   | { type: 'pickName'; name: string }
   | { type: 'chooseCustomName' }
   | { type: 'setName'; name: string }
@@ -80,13 +80,21 @@ export function draftReducer(draft: EntryDraft, action: DraftAction): EntryDraft
       // category is meaningless under another -- e.g. after going back and
       // picking a different category, a name picked for the old one must
       // not silently ride along into the new one.
-      return {
-        ...draft,
-        category: action.category,
-        name: draft.category === action.category ? draft.name : '',
-        nameIsCustom: draft.category === action.category ? draft.nameIsCustom : false,
-        step: 'name',
-      };
+      {
+        const same = draft.category === action.category;
+        return {
+          ...draft,
+          category: action.category,
+          name: same ? draft.name : '',
+          // With nothing to suggest, the name step would show only an "other"
+          // chip -- a dead end for the first entry ever made in a category. The
+          // caller knows whether suggestions exist because it holds the store,
+          // so it says so here and the decision stays testable rather than
+          // becoming a render-time effect no test can reach.
+          nameIsCustom: same ? draft.nameIsCustom : action.hasSuggestions === false,
+          step: 'name',
+        };
+      }
 
     case 'pickName':
       return { ...draft, name: action.name, nameIsCustom: false, step: 'amount' };
