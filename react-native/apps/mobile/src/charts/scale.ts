@@ -18,6 +18,18 @@ export interface Arc {
   fraction: number;
 }
 
+/**
+ * Coerce a value to a finite, non-negative number.
+ *
+ * `total <= 0` does NOT catch NaN -- `NaN <= 0` is false -- so a single
+ * non-finite value slipped past the empty guard and put `NaN` into an SVG path,
+ * which renders as nothing at all. Sanitising at the boundary is the fix; the
+ * guards downstream then mean what they say.
+ */
+function finite(v: number): number {
+  return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
 /** Round axis values from 0 up to at least `max`, evenly spaced. */
 export function niceTicks(max: number, count = 4): number[] {
   const safeMax = Number.isFinite(max) && max > 0 ? max : 0;
@@ -41,16 +53,17 @@ export function barLayout(
   opts: { width: number; height: number; gap?: number; max?: number },
 ): BarRect[] {
   if (values.length === 0) return [];
+  const safe = values.map(finite);
   const gap = opts.gap ?? 8;
   // An explicit max lets a caller scale bars against an AXIS maximum rather
   // than the data maximum, so the tallest bar meets the top gridline instead
   // of overshooting it. Without this the caller has to recompute every height.
-  const max = opts.max !== undefined && opts.max > 0 ? opts.max : Math.max(...values, 0);
+  const max = opts.max !== undefined && opts.max > 0 ? opts.max : Math.max(...safe, 0);
   const slot = opts.width / values.length;
   const width = Math.max(0, slot - gap);
 
-  return values.map((v, i) => {
-    const height = max > 0 ? (Math.max(0, v) / max) * opts.height : 0;
+  return safe.map((v, i) => {
+    const height = max > 0 ? (v / max) * opts.height : 0;
     return {
       x: i * slot + gap / 2,
       y: opts.height - height,
@@ -74,8 +87,9 @@ export function donutArcs(
   values: number[],
   opts: { size: number; thickness: number },
 ): Arc[] {
-  const total = values.reduce((s, v) => s + Math.max(0, v), 0);
-  if (values.length === 0 || total <= 0) return [];
+  const safe = values.map(finite);
+  const total = safe.reduce((s, v) => s + v, 0);
+  if (safe.length === 0 || !(total > 0)) return [];
 
   const outer = opts.size / 2;
   const inner = outer - opts.thickness;
@@ -83,8 +97,8 @@ export function donutArcs(
   const cy = outer;
 
   let angle = -Math.PI / 2;
-  return values.map((v) => {
-    const fraction = Math.max(0, v) / total;
+  return safe.map((v) => {
+    const fraction = v / total;
     const sweep = fraction * Math.PI * 2;
     const end = angle + sweep;
 

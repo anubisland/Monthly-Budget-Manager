@@ -214,3 +214,45 @@ describe('palette', () => {
     expect(colorFor(-1)).toBe(CATEGORY_COLORS[CATEGORY_COLORS.length - 1]);
   });
 });
+
+// `total <= 0` does not catch NaN -- `NaN <= 0` is false -- so a single
+// non-finite value slipped past the empty guard and wrote NaN into an SVG
+// path, which renders as nothing at all. Amounts are sanitised upstream today,
+// so this was not reachable through the app; these charts are reused in later
+// phases, and a silently blank chart is a bad way to find that out.
+describe('non-finite values cannot reach the output', () => {
+  const hostile: [string, number[]][] = [
+    ['a lone NaN', [NaN]],
+    ['a NaN among real values', [1, NaN, 2]],
+    ['Infinity', [Infinity]],
+    ['negative Infinity', [-Infinity]],
+    ['a mix of every bad kind', [NaN, Infinity, -Infinity, -5, 0]],
+  ];
+
+  it.each(hostile)('barLayout survives %s', (_label, values) => {
+    for (const b of barLayout(values, { width: 300, height: 200 })) {
+      for (const n of [b.x, b.y, b.width, b.height]) {
+        expect(Number.isFinite(n)).toBe(true);
+      }
+    }
+  });
+
+  it.each(hostile)('donutArcs never writes NaN into a path for %s', (_label, values) => {
+    for (const a of donutArcs(values, { size: 200, thickness: 30 })) {
+      expect(a.d).not.toMatch(/NaN|Infinity|undefined/);
+      expect(Number.isFinite(a.fraction)).toBe(true);
+    }
+  });
+
+  it('treats an all-non-finite set as empty rather than drawing garbage', () => {
+    expect(donutArcs([NaN, Infinity], { size: 200, thickness: 30 })).toEqual([]);
+    for (const b of barLayout([NaN, Infinity], { width: 300, height: 200 })) {
+      expect(b.height).toBe(0);
+    }
+  });
+
+  it('still ignores the finite negatives it always did', () => {
+    expect(donutArcs([-5, -10], { size: 200, thickness: 30 })).toEqual([]);
+    expect(barLayout([-5, 10], { width: 300, height: 200 })[0].height).toBe(0);
+  });
+});
