@@ -11,6 +11,7 @@ module.exports = {
     'src/i18n/**/*.ts',
     'src/charts/**/*.ts',
     'src/components/**/*.ts',
+    'src/entry/**/*.ts',
     '!src/**/*.test.ts',
   ],
   coverageThreshold: {
