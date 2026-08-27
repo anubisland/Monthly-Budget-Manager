@@ -1,637 +1,197 @@
-import json
-import io
-import sys
-from datetime import datetime
+import json, io, sys, threading, http.server, socket, os
+from dataclasses import dataclass, asdict
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 import toga
-from .model import totals, expenses_by_category, parse_amount
+from toga.style import Pack
+from monthly_budget.core import BudgetMonth
+from monthly_budget.i18n import I18n
+
+_web_dir = Path(__file__).parent / 'web'
 
 
-CATEGORIES = [
-	"Food", "Rent", "Fuel", "Electricity", "Internet", "Water", "Transport",
-	"Healthcare", "Entertainment", "Education", "Clothing", "Savings",
-	"Debt", "Subscriptions", "Gifts", "Misc", "Uncategorized"
-]
-
-# File filters for dialogs (backward-compatible)
-# Some Toga mobile backends may not expose FileFilter; fall back to simple patterns.
-if hasattr(toga, "FileFilter"):
-	JSON_FILTER = [toga.FileFilter("JSON", "*.json")]
-	XLSX_FILTER = [toga.FileFilter("Excel Workbook", "*.xlsx")]
-else:
-	# Older backends often accept a list of glob strings.
-	JSON_FILTER = ["*.json", "json"]
-	XLSX_FILTER = ["*.xlsx", "xlsx"]
+@dataclass
+class Goal:
+    name: str; target: float; current: float = 0.0
+    icon: str = "🎯"; target_month: str = ""
 
 
-class BudgetMobile(toga.App):
-	def startup(self):
-		# Data stores
-		self.incomes = []
-		self.expenses = []
-		# File meta
-		today = datetime.now()
-		self.meta_year = today.year
-		self.meta_month = today.month
+CAT_COLORS = {
+    "Food":"#FF6B6B","Rent":"#4ECDC4","Fuel":"#FFE66D","Electricity":"#FFD93D",
+    "Internet":"#6BCB77","Water":"#4D96FF","Transport":"#FF6B35","Healthcare":"#FF4757",
+    "Entertainment":"#A29BFE","Education":"#00CEC9","Clothing":"#FD79A8","Savings":"#00B894",
+    "Debt":"#E17055","Subscriptions":"#0984E3","Gifts":"#E84393","Misc":"#636E72",
+    "Uncategorized":"#B2BEC3",
+}
 
-		# Small layout helper for labeled rows
-		def form_row(label: str, widget: toga.Widget) -> toga.Box:
-			lbl = toga.Label(label, style=toga.style.Pack(width=110, padding_bottom=6))
-			box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
-			# Toga 0.5: update style using keyword args rather than passing a Pack instance
-			widget.style.update(flex=1)
-			box.add(lbl)
-			box.add(widget)
-			return box
 
-		# Income tab
-		self.i_name = toga.TextInput(placeholder="e.g. Salary", style=toga.style.Pack())
-		self.i_amount = toga.TextInput(placeholder="e.g. 1200.00", style=toga.style.Pack())
-		self.i_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)], style=toga.style.Pack(width=120))
-		self.i_today = toga.Button("Today", on_press=self.use_today_income_day, style=toga.style.Pack(width=100))
-		row_date_income = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
-		row_date_income.add(toga.Label("Day", style=toga.style.Pack(width=110, padding_right=6)))
-		row_date_income.add(self.i_day)
-		row_date_income.add(self.i_today)
-		self.i_add = toga.Button("Add income", on_press=self.add_income, style=toga.style.Pack(padding_top=4, padding_bottom=8))
-		self.i_table = toga.Table(headings=["Name", "Amount", "Date"], data=[], style=toga.style.Pack(flex=1, height=300))
-		income_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
-		income_box.add(toga.Label("Income", style=toga.style.Pack(padding_bottom=8)))
-		income_box.add(form_row("Name", self.i_name))
-		income_box.add(form_row("Amount", self.i_amount))
-		income_box.add(row_date_income)
-		income_box.add(self.i_add)
-		income_box.add(self.i_table)
+class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
+    app = None
 
-		# Expenses tab
-		self.e_name = toga.TextInput(placeholder="e.g. Groceries", style=toga.style.Pack())
-		self.e_category_select = toga.Selection(items=CATEGORIES, style=toga.style.Pack())
-		self.e_category = toga.TextInput(placeholder="Custom category (optional)", style=toga.style.Pack())
-		self.e_amount = toga.TextInput(placeholder="e.g. 50.00", style=toga.style.Pack())
-		self.e_day = toga.Selection(items=[str(i).zfill(2) for i in range(1, 32)], style=toga.style.Pack(width=120))
-		self.e_today = toga.Button("Today", on_press=self.use_today_expense_day, style=toga.style.Pack(width=100))
-		row_date_expense = toga.Box(style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=6))
-		row_date_expense.add(toga.Label("Day", style=toga.style.Pack(width=110, padding_right=6)))
-		row_date_expense.add(self.e_day)
-		row_date_expense.add(self.e_today)
-		self.e_add = toga.Button("Add expense", on_press=self.add_expense, style=toga.style.Pack(padding_top=4, padding_bottom=8))
-		self.e_table = toga.Table(headings=["Name", "Category", "Amount", "Date"], data=[], style=toga.style.Pack(flex=1, height=300))
-		expense_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
-		expense_box.add(toga.Label("Expenses", style=toga.style.Pack(padding_bottom=8)))
-		expense_box.add(form_row("Name", self.e_name))
-		expense_box.add(form_row("Category", self.e_category_select))
-		expense_box.add(form_row("Custom", self.e_category))
-		expense_box.add(form_row("Amount", self.e_amount))
-		expense_box.add(row_date_expense)
-		expense_box.add(self.e_add)
-		expense_box.add(self.e_table)
+    def do_GET(self):
+        p = urlparse(self.path).path
+        if p == '/api/data':
+            return self._json(self.app._get_api_data())
+        if p == '/api/backup':
+            return self._json(self.app._get_api_data())
+        f = _web_dir / (p.lstrip('/') or 'index.html')
+        if f.exists() and f.is_file():
+            return self._file(f)
+        return self._json({"error":"not found"}, 404)
 
-		# Report tab
-		# Date controls
-		self.year_input = toga.TextInput(placeholder="YYYY", style=toga.style.Pack())
-		self.month_select = toga.Selection(items=[str(i).zfill(2) for i in range(1, 13)], style=toga.style.Pack(width=120))
-		self.today_btn = toga.Button("Today", on_press=self.use_today, style=toga.style.Pack(width=100))
+    def do_POST(self):
+        d = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+        p = urlparse(self.path).path; a = self.app
+        if p == '/api/add-income':
+            a.bm.add_income(d['name'], d['amount'], d.get('date',''))
+        elif p == '/api/add-expense':
+            a.bm.add_expense(d['name'], d['amount'], d.get('category','Uncategorized'), d.get('date',''))
+        elif p == '/api/delete-income':
+            idx = d['index']; a.bm.incomes.pop(idx)
+        elif p == '/api/delete-expense':
+            idx = d['index']; a.bm.expenses.pop(idx)
+        elif p == '/api/edit-income':
+            idx = d['index']; inc = a.bm.incomes[idx]
+            if 'name' in d: inc.name = d['name']
+            if 'amount' in d: inc.amount = float(d['amount'])
+            if 'date' in d: inc.date = d['date']
+        elif p == '/api/edit-expense':
+            idx = d['index']; exp = a.bm.expenses[idx]
+            if 'name' in d: exp.name = d['name']
+            if 'amount' in d: exp.amount = float(d['amount'])
+            if 'category' in d: exp.category = d['category']
+            if 'date' in d: exp.date = d['date']
+        elif p == '/api/add-goal':
+            a.goals.append(Goal(**{k:d[k] for k in ['name','target','current','icon','target_month'] if k in d}))
+        elif p == '/api/delete-goal':
+            idx = d.get('index', -1)
+            if 0 <= idx < len(a.goals): a.goals.pop(idx)
+        elif p == '/api/set-budget':
+            a.bm.total_budget = float(d.get('total_budget', 0.0))
+        elif p == '/api/toggle-theme':
+            a._dark = not a._dark; a._save_settings()
+            return self._json(self.app._get_api_data())
+        elif p == '/api/set-language':
+            a._lang = d['lang']; a._i18n.set_language(d['lang']); a._save_settings()
+        elif p == '/api/set-currency':
+            a._currency = d['currency']; a._save_settings()
+        elif p == '/api/reset':
+            a.bm = BudgetMonth(); a.goals = []; a._save_data()
+            return self._json(self.app._get_api_data())
+        a._save_data()
+        return self._json(self.app._get_api_data())
 
-		self.r_income_total = toga.Label("")
-		self.r_expense_total = toga.Label("")
-		self.r_profit = toga.Label("")
-		self.r_margin = toga.Label("")
-		self.r_categories = toga.Table(headings=["Category", "Amount", "Percent"], data=[], style=toga.style.Pack(flex=1, height=300))
-		self.status_label = toga.Label("")
+    def _json(self, data, status=200):
+        self.send_response(status)
+        self.send_header('Content-Type','application/json')
+        self.send_header('Access-Control-Allow-Origin','*')
+        self.end_headers()
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
-		report_box = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, padding=8))
-		for w in (
-			toga.Label("Report", style=toga.style.Pack(padding_bottom=8)),
-			toga.Label("Period (YYYY-MM)"),
-			# period row
-			toga.Box(children=[
-				self.year_input,
-				self.month_select,
-				self.today_btn,
-			], style=toga.style.Pack(direction=toga.style.pack.ROW, padding_bottom=8)),
-			toga.Label("Totals", style=toga.style.Pack(padding_top=4)),
-			self.r_income_total,
-			self.r_expense_total,
-			self.r_profit,
-			self.r_margin,
-			toga.Label("Expense Categories", style=toga.style.Pack(padding_top=6)),
-			self.r_categories,
-			self.status_label,
-		):
-			report_box.add(w)
+    def _file(self, path):
+        self.send_response(200)
+        ext = path.suffix.lower()
+        mt = {
+            '.html':'text/html;charset=utf-8','.css':'text/css','.js':'text/javascript',
+            '.png':'image/png','.svg':'image/svg+xml','.ico':'image/x-icon',
+            '.json':'application/json','.txt':'text/plain',
+        }.get(ext, 'application/octet-stream')
+        self.send_header('Content-Type', mt)
+        self.send_header('Access-Control-Allow-Origin','*')
+        self.end_headers()
+        self.wfile.write(path.read_bytes())
 
-		# Content areas
-		self.income_box = income_box
-		self.expense_box = expense_box
-		self.report_box = report_box
-		self.content = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN, flex=1))
-		self.content.add(self.income_box)
+    def log_message(self, fmt, *a):
+        print(f"[server] {fmt%a}")
 
-		# Bottom navigation with icons
-		self.nav_income = toga.Button("💰 Income", on_press=lambda b: self.switch_section("Income"), style=toga.style.Pack(flex=1, padding=6))
-		self.nav_expenses = toga.Button("🧾 Expenses", on_press=lambda b: self.switch_section("Expenses"), style=toga.style.Pack(flex=1, padding=6))
-		self.nav_report = toga.Button("📊 Report", on_press=lambda b: self.switch_section("Report"), style=toga.style.Pack(flex=1, padding=6))
-		self.navbar = toga.Box(children=[self.nav_income, self.nav_expenses, self.nav_report], style=toga.style.Pack(direction=toga.style.pack.ROW, padding=(4, 8)))
 
-		root = toga.Box(style=toga.style.Pack(direction=toga.style.pack.COLUMN))
-		root.add(self.content)
-		root.add(self.navbar)
+class App(toga.App):
+    def startup(self):
+        self._dark = False; self._lang = "en"; self._currency = "USD"
+        self._year = datetime.now().year; self._month = datetime.now().month
+        self.bm = BudgetMonth(); self.goals = []
+        self._i18n = I18n.get_instance()
+        self._setup_storage()
+        self._load_settings()
+        self._load_data()
+        self._start_server()
+        self.main_window = toga.MainWindow(title="Budget")
+        self._web = toga.WebView(
+            url=f'http://127.0.0.1:{self._port}/',
+            style=Pack(flex=1)
+        )
+        self.main_window.content = self._web
+        print(f"[budget] WebView loading http://127.0.0.1:{self._port}/")
+        self.main_window.show()
 
-		self.main_window = toga.MainWindow(title=self.formal_name)
-		self.main_window.content = root
-		# Overflow menu commands (3-dots)
-		self.cmd_new = toga.Command(self.on_new, text="New", tooltip="Start a new monthly report")
-		self.cmd_save = toga.Command(self.on_save, text="Save", tooltip="Save to JSON")
-		self.cmd_open = toga.Command(self.on_open, text="Open", tooltip="Open from JSON")
-		self.cmd_export = toga.Command(self.on_export, text="Export", tooltip="Export to Excel")
-		# Add to application commands so they appear in the 3-dots overflow menu (alongside About)
-		self.commands.add(self.cmd_new, self.cmd_save, self.cmd_open, self.cmd_export)
-		self.main_window.show()
-		# Initialize date controls
-		self._sync_date_controls()
-		self.update_report()
-		# Default day selections to today
-		today_day = datetime.now().day
-		self.i_day.value = str(today_day).zfill(2)
-		self.e_day.value = str(today_day).zfill(2)
-		# Highlight Income tab by default
-		self._highlight_nav("Income")
+    def _start_server(self):
+        handler = BudgetAPIHandler; handler.app = self
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind(('127.0.0.1', 0))
+        self._port = s.getsockname()[1]; s.close()
+        print(f"[budget] Server starting on port {self._port}")
+        server = http.server.HTTPServer(('127.0.0.1', self._port), handler)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        print(f"[budget] Server started on port {self._port}")
 
-	# Actions
-	def _compose_date(self, day: int | None) -> str | None:
-		if not day:
-			return None
-		return f"{self.meta_year}-{str(self.meta_month).zfill(2)}-{str(day).zfill(2)}"
+    def _get_api_data(self):
+        cats = {}
+        for c, a in self.bm.expenses_by_category().items():
+            cats[c] = {'amount': a, 'color': CAT_COLORS.get(c, '#B2BEC3')}
+        return {
+            'year': self._year, 'month': self._month,
+            'incomes': [{'name':i.name,'amount':i.amount,'date':i.date or ''} for i in self.bm.incomes],
+            'expenses': [{'name':e.name,'amount':e.amount,'category':e.category,'date':e.date or ''} for e in self.bm.expenses],
+            'total_income': self.bm.total_income(),
+            'total_expenses': self.bm.total_expenses(),
+            'net': self.bm.net(),
+            'margin': self.bm.profit_margin(),
+            'categories': cats,
+            'total_budget': self.bm.total_budget,
+            'goals': [{'name':g.name,'target':g.target,'current':g.current,'icon':g.icon,'target_month':g.target_month} for g in self.goals],
+            'dark': self._dark, 'lang': self._lang, 'currency': self._currency,
+            'today': datetime.now().strftime('%Y-%m-%d'),
+        }
 
-	def add_income(self, button):
-		name = (self.i_name.value or "").strip()
-		amt = parse_amount(self.i_amount.value)
-		day = None
-		try:
-			day = int((self.i_day.value or "").strip())
-		except Exception:
-			day = None
-		date_str = self._compose_date(day)
-		if name or amt:
-			rec = {"name": name, "amount": amt}
-			if date_str:
-				rec["date"] = date_str
-			self.incomes.append(rec)
-			self.i_table.data.append([name, f"{amt:.2f}", date_str or ""])
-			self.i_name.value = ""
-			self.i_amount.value = ""
-			self.update_report()
+    def _setup_storage(self):
+        try: d = Path(self.paths.data)
+        except: d = Path.home()/".budget_mobile"
+        d.mkdir(parents=True,exist_ok=True)
+        self._dd=d; self._sp=d/"settings.json"; self._dp=d/"data.json"
 
-	def add_expense(self, button):
-		name = (self.e_name.value or "").strip()
-		custom_cat = (self.e_category.value or "").strip()
-		cat = custom_cat or (self.e_category_select.value or "Uncategorized").strip()
-		amt = parse_amount(self.e_amount.value)
-		day = None
-		try:
-			day = int((self.e_day.value or "").strip())
-		except Exception:
-			day = None
-		date_str = self._compose_date(day)
-		if name or cat or amt:
-			rec = {"name": name, "category": cat, "amount": amt}
-			if date_str:
-				rec["date"] = date_str
-			self.expenses.append(rec)
-			self.e_table.data.append([name, cat, f"{amt:.2f}", date_str or ""])
-			self.e_name.value = ""
-			self.e_category.value = ""
-			self.e_amount.value = ""
-			self.update_report()
+    def _load_settings(self):
+        try:
+            s=json.loads(self._sp.read_text("utf-8"))
+            self._dark=s.get("dark",False); self._lang=s.get("lang","en"); self._currency=s.get("currency","USD")
+            self._i18n.set_language(self._lang)
+        except: pass
 
-	def update_report(self):
-		t = totals(self.incomes, self.expenses)
-		self.r_income_total.text = f"Income Total: {t['income_total']:.2f}"
-		self.r_expense_total.text = f"Expense Total: {t['expense_total']:.2f}"
-		self.r_profit.text = f"Profit: {t['profit']:.2f}"
-		self.r_margin.text = f"Profit Margin: {t['profit_margin']:.2f}%"
-		# Categories table
-		cats = expenses_by_category(self.expenses)
-		self.r_categories.data.clear()
-		for row in cats:
-			self.r_categories.data.append([
-				row["category"], f"{row['amount']:.2f}", f"{row['percent']:.1f}%",
-			])
+    def _save_settings(self):
+        try: self._sp.write_text(json.dumps({"dark":self._dark,"lang":self._lang,"currency":self._currency}),"utf-8")
+        except: pass
 
-	def _highlight_nav(self, section: str):
-		# Simple highlight: disable active button
-		self.nav_income.enabled = section != "Income"
-		self.nav_expenses.enabled = section != "Expenses"
-		self.nav_report.enabled = section != "Report"
+    def _load_data(self):
+        try:
+            d=json.loads(self._dp.read_text("utf-8"))
+            self.bm=BudgetMonth(); self.bm.from_dict(d.get("budget",{}))
+            self.goals=[Goal(**g) for g in d.get("goals",[])]
+            self._year=d.get("year",self._year); self._month=d.get("month",self._month)
+        except: pass
 
-	def switch_section(self, section: str):
-		# Swap displayed content based on requested section
-		for child in list(self.content.children):
-			self.content.remove(child)
-		if section == "Income":
-			self.content.add(self.income_box)
-		elif section == "Expenses":
-			self.content.add(self.expense_box)
-		else:
-			self.content.add(self.report_box)
-		self._highlight_nav(section)
-
-	# Date helpers
-	def _is_mobile(self) -> bool:
-		# Android reports 'android'; iOS may report 'ios'
-		plat = sys.platform.lower()
-		return plat.startswith("android") or plat == "ios"
-
-	def _sync_date_controls(self):
-		self.year_input.value = str(self.meta_year)
-		self.month_select.value = str(self.meta_month).zfill(2)
-
-	def _read_date_controls(self):
-		try:
-			y = int((self.year_input.value or '').strip())
-		except Exception:
-			y = self.meta_year
-		try:
-			m = int((self.month_select.value or '').strip())
-		except Exception:
-			m = self.meta_month
-		m = max(1, min(12, m))
-		if y < 1900 or y > 3000:
-			y = self.meta_year
-		self.meta_year, self.meta_month = y, m
-		self._sync_date_controls()
-
-	def use_today(self, button):
-		now = datetime.now()
-		self.meta_year, self.meta_month = now.year, now.month
-		self._sync_date_controls()
-
-	# Persistence
-	def _serialize(self):
-		self._read_date_controls()
-		return {
-			"meta": {
-				"year": self.meta_year,
-				"month": self.meta_month,
-				"saved_at": datetime.now().isoformat(timespec="seconds"),
-			},
-			"incomes": self.incomes,
-			"expenses": self.expenses,
-		}
-
-	def _deserialize(self, data: dict):
-		meta = data.get("meta", {})
-		self.meta_year = int(meta.get("year", self.meta_year))
-		self.meta_month = int(meta.get("month", self.meta_month))
-		self.incomes = list(data.get("incomes", []))
-		self.expenses = list(data.get("expenses", []))
-		# Rebuild tables
-		self.i_table.data.clear()
-		for r in self.incomes:
-			self.i_table.data.append([
-				r.get("name", ""),
-				f"{parse_amount(r.get('amount', 0)):.2f}",
-				r.get("date", ""),
-			])
-		self.e_table.data.clear()
-		for r in self.expenses:
-			self.e_table.data.append([
-				r.get("name", ""),
-				r.get("category", ""),
-				f"{parse_amount(r.get('amount', 0)):.2f}",
-				r.get("date", ""),
-			])
-		self._sync_date_controls()
-		self.update_report()
-
-	def use_today_income_day(self, button):
-		self.i_day.value = str(datetime.now().day).zfill(2)
-
-	def use_today_expense_day(self, button):
-		self.e_day.value = str(datetime.now().day).zfill(2)
-
-	def _default_filename(self, ext: str) -> str:
-		return f"budget-{self.meta_year}-{str(self.meta_month).zfill(2)}.{ext}"
-
-	def _safe_app_path(self, filename: str) -> Path:
-		try:
-			base = Path(self.paths.data)
-		except Exception:
-			base = Path.home()
-		base.mkdir(parents=True, exist_ok=True)
-		return base / filename
-
-	def _first_selection(self, sel):
-		"""Normalize dialog return to a single selection (str or Document-like).
-		Accepts str, list/tuple of items, or an object with open()/path attributes.
-		"""
-		if sel is None:
-			return None
-		if isinstance(sel, (list, tuple)):
-			return sel[0] if sel else None
-		return sel
-
-	def _is_canceled(self, sel) -> bool:
-		# Be explicit: only treat None or empty string/list as canceled; custom
-		# objects from Android SAF should be considered valid even if falsy.
-		if sel is None:
-			return True
-		if isinstance(sel, (list, tuple)) and len(sel) == 0:
-			return True
-		if isinstance(sel, str) and sel.strip() == "":
-			return True
-		return False
-
-	def _ensure_ext(self, path: str, ext: str) -> str:
-		# Ensure path ends with .ext (ext should include dot, e.g. ".json")
-		low = path.lower()
-		if not low.endswith(ext.lower()):
-			return path + ext
-		return path
-
-	# Dialog helpers which retry without filters if the platform rejects them
-	async def _open_json_dialog(self, title: str):
-		# Try with filters and multiselect flag; progressively relax on TypeError
-		try:
-			return await self.main_window.open_file_dialog(
-				title,
-				multiselect=False,
-				file_types=JSON_FILTER,
-			)
-		except TypeError:
-			try:
-				return await self.main_window.open_file_dialog(title, multiselect=False)
-			except TypeError:
-				try:
-					return await self.main_window.open_file_dialog(title, file_types=JSON_FILTER)
-				except TypeError:
-					return await self.main_window.open_file_dialog(title)
-
-	async def _save_json_dialog(self, title: str, suggested: str):
-		# Try with filters and suggested name; progressively relax on TypeError
-		try:
-			return await self.main_window.save_file_dialog(
-				title,
-				suggested_filename=suggested,
-				file_types=JSON_FILTER,
-			)
-		except TypeError:
-			try:
-				return await self.main_window.save_file_dialog(title, suggested_filename=suggested)
-			except TypeError:
-				try:
-					# Some backends may use 'filename' instead
-					return await self.main_window.save_file_dialog(title, filename=suggested)
-				except TypeError:
-					return await self.main_window.save_file_dialog(title)
-
-	async def _save_xlsx_dialog(self, title: str, suggested: str):
-		# Try with filters and suggested name; progressively relax on TypeError
-		try:
-			return await self.main_window.save_file_dialog(
-				title,
-				suggested_filename=suggested,
-				file_types=XLSX_FILTER,
-			)
-		except TypeError:
-			try:
-				return await self.main_window.save_file_dialog(title, suggested_filename=suggested)
-			except TypeError:
-				try:
-					return await self.main_window.save_file_dialog(title, filename=suggested)
-				except TypeError:
-					return await self.main_window.save_file_dialog(title)
-
-	async def _confirm(self, title: str, message: str) -> bool:
-		try:
-			# Toga confirm dialog returns True/False
-			return await self.main_window.confirm_dialog(title, message)
-		except Exception:
-			return False
-
-	async def on_save(self, button):
-		try:
-			# Use a native save dialog; require explicit selection
-			sel = await self.main_window.save_file_dialog(
-				"Save Budget JSON",
-				suggested_filename=self._default_filename("json"),
-				file_types=None,
-			)
-			sel = self._first_selection(sel)
-			if not sel:
-				# Auto fallback to app storage default path
-				sel = str(self._safe_app_path(self._default_filename("json")))
-			data = self._serialize()
-			# If the selection is a Document-like object, use its open() method
-			if hasattr(sel, "open"):
-				with sel.open("w", encoding="utf-8") as f:
-					json.dump(data, f, ensure_ascii=False, indent=2)
-				self.status_label.text = "Saved"
-			else:
-				path = str(sel)
-				with open(path, "w", encoding="utf-8") as f:
-					json.dump(data, f, ensure_ascii=False, indent=2)
-				self.status_label.text = f"Saved: {path}"
-		except Exception as e:
-			self.status_label.text = f"Save failed: {e}"
-
-	async def on_open(self, button):
-		try:
-			# Use a native open dialog; require explicit selection
-			sel = await self.main_window.open_file_dialog(
-				"Open Budget JSON",
-				multiselect=False,
-				file_types=None,
-			)
-			sel = self._first_selection(sel)
-			if not sel:
-				# Auto fallback to default file in app storage
-				sel = str(self._safe_app_path(self._default_filename("json")))
-			if hasattr(sel, "open"):
-				with sel.open("r", encoding="utf-8") as f:
-					data = json.load(f)
-			else:
-				path = str(sel)
-				with open(path, "r", encoding="utf-8") as f:
-					data = json.load(f)
-			self._deserialize(data)
-			self.status_label.text = "Opened"
-		except FileNotFoundError:
-			self.status_label.text = "Open failed: file not found"
-		except Exception as e:
-			self.status_label.text = f"Open failed: {e}"
-
-	async def on_export(self, button):
-		try:
-			# Try XlsxWriter first (pure-Python), then openpyxl
-			engine = None
-			try:
-				import xlsxwriter  # type: ignore
-				engine = "xlsxwriter"
-			except Exception:
-				pass
-			if engine is None:
-				try:
-					from openpyxl import Workbook  # type: ignore
-					from openpyxl.utils import get_column_letter  # type: ignore
-					from openpyxl.styles import Font, Alignment, PatternFill  # type: ignore
-					engine = "openpyxl"
-				except Exception:
-					engine = None
-			if engine is None:
-				self.status_label.text = "Export failed: No Excel engine (install XlsxWriter or openpyxl)"
-				return
-
-			# Ask user where to save; require explicit selection
-			sel = await self.main_window.save_file_dialog(
-				"Export to Excel",
-				suggested_filename=self._default_filename("xlsx"),
-				file_types=None,
-			)
-			sel = self._first_selection(sel)
-			if not sel:
-				# Auto fallback to app storage
-				sel = str(self._safe_app_path(self._default_filename("xlsx")))
-
-			if engine == "xlsxwriter":
-				# Build workbook with XlsxWriter
-				import xlsxwriter  # type: ignore
-				buffer = io.BytesIO()
-				wb = xlsxwriter.Workbook(buffer, {"in_memory": True})
-				fmt_bold = wb.add_format({"bold": True})
-				fmt_hdr = wb.add_format({"bold": True, "bg_color": "#DDDDDD", "align": "center"})
-				# Summary
-				sum_ws = wb.add_worksheet("Summary")
-				sum_ws.write_row(0, 0, ["Year", self.meta_year], fmt_bold)
-				sum_ws.write_row(1, 0, ["Month", self.meta_month])
-				sum_ws.write(2, 0, "")
-				t = totals(self.incomes, self.expenses)
-				sum_ws.write_row(3, 0, ["Income Total", t["income_total"]])
-				sum_ws.write_row(4, 0, ["Expense Total", t["expense_total"]])
-				sum_ws.write_row(5, 0, ["Profit", t["profit"]])
-				sum_ws.write_row(6, 0, ["Profit Margin %", t["profit_margin"]])
-				sum_ws.set_column(0, 1, 20)
-				# Incomes
-				inc = wb.add_worksheet("Incomes")
-				inc.write_row(0, 0, ["Name", "Amount", "Date"], fmt_hdr)
-				rowi = 1
-				for r in self.incomes:
-					inc.write_row(rowi, 0, [r.get("name", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-					rowi += 1
-				inc.set_column(0, 0, 30)
-				inc.set_column(1, 1, 15)
-				inc.set_column(2, 2, 15)
-				# Expenses
-				exp = wb.add_worksheet("Expenses")
-				exp.write_row(0, 0, ["Name", "Category", "Amount", "Date"], fmt_hdr)
-				rowe = 1
-				for r in self.expenses:
-					exp.write_row(rowe, 0, [r.get("name", ""), r.get("category", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-					rowe += 1
-				exp.set_column(0, 0, 30)
-				exp.set_column(1, 1, 20)
-				exp.set_column(2, 2, 15)
-				exp.set_column(3, 3, 15)
-				# Categories
-				cat = wb.add_worksheet("Categories")
-				cat.write_row(0, 0, ["Category", "Amount", "Percent"], fmt_hdr)
-				rowc = 1
-				for row in expenses_by_category(self.expenses):
-					cat.write_row(rowc, 0, [row["category"], row["amount"], row["percent"]])
-					rowc += 1
-				cat.set_column(0, 2, 20)
-				wb.close()
-				data_bytes = buffer.getvalue()
-			else:
-				# Build workbook with openpyxl
-				from openpyxl import Workbook
-				from openpyxl.utils import get_column_letter
-				from openpyxl.styles import Font, Alignment, PatternFill
-				wb = Workbook()
-				ws = wb.active
-				ws.title = "Summary"
-				ws.append(["Year", self.meta_year])
-				ws.append(["Month", self.meta_month])
-				ws.append([])
-				t = totals(self.incomes, self.expenses)
-				ws.append(["Income Total", t["income_total"]])
-				ws.append(["Expense Total", t["expense_total"]])
-				ws.append(["Profit", t["profit"]])
-				ws.append(["Profit Margin %", t["profit_margin"]])
-				for col in range(1, 3):
-					ws.column_dimensions[get_column_letter(col)].width = 20
-				for cell in ws[1]:
-					cell.font = Font(bold=True)
-				inc = wb.create_sheet("Incomes")
-				inc.append(["Name", "Amount", "Date"])
-				for c in inc[1]:
-					c.font = Font(bold=True)
-					c.fill = PatternFill("solid", fgColor="DDDDDD")
-					c.alignment = Alignment(horizontal="center")
-				for r in self.incomes:
-					inc.append([r.get("name", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-				inc.column_dimensions['A'].width = 30
-				inc.column_dimensions['B'].width = 15
-				inc.column_dimensions['C'].width = 15
-				exp = wb.create_sheet("Expenses")
-				exp.append(["Name", "Category", "Amount", "Date"])
-				for c in exp[1]:
-					c.font = Font(bold=True)
-					c.fill = PatternFill("solid", fgColor="DDDDDD")
-					c.alignment = Alignment(horizontal="center")
-				for r in self.expenses:
-					exp.append([r.get("name", ""), r.get("category", ""), parse_amount(r.get("amount", 0)), r.get("date", "")])
-				exp.column_dimensions['A'].width = 30
-				exp.column_dimensions['B'].width = 20
-				exp.column_dimensions['C'].width = 15
-				exp.column_dimensions['D'].width = 15
-				cat = wb.create_sheet("Categories")
-				cat.append(["Category", "Amount", "Percent"])
-				for c in cat[1]:
-					c.font = Font(bold=True)
-					c.fill = PatternFill("solid", fgColor="DDDDDD")
-					c.alignment = Alignment(horizontal="center")
-				for row in expenses_by_category(self.expenses):
-					cat.append([row["category"], row["amount"], row["percent"]])
-				for col in ('A','B','C'):
-					cat.column_dimensions[col].width = 20
-				buffer = io.BytesIO()
-				wb.save(buffer)
-				data_bytes = buffer.getvalue()
-
-			# Write bytes to target selection or fallback path
-			if hasattr(sel, "open"):
-				with sel.open("wb") as f:
-					f.write(data_bytes)
-				self.status_label.text = "Exported"
-			else:
-				path = str(sel) if sel else str(self._safe_app_path(self._default_filename("xlsx")))
-				with open(path, "wb") as f:
-					f.write(data_bytes)
-				self.status_label.text = f"Exported: {path}"
-		except Exception as e:
-			self.status_label.text = f"Export failed: {e}"
-
-	def on_new(self, button):
-		# Reset to a new monthly report
-		now = datetime.now()
-		self.meta_year, self.meta_month = now.year, now.month
-		self.incomes = []
-		self.expenses = []
-		self.i_table.data.clear()
-		self.e_table.data.clear()
-		self.i_name.value = ""
-		self.i_amount.value = ""
-		self.e_name.value = ""
-		self.e_amount.value = ""
-		self.e_category.value = ""
-		self._sync_date_controls()
-		self.i_day.value = str(now.day).zfill(2)
-		self.e_day.value = str(now.day).zfill(2)
-		self.update_report()
-		self.status_label.text = "Started new monthly report"
+    def _save_data(self):
+        try:
+            self._dp.write_text(json.dumps({
+                "year":self._year,"month":self._month,
+                "budget":self.bm.to_dict(),
+                "goals":[asdict(g) for g in self.goals]
+            }, indent=2, ensure_ascii=False), "utf-8")
+        except: pass
 
 
 def main():
-	return BudgetMobile("Budget Manager", "com.example.budget_manager_mobile")
+    return App("Budget Manager","com.example.budget_manager_mobile")
