@@ -13,7 +13,7 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { BudgetDoc, Entry, makeId, monthLabel } from '@monthly-budget/shared';
+import { BudgetDoc, Entry, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
 import { BarChart, PieChart } from 'react-native-chart-kit';
 import { ReactNativeAdapter } from './ReactNativeAdapter';
 import { BudgetProvider, useBudget } from './state/BudgetProvider';
@@ -99,8 +99,8 @@ function BudgetScreen() {
 
   const clearAllData = () => {
     Alert.alert(
-      'Clear All Data',
-      'Are you sure you want to clear all income and expense data? This cannot be undone.',
+      'Clear This Month',
+      'Clear every income and expense recorded for the month you are viewing? Other months are not affected. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -114,8 +114,8 @@ function BudgetScreen() {
 
   const addSampleData = () => {
     const sampleIncomes: Entry[] = [
-      { id: makeId(), name: 'Salary', category: '', amount: 5000, date: dateForDay(1) },
-      { id: makeId(), name: 'Freelance', category: '', amount: 1500, date: dateForDay(15) },
+      { id: makeId(), name: 'Salary', category: OTHER_CATEGORY_ID, amount: 5000, date: dateForDay(1) },
+      { id: makeId(), name: 'Freelance', category: OTHER_CATEGORY_ID, amount: 1500, date: dateForDay(15) },
     ];
 
     const sampleExpenses: Entry[] = [
@@ -134,7 +134,7 @@ function BudgetScreen() {
   const createNewBudget = () => {
     Alert.alert(
       'Create New Budget',
-      'This will clear all current data. Are you sure?',
+      'This will clear the month you are viewing. Other months are not affected. Are you sure?',
       [
         {
           text: 'Cancel',
@@ -158,7 +158,10 @@ function BudgetScreen() {
           upsert('income', {
             id: makeId(),
             name: income.name,
-            category: '',
+            // Income has no category picker in this screen yet (Phase 4 adds one).
+            // Use the taxonomy's own fallback, never '' -- an empty id is not a valid
+            // category and would break income suggestions and recurring detection.
+            category: OTHER_CATEGORY_ID,
             amount: income.amount,
             date: income.date || dateForDay(1),
           });
@@ -220,7 +223,10 @@ function BudgetScreen() {
     const income: Entry = {
       id: makeId(),
       name: newIncome.name.trim(),
-      category: '',
+      // Income has no category picker in this screen yet (Phase 4 adds one).
+      // Use the taxonomy's own fallback, never '' -- an empty id is not a valid
+      // category and would break income suggestions and recurring detection.
+      category: OTHER_CATEGORY_ID,
       amount: amount,
       date: date,
     };
@@ -551,7 +557,7 @@ function BudgetScreen() {
             <Text style={styles.sampleButtonText}>Add Sample Data</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.clearButton} onPress={clearAllData}>
-            <Text style={styles.clearButtonText}>Clear All Data</Text>
+            <Text style={styles.clearButtonText}>Clear This Month</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
