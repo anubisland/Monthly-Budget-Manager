@@ -2,7 +2,6 @@ import { BudgetDoc, serialize, deserialize } from '@monthly-budget/shared';
 import { Alert, Platform, Share } from 'react-native';
 import RNFS from 'react-native-fs';
 import { pick } from '@react-native-documents/picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Define the adapter interface locally since we have import issues
 interface BudgetAdapter {
@@ -10,8 +9,6 @@ interface BudgetAdapter {
   saveJSON(doc: BudgetDoc): Promise<void>;
   exportXLSX(doc: BudgetDoc): Promise<void>;
 }
-
-const STORAGE_KEY = '@MonthlyBudget:current_budget';
 
 export class ReactNativeAdapter implements BudgetAdapter {
   
@@ -27,10 +24,7 @@ export class ReactNativeAdapter implements BudgetAdapter {
         const file = result[0];
         const content = await RNFS.readFile(file.uri, 'utf8');
         const budget = deserialize(content);
-        
-        // Save to local storage for persistence
-        await AsyncStorage.setItem(STORAGE_KEY, serialize(budget));
-        
+
         return budget;
       }
       
@@ -57,10 +51,7 @@ export class ReactNativeAdapter implements BudgetAdapter {
       
       const content = serialize(docWithTimestamp);
       const filename = `budget_${docWithTimestamp.meta.year}_${docWithTimestamp.meta.month.toString().padStart(2, '0')}.json`;
-      
-      // Save to local storage
-      await AsyncStorage.setItem(STORAGE_KEY, content);
-      
+
       // Ask user how they want to save
       Alert.alert(
         'Save Budget',
@@ -215,30 +206,6 @@ export class ReactNativeAdapter implements BudgetAdapter {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       Alert.alert('Error', 'Failed to export file: ' + errorMessage);
-    }
-  }
-
-  // Additional method to load from local storage
-  async loadFromStorage(): Promise<BudgetDoc | null> {
-    try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        return deserialize(stored);
-      }
-      return null;
-    } catch (error) {
-      console.error('Failed to load from storage:', error);
-      return null;
-    }
-  }
-
-  // Additional method to save to local storage only
-  async saveToStorage(doc: BudgetDoc): Promise<void> {
-    try {
-      const content = serialize(doc);
-      await AsyncStorage.setItem(STORAGE_KEY, content);
-    } catch (error) {
-      console.error('Failed to save to storage:', error);
     }
   }
 }

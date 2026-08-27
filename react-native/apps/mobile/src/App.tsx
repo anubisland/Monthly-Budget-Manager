@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   SafeAreaView,
   Text,
@@ -13,10 +13,11 @@ import {
   FlatList,
   Dimensions,
 } from 'react-native';
-import { BudgetDoc, Income, Expense, totals, expensesByCategory, serialize, deserialize } from '@monthly-budget/shared';
+import { BudgetDoc, Entry, makeId, monthLabel } from '@monthly-budget/shared';
 import { BarChart, PieChart } from 'react-native-chart-kit';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ReactNativeAdapter } from './ReactNativeAdapter';
+import { BudgetProvider, useBudget } from './state/BudgetProvider';
+import { t } from './i18n';
 
 // Predefined expense categories from Python GUI
 const EXPENSE_CATEGORIES = [
@@ -47,92 +48,53 @@ const formatDateDisplay = (dateStr: string): string => {
   return `${day} (${dayOfWeek})`;
 };
 
-export default function App() {
-  const [budget, setBudget] = useState<BudgetDoc>({
-    meta: {
-      year: new Date().getFullYear(),
-      month: new Date().getMonth() + 1,
-    },
-    incomes: [],
-    expenses: [],
-  });
+function BudgetScreen() {
+  const {
+    status, monthKey, month, totals: stats, byCategory: categoryStats,
+    store, error, notice,
+    goTo, upsert, remove, dismissError, dismissNotice,
+  } = useBudget();
+
+  // The displayed month, derived from the single source of truth (monthKey)
+  // instead of a locally-held year/month pair.
+  const displayYear = Number(monthKey.slice(0, 4));
+  const displayMonth = Number(monthKey.slice(5, 7));
 
   const [activeTab, setActiveTab] = useState<'summary' | 'income' | 'expense'>('summary');
   const [newIncome, setNewIncome] = useState({ name: '', amount: '', day: '' });
   const [newExpense, setNewExpense] = useState({ name: '', category: '', amount: '', day: '' });
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [showMonthYearPicker, setShowMonthYearPicker] = useState(false);
-  
+
   const adapter = new ReactNativeAdapter();
 
-  const stats = totals(budget.incomes, budget.expenses);
-  const categoryStats = expensesByCategory(budget.expenses);
+  if (status === 'loading') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>{t('status.loading', store.locale)}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
-  // Load from storage on app start
-  useEffect(() => {
-    const loadStoredBudget = async () => {
-      try {
-        const stored = await adapter.loadFromStorage();
-        if (stored) {
-          setBudget(stored);
-        }
-      } catch (error) {
-        console.error('Failed to load stored budget:', error);
-      }
-    };
-    
-    loadStoredBudget();
-  }, []);
+  // Build a same-shaped day-of-month date within the displayed month, so
+  // entries created here always belong to the month they're shown under.
+  const dateForDay = (day: number): string => `${monthKey}-${String(day).padStart(2, '0')}`;
 
-  // Auto-save to storage when budget changes
-  useEffect(() => {
-    const saveToStorage = async () => {
-      try {
-        await adapter.saveToStorage(budget);
-      } catch (error) {
-        console.error('Failed to auto-save budget:', error);
-      }
-    };
-    
-    saveToStorage();
-  }, [budget]);
+  // Snapshot of the displayed month in the legacy file-export shape. File
+  // open/save/export are user-initiated one-off actions, not persistence --
+  // the store itself is owned by the provider.
+  const currentMonthAsDoc = (): BudgetDoc => ({
+    meta: { year: displayYear, month: displayMonth },
+    incomes: month.incomes.map(({ name, amount, date }) => ({ name, amount, date })),
+    expenses: month.expenses.map(({ name, category, amount, date }) => ({ name, category, amount, date })),
+  });
 
-  // Load budget data on app start (legacy method for enhanced features)
-  useEffect(() => {
-    loadBudgetData();
-  }, []);
-
-  // Save budget data whenever it changes (legacy method for enhanced features)
-  useEffect(() => {
-    saveBudgetData();
-  }, [budget]);
-
-  const saveBudgetData = async () => {
-    try {
-      const updatedBudget = {
-        ...budget,
-        meta: {
-          ...budget.meta,
-          saved_at: new Date().toISOString(),
-        },
-      };
-      const jsonData = serialize(updatedBudget);
-      await AsyncStorage.setItem('budget_data', jsonData);
-    } catch (error) {
-      console.error('Failed to save budget data:', error);
-    }
-  };
-
-  const loadBudgetData = async () => {
-    try {
-      const jsonData = await AsyncStorage.getItem('budget_data');
-      if (jsonData) {
-        const loadedBudget = deserialize(jsonData);
-        setBudget(loadedBudget);
-      }
-    } catch (error) {
-      console.error('Failed to load budget data:', error);
-    }
+  const clearCurrentMonth = () => {
+    month.incomes.forEach((income) => remove('income', income.id));
+    month.expenses.forEach((expense) => remove('expense', expense.id));
   };
 
   const clearAllData = () => {
@@ -141,43 +103,31 @@ export default function App() {
       'Are you sure you want to clear all income and expense data? This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear', 
+        {
+          text: 'Clear',
           style: 'destructive',
-          onPress: () => {
-            setBudget({
-              meta: {
-                year: new Date().getFullYear(),
-                month: new Date().getMonth() + 1,
-              },
-              incomes: [],
-              expenses: [],
-            });
-          }
+          onPress: clearCurrentMonth,
         },
       ]
     );
   };
 
   const addSampleData = () => {
-    const sampleIncomes: Income[] = [
-      { name: 'Salary', amount: 5000, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-01` },
-      { name: 'Freelance', amount: 1500, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-15` },
+    const sampleIncomes: Entry[] = [
+      { id: makeId(), name: 'Salary', category: '', amount: 5000, date: dateForDay(1) },
+      { id: makeId(), name: 'Freelance', category: '', amount: 1500, date: dateForDay(15) },
     ];
 
-    const sampleExpenses: Expense[] = [
-      { name: 'Rent', category: 'Rent', amount: 1200, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-01` },
-      { name: 'Groceries', category: 'Food', amount: 400, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-03` },
-      { name: 'Gas Bill', category: 'Fuel', amount: 80, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-05` },
-      { name: 'Internet', category: 'Internet', amount: 60, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-10` },
-      { name: 'Movies', category: 'Entertainment', amount: 25, date: `${budget.meta.year}-${budget.meta.month.toString().padStart(2, '0')}-12` },
+    const sampleExpenses: Entry[] = [
+      { id: makeId(), name: 'Rent', category: 'Rent', amount: 1200, date: dateForDay(1) },
+      { id: makeId(), name: 'Groceries', category: 'Food', amount: 400, date: dateForDay(3) },
+      { id: makeId(), name: 'Gas Bill', category: 'Fuel', amount: 80, date: dateForDay(5) },
+      { id: makeId(), name: 'Internet', category: 'Internet', amount: 60, date: dateForDay(10) },
+      { id: makeId(), name: 'Movies', category: 'Entertainment', amount: 25, date: dateForDay(12) },
     ];
 
-    setBudget(prev => ({
-      ...prev,
-      incomes: [...prev.incomes, ...sampleIncomes],
-      expenses: [...prev.expenses, ...sampleExpenses],
-    }));
+    sampleIncomes.forEach((income) => upsert('income', income));
+    sampleExpenses.forEach((expense) => upsert('expense', expense));
   };
 
   // File operations
@@ -193,16 +143,7 @@ export default function App() {
         {
           text: 'Create New',
           style: 'destructive',
-          onPress: () => {
-            setBudget({
-              meta: {
-                year: new Date().getFullYear(),
-                month: new Date().getMonth() + 1,
-              },
-              incomes: [],
-              expenses: [],
-            });
-          },
+          onPress: clearCurrentMonth,
         },
       ]
     );
@@ -212,7 +153,25 @@ export default function App() {
     try {
       const loadedBudget = await adapter.openJSON();
       if (loadedBudget) {
-        setBudget(loadedBudget);
+        clearCurrentMonth();
+        loadedBudget.incomes.forEach((income) => {
+          upsert('income', {
+            id: makeId(),
+            name: income.name,
+            category: '',
+            amount: income.amount,
+            date: income.date || dateForDay(1),
+          });
+        });
+        loadedBudget.expenses.forEach((expense) => {
+          upsert('expense', {
+            id: makeId(),
+            name: expense.name,
+            category: expense.category,
+            amount: expense.amount,
+            date: expense.date || dateForDay(1),
+          });
+        });
         Alert.alert('Success', 'Budget loaded successfully!');
       }
     } catch (error) {
@@ -222,7 +181,7 @@ export default function App() {
 
   const saveBudget = async () => {
     try {
-      await adapter.saveJSON(budget);
+      await adapter.saveJSON(currentMonthAsDoc());
     } catch (error) {
       Alert.alert('Error', 'Failed to save budget file');
     }
@@ -230,7 +189,7 @@ export default function App() {
 
   const exportBudget = async () => {
     try {
-      await adapter.exportXLSX(budget);
+      await adapter.exportXLSX(currentMonthAsDoc());
     } catch (error) {
       Alert.alert('Error', 'Failed to export budget file');
     }
@@ -241,34 +200,32 @@ export default function App() {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    
+
     const amount = parseFloat(newIncome.amount);
     if (isNaN(amount) || amount <= 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
-    // Create date from year-month-day or current date
-    let date = new Date().toISOString().split('T')[0];
+    // Create date from the displayed month plus the chosen day, defaulting
+    // to the 1st so the entry always lands in the month it's added from.
+    let date = dateForDay(1);
     if (newIncome.day.trim()) {
       const day = parseInt(newIncome.day.trim());
       if (day >= 1 && day <= 31) {
-        const year = budget.meta.year;
-        const month = budget.meta.month;
-        date = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        date = dateForDay(day);
       }
     }
 
-    const income: Income = {
+    const income: Entry = {
+      id: makeId(),
       name: newIncome.name.trim(),
+      category: '',
       amount: amount,
       date: date,
     };
 
-    setBudget(prev => ({
-      ...prev,
-      incomes: [...prev.incomes, income],
-    }));
+    upsert('income', income);
 
     setNewIncome({ name: '', amount: '', day: '' });
   };
@@ -278,51 +235,42 @@ export default function App() {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    
+
     const amount = parseFloat(newExpense.amount);
     if (isNaN(amount) || amount <= 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
 
-    // Create date from year-month-day or current date
-    let date = new Date().toISOString().split('T')[0];
+    // Create date from the displayed month plus the chosen day, defaulting
+    // to the 1st so the entry always lands in the month it's added from.
+    let date = dateForDay(1);
     if (newExpense.day.trim()) {
       const day = parseInt(newExpense.day.trim());
       if (day >= 1 && day <= 31) {
-        const year = budget.meta.year;
-        const month = budget.meta.month;
-        date = `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+        date = dateForDay(day);
       }
     }
 
-    const expense: Expense = {
+    const expense: Entry = {
+      id: makeId(),
       name: newExpense.name.trim(),
       category: newExpense.category.trim(),
       amount: amount,
       date: date,
     };
 
-    setBudget(prev => ({
-      ...prev,
-      expenses: [...prev.expenses, expense],
-    }));
+    upsert('expense', expense);
 
     setNewExpense({ name: '', category: '', amount: '', day: '' });
   };
 
-  const deleteIncome = (index: number) => {
-    setBudget(prev => ({
-      ...prev,
-      incomes: prev.incomes.filter((_, i) => i !== index),
-    }));
+  const deleteIncome = (id: string) => {
+    remove('income', id);
   };
 
-  const deleteExpense = (index: number) => {
-    setBudget(prev => ({
-      ...prev,
-      expenses: prev.expenses.filter((_, i) => i !== index),
-    }));
+  const deleteExpense = (id: string) => {
+    remove('expense', id);
   };
 
   const selectCategory = (category: string) => {
@@ -331,10 +279,7 @@ export default function App() {
   };
 
   const updateMonthYear = (year: number, month: number) => {
-    setBudget(prev => ({
-      ...prev,
-      meta: { ...prev.meta, year, month }
-    }));
+    goTo(`${year}-${String(month).padStart(2, '0')}`);
     setShowMonthYearPicker(false);
   };
 
@@ -386,13 +331,13 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.monthYearOption,
-                    budget.meta.month === index + 1 && styles.selectedOption
+                    displayMonth === index + 1 && styles.selectedOption
                   ]}
-                  onPress={() => updateMonthYear(budget.meta.year, index + 1)}
+                  onPress={() => updateMonthYear(displayYear, index + 1)}
                 >
                   <Text style={[
                     styles.monthYearOptionText,
-                    budget.meta.month === index + 1 && styles.selectedOptionText
+                    displayMonth === index + 1 && styles.selectedOptionText
                   ]}>{item}</Text>
                 </TouchableOpacity>
               )}
@@ -406,13 +351,13 @@ export default function App() {
                 <TouchableOpacity
                   style={[
                     styles.monthYearOption,
-                    budget.meta.year === item && styles.selectedOption
+                    displayYear === item && styles.selectedOption
                   ]}
-                  onPress={() => updateMonthYear(item, budget.meta.month)}
+                  onPress={() => updateMonthYear(item, displayMonth)}
                 >
                   <Text style={[
                     styles.monthYearOptionText,
-                    budget.meta.year === item && styles.selectedOptionText
+                    displayYear === item && styles.selectedOptionText
                   ]}>{item}</Text>
                 </TouchableOpacity>
               )}
@@ -432,58 +377,55 @@ export default function App() {
 
   const renderSummary = () => {
     const screenWidth = Dimensions.get('window').width;
-    
+
     return (
       <ScrollView style={styles.content}>
         <Text style={styles.sectionTitle}>Budget Summary</Text>
-        
+
         {/* Month/Year Selector */}
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.monthYearSelector}
           onPress={() => setShowMonthYearPicker(true)}
         >
           <Text style={styles.monthTitle}>
-            {new Date(budget.meta.year, budget.meta.month - 1).toLocaleDateString('en-US', { 
-              month: 'long', 
-              year: 'numeric' 
-            })}
+            {monthLabel(monthKey, store.locale)}
           </Text>
           <Text style={styles.changeText}>Tap to change</Text>
         </TouchableOpacity>
-        
+
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Total Income</Text>
             <Text style={[styles.statValue, styles.incomeColor]}>
-              ${stats.income_total.toFixed(2)}
+              ${stats.income.toFixed(2)}
             </Text>
           </View>
-          
+
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Total Expenses</Text>
             <Text style={[styles.statValue, styles.expenseColor]}>
-              ${stats.expense_total.toFixed(2)}
+              ${stats.expenses.toFixed(2)}
             </Text>
           </View>
-          
+
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Profit/Loss</Text>
-            <Text style={[styles.statValue, stats.profit >= 0 ? styles.profitColor : styles.lossColor]}>
-              ${stats.profit.toFixed(2)}
+            <Text style={[styles.statValue, stats.net >= 0 ? styles.profitColor : styles.lossColor]}>
+              ${stats.net.toFixed(2)}
             </Text>
           </View>
-          
+
           <View style={styles.statCard}>
             <Text style={styles.statLabel}>Profit Margin</Text>
-            <Text style={[styles.statValue, stats.profit_margin >= 0 ? styles.profitColor : styles.lossColor]}>
-              {stats.profit_margin.toFixed(1)}%
+            <Text style={[styles.statValue, stats.margin >= 0 ? styles.profitColor : styles.lossColor]}>
+              {stats.margin.toFixed(1)}%
             </Text>
           </View>
         </View>
 
         {/* Charts Section */}
         <Text style={styles.sectionTitle}>Charts</Text>
-        
+
         {/* Income vs Expenses Bar Chart */}
         <View style={styles.chartContainer}>
           <Text style={styles.chartTitle}>Income vs Expenses</Text>
@@ -491,7 +433,7 @@ export default function App() {
             data={{
               labels: ['Income', 'Expenses'],
               datasets: [{
-                data: [stats.income_total, stats.expense_total]
+                data: [stats.income, stats.expenses]
               }]
             }}
             width={screenWidth - 32}
@@ -552,7 +494,7 @@ export default function App() {
             <Text style={styles.chartTitle}>Expense Categories (Bar Chart)</Text>
             <BarChart
               data={{
-                labels: categoryStats.slice(0, 8).map(cat => 
+                labels: categoryStats.slice(0, 8).map(cat =>
                   cat.category.length > 8 ? cat.category.substring(0, 8) + '...' : cat.category
                 ),
                 datasets: [{
@@ -605,11 +547,6 @@ export default function App() {
         {/* Data Management Section */}
         <Text style={styles.sectionTitle}>Data Management</Text>
         <View style={styles.dataManagementContainer}>
-          {budget.meta.saved_at && (
-            <Text style={styles.lastSavedText}>
-              Last saved: {new Date(budget.meta.saved_at).toLocaleString()}
-            </Text>
-          )}
           <TouchableOpacity style={styles.sampleButton} onPress={addSampleData}>
             <Text style={styles.sampleButtonText}>Add Sample Data</Text>
           </TouchableOpacity>
@@ -624,7 +561,7 @@ export default function App() {
   const renderIncomes = () => (
     <ScrollView style={styles.content}>
       <Text style={styles.sectionTitle}>Income Management</Text>
-      
+
       <View style={styles.formContainer}>
         <TextInput
           style={styles.input}
@@ -652,8 +589,8 @@ export default function App() {
       </View>
 
       <Text style={styles.listTitle}>Current Incomes</Text>
-      {budget.incomes.map((income, index) => (
-        <View key={index} style={styles.listItem}>
+      {month.incomes.map((income) => (
+        <View key={income.id} style={styles.listItem}>
           <View style={styles.listItemContent}>
             <Text style={styles.listItemName}>{income.name}</Text>
             <Text style={styles.listItemAmount}>${income.amount.toFixed(2)}</Text>
@@ -663,9 +600,9 @@ export default function App() {
               </Text>
             )}
           </View>
-          <TouchableOpacity 
-            style={styles.deleteButton} 
-            onPress={() => deleteIncome(index)}
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => deleteIncome(income.id)}
           >
             <Text style={styles.deleteButtonText}>Delete</Text>
           </TouchableOpacity>
@@ -677,7 +614,7 @@ export default function App() {
   const renderExpenses = () => (
     <ScrollView style={styles.content}>
       <Text style={styles.sectionTitle}>Expense Management</Text>
-      
+
       <View style={styles.formContainer}>
         <TextInput
           style={styles.input}
@@ -685,7 +622,7 @@ export default function App() {
           value={newExpense.name}
           onChangeText={(text) => setNewExpense(prev => ({ ...prev, name: text }))}
         />
-        
+
         <View style={styles.categoryInputContainer}>
           <TextInput
             style={[styles.input, styles.categoryInput]}
@@ -693,14 +630,14 @@ export default function App() {
             value={newExpense.category}
             onChangeText={(text) => setNewExpense(prev => ({ ...prev, category: text }))}
           />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.pickButton}
             onPress={() => setShowCategoryPicker(true)}
           >
             <Text style={styles.pickButtonText}>Pick</Text>
           </TouchableOpacity>
         </View>
-        
+
         <TextInput
           style={styles.input}
           placeholder="Amount"
@@ -721,8 +658,8 @@ export default function App() {
       </View>
 
       <Text style={styles.listTitle}>Current Expenses</Text>
-      {budget.expenses.map((expense, index) => (
-        <View key={index} style={styles.listItem}>
+      {month.expenses.map((expense) => (
+        <View key={expense.id} style={styles.listItem}>
           <View style={styles.listItemContent}>
             <Text style={styles.listItemName}>{expense.name}</Text>
             <Text style={styles.listItemCategory}>{expense.category}</Text>
@@ -733,9 +670,9 @@ export default function App() {
               </Text>
             )}
           </View>
-          <TouchableOpacity 
-            style={styles.deleteButton} 
-            onPress={() => deleteExpense(index)}
+          <TouchableOpacity
+            style={styles.deleteButton}
+            onPress={() => deleteExpense(expense.id)}
           >
             <Text style={styles.deleteButtonText}>Delete</Text>
           </TouchableOpacity>
@@ -747,24 +684,53 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#f8f9fa" />
-      
+
+      {error && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>
+            {t('status.saveFailed', store.locale)} ({error})
+          </Text>
+          <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissError}>
+            <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {notice === 'migrated' && (
+        <View style={styles.noticeBanner}>
+          <Text style={styles.noticeBannerText}>{t('status.migrated', store.locale)}</Text>
+          <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissNotice}>
+            <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {notice === 'corrupt' && (
+        <View style={styles.noticeBanner}>
+          <Text style={styles.noticeBannerText}>{t('status.loadCorrupt', store.locale)}</Text>
+          <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissNotice}>
+            <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Monthly Budget Manager</Text>
-        
+
         {/* File Operations Row */}
         <View style={styles.fileOperationsContainer}>
           <TouchableOpacity style={styles.fileButton} onPress={createNewBudget}>
             <Text style={styles.fileButtonText}>New</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.fileButton} onPress={openBudget}>
             <Text style={styles.fileButtonText}>Open</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.fileButton} onPress={saveBudget}>
             <Text style={styles.fileButtonText}>Save</Text>
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.fileButton} onPress={exportBudget}>
             <Text style={styles.fileButtonText}>Export</Text>
           </TouchableOpacity>
@@ -799,10 +765,65 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <BudgetProvider>
+      <BudgetScreen />
+    </BudgetProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#6c757d',
+  },
+  errorBanner: {
+    backgroundColor: '#f8d7da',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorBannerText: {
+    flex: 1,
+    color: '#721c24',
+    fontSize: 13,
+  },
+  noticeBanner: {
+    backgroundColor: '#fff3cd',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  noticeBannerText: {
+    flex: 1,
+    color: '#856404',
+    fontSize: 13,
+  },
+  bannerDismissButton: {
+    marginLeft: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 4,
+    backgroundColor: 'rgba(0,0,0,0.08)',
+  },
+  bannerDismissText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#212529',
   },
   header: {
     backgroundColor: '#fff',
