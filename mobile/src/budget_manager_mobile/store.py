@@ -39,6 +39,14 @@ def parse_month_key(key: str) -> Tuple[int, int]:
     parts = str(key).split("-")
     if len(parts) != 2:
         raise ValueError(f"not a month key: {key!r}")
+    # The widths matter as much as the values. Month keys are compared as
+    # strings everywhere downstream, so a non-canonical "2026-0012" would sort
+    # before "2026-08" and slip past the future check into a month the arrows
+    # can never leave.
+    if len(parts[0]) != 4 or len(parts[1]) != 2:
+        raise ValueError(f"not a canonical month key: {key!r}")
+    if not (parts[0].isdigit() and parts[1].isdigit()):
+        raise ValueError(f"not a month key: {key!r}")
     year, month = int(parts[0]), int(parts[1])
     if not 1 <= month <= 12:
         raise ValueError(f"month out of range: {key!r}")
@@ -162,12 +170,18 @@ def read_doc(path: Path, fallback_current: str) -> Tuple[Dict, Note]:
         text = path.read_text("utf-8")
     except FileNotFoundError:
         return empty_doc(fallback_current), None
+    except UnicodeDecodeError:
+        # Raised by the decode inside read_text, not by json.loads, and it is a
+        # ValueError rather than an OSError — so it escapes both of the clauses
+        # below if it is not caught right here. A single bad byte would then
+        # propagate out of load() and stop the app from starting at all.
+        return empty_doc(fallback_current), "corrupt"
     except OSError:
         return empty_doc(fallback_current), "unreadable"
 
     try:
         raw = json.loads(text)
-    except (ValueError, UnicodeDecodeError):
+    except ValueError:
         return empty_doc(fallback_current), "corrupt"
 
     return migrate(raw, fallback_current)
