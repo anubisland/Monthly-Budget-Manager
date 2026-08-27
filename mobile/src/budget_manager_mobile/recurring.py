@@ -45,9 +45,12 @@ def fires_in(template: RecurringTransaction, month: str) -> bool:
         return False
     try:
         year, month_number = store.parse_month_key(month)
+        # Inside the try as well: the expansion builds real dates, so it can
+        # raise for a month key that parsed cleanly. A guard around only the
+        # parse looked complete and covered nothing that actually threw.
+        return bool(apply_recurring_for_month([template], year, month_number))
     except ValueError:
         return False
-    return bool(apply_recurring_for_month([template], year, month_number))
 
 
 def expenses_for(template: RecurringTransaction, month: str) -> List:

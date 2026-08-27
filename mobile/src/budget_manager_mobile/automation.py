@@ -60,12 +60,16 @@ def add_recurring(app, d: Dict) -> None:
         raise ApiError("amount must be a positive number")
     if frequency not in decode.FREQUENCIES:
         raise ApiError("unsupported frequency")
-    if isinstance(day, bool) or not isinstance(day, int) or not 0 <= day <= 31:
-        raise ApiError("day must be between 0 and 31")
+    checked_day = decode.day_for(day, frequency)
+    if checked_day is None:
+        raise ApiError(
+            "day must be 0-6 (Mon-Sun)" if frequency in decode.WEEKDAY_FREQUENCIES
+            else "day must be 1-31"
+        )
 
     app.data.recurring.append(RecurringTransaction(
         category=category, description=description, amount=amount,
-        frequency=frequency, day=day,
+        frequency=frequency, day=checked_day,
         # Starting from the month on screen, so adding a template while looking
         # at a past month does not silently backfill every month since.
         start_date=app.data.current,

@@ -50,6 +50,11 @@ def parse_month_key(key: str) -> Tuple[int, int]:
     year, month = int(parts[0]), int(parts[1])
     if not 1 <= month <= 12:
         raise ValueError(f"month out of range: {key!r}")
+    # datetime.date cannot represent year 0, and the recurring engine builds
+    # dates: "0000-01" passed every other check and then raised out of a GET,
+    # leaving the app unable to render the screen that would move the month.
+    if year < 1:
+        raise ValueError(f"year out of range: {key!r}")
     return year, month
 
 

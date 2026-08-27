@@ -121,14 +121,6 @@ class BudgetData:
             else:
                 self.goals.append(goal)
 
-        # An I/O failure says nothing about the file's contents, so touching it
-        # would turn a transient error into permanent loss.
-        self.readable = note != "unreadable"
-        if note in ("corrupt", "future-version"):
-            store.quarantine(self._path)
-        elif note == "migrated-v1" or dropped:
-            store.backup(self._path)
-
         self.recurring, lost = decode.templates(
             doc.get("recurring"), RecurringTransaction, decode.RECURRING_FIELDS
         )
@@ -137,7 +129,20 @@ class BudgetData:
             doc.get("rules"), TransactionRule, decode.RULE_FIELDS
         )
         dropped += lost
-        self.settled = decode.settled(doc.get("settled"))
+        self.settled, lost = decode.settled(doc.get("settled"))
+        dropped += lost
+
+        # Every decode above must have run before this point. The block used to
+        # sit higher, reading a `dropped` that counted only months and goals —
+        # so a damaged recurring template was dropped, reported in the note, and
+        # never backed up, and the next save deleted it for good.
+        # An I/O failure says nothing about the file's contents, so touching it
+        # would turn a transient error into permanent loss.
+        self.readable = note != "unreadable"
+        if note in ("corrupt", "future-version"):
+            store.quarantine(self._path)
+        elif note == "migrated-v1" or dropped:
+            store.backup(self._path)
 
         self.dropped = dropped
         self.note = note or ("partial" if dropped else None)

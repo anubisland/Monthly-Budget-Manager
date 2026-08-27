@@ -1,22 +1,23 @@
+import http.server
 import json
+import socket
 import sys
 import threading
-import http.server
-import socket
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
-import toga
-from toga.style import Pack
-from monthly_budget.i18n import I18n
-
 import api
 import goals as goals_module
+import recurring
 import store
+import toga
 from budget_data import BudgetData
+from toga.style import Pack
+
+from monthly_budget.i18n import I18n
 
 _web_dir = Path(__file__).parent / 'web'
 
@@ -173,6 +174,9 @@ class App(toga.App):
             'today': self.today_iso(),
             'note': self.data.note,
             'dropped': self.data.dropped,
+            'rules': [{'pattern': r.pattern, 'category': r.category} for r in self.data.rules],
+            'recurring': self._recurring_state(),
+            'pending_recurring': self._pending_state(),
         }
 
     def _categories(self, bm):
@@ -195,6 +199,34 @@ class App(toga.App):
                 'this_month': status['this_month'],
                 'carried_over': status['carried_over'],
                 'target_month': g.target_month,
+            })
+        return result
+
+    def _recurring_state(self):
+        return [
+            {'id': t.id, 'description': t.description, 'category': t.category,
+             'amount': t.amount, 'frequency': t.frequency, 'day': t.day,
+             'start_date': t.start_date}
+            for t in self.data.recurring
+        ]
+
+    def _pending_state(self):
+        """Templates the month on screen has not accepted or skipped yet.
+
+        The total is computed here so the UI can show what accepting will cost
+        without knowing how a frequency expands into dates.
+        """
+        result = []
+        for template in recurring.pending(
+            self.data.recurring, self.data.current,
+            self.data.settled_in(self.data.current),
+        ):
+            occurrences = recurring.expenses_for(template, self.data.current)
+            result.append({
+                'id': template.id, 'description': template.description,
+                'category': template.category, 'amount': template.amount,
+                'count': len(occurrences),
+                'total': round(sum(e.amount for e in occurrences), 2),
             })
         return result
 

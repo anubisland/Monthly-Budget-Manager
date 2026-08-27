@@ -150,7 +150,6 @@ RECURRING_FIELDS = {
     "description": lambda v: validate.text(v),
     "amount": lambda v: validate.amount(v),
     "frequency": lambda v: v if v in FREQUENCIES else None,
-    "day": lambda v: _day(v),
     "start_date": lambda v: str(v) if store.is_month_key(v) else None,
 }
 
@@ -165,12 +164,25 @@ RULE_FIELDS = {
 FREQUENCIES = ("weekly", "biweekly", "monthly", "quarterly", "yearly")
 
 
-def _day(value: object) -> Optional[int]:
-    """A day-of-month (1-31) or day-of-week (0-6); the engine reads it both
-    ways depending on frequency, so the wider range is accepted here."""
+#: Frequencies whose `day` the engine reads as a weekday, Monday = 0.
+WEEKDAY_FREQUENCIES = ("weekly", "biweekly")
+
+
+def day_for(value: object, frequency: object) -> Optional[int]:
+    """The day field, checked against what ``frequency`` makes it mean.
+
+    core._recurring_days_in_month reads `day` as a weekday for weekly and
+    biweekly templates and as a date otherwise, and accepting the union of both
+    ranges creates templates that can never fire: a weekly template with day 15
+    matches no weekday, and a monthly one with day 0 yields the impossible date
+    YYYY-MM-00 — which then fails validation on the next load and silently
+    loses the row's date.
+    """
     if isinstance(value, bool) or not isinstance(value, int):
         return None
-    return value if 0 <= value <= 31 else None
+    if frequency in WEEKDAY_FREQUENCIES:
+        return value if 0 <= value <= 6 else None
+    return value if 1 <= value <= 31 else None
 
 
 def templates(raw: object, factory, fields) -> Tuple[List, int]:
@@ -191,6 +203,11 @@ def templates(raw: object, factory, fields) -> Tuple[List, int]:
     return built, dropped
 
 
+def fields_needing_day(fields) -> Tuple[str, ...]:
+    """('day',) when this record type has a day, () otherwise."""
+    return ("day",) if "frequency" in fields else ()
+
+
 def _template(item: object, factory, fields):
     if not isinstance(item, dict):
         return None
@@ -204,6 +221,14 @@ def _template(item: object, factory, fields):
         built[name] = value
     if len(built) != len(fields):
         return None
+
+    # `day` depends on `frequency`, so it cannot be checked by the per-field
+    # table above and is validated here as a pair.
+    if "day" in fields_needing_day(fields):
+        day = day_for(item.get("day"), built.get("frequency"))
+        if day is None:
+            return None
+        built["day"] = day
 
     identifier = item.get("id")
     if isinstance(identifier, bool) or not isinstance(identifier, int) or identifier < 1:
@@ -220,15 +245,26 @@ def _template(item: object, factory, fields):
     return factory(**built)
 
 
-def settled(raw: object) -> Dict[str, List[int]]:
-    """month key -> template ids already actioned there."""
+def settled(raw: object) -> Tuple[Dict[str, List[int]], int]:
+    """month key -> template ids already actioned there, and how many were lost.
+
+    Counted rather than silently discarded: this record is the guard that stops
+    a recurring template being applied twice, so losing an entry re-offers an
+    item the user already accepted. The count is what triggers a backup before
+    the reduced version is written.
+    """
+    if raw is None:
+        return {}, 0
     if not isinstance(raw, dict):
-        return {}
-    result = {}
+        return {}, 1
+
+    result, dropped = {}, 0
     for key, ids in raw.items():
         if not store.is_month_key(key) or not isinstance(ids, list):
+            dropped += 1
             continue
         clean = [i for i in ids if isinstance(i, int) and not isinstance(i, bool) and i > 0]
+        dropped += len(ids) - len(clean)
         if clean:
             result[str(key)] = sorted(set(clean))
-    return result
+    return result, dropped
