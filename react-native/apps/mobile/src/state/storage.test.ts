@@ -543,3 +543,70 @@ describe('cleanup failure leaves a diagnostic trail', () => {
     expect(r.warning).toBeUndefined();
   });
 });
+
+// A payload this version does not understand must never be mistaken for an
+// empty budget. migrateV0toV1 returns an empty store for anything it cannot
+// recognise, and an empty store passes isUsable trivially -- so validating only
+// its OUTPUT let a future-format store load as blank, unflagged and
+// unpreserved, after which the first autosave destroyed the original.
+describe('unrecognised payloads are never mistaken for an empty budget', () => {
+  const futureStore = JSON.stringify({
+    version: 2, currency: 'SAR', locale: 'ar', recurring: [],
+    months: { '2026-08': { incomes: [], expenses: [{ id: 'a', name: 'Rent', category: 'housing', amount: 1500, date: '2026-08-01' }] } },
+  });
+
+  it('routes a future-version store to corrupt, not loaded', async () => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: futureStore }), { today: TODAY });
+    expect(r.status).toBe('corrupt');
+  });
+
+  it('preserves it rather than letting the next save destroy it', async () => {
+    const kv = new MemoryKV({ [STORE_KEY]: futureStore });
+    await loadStore(kv, { today: TODAY });
+    expect(await kv.getItem(CORRUPT_KEY)).toBe(futureStore);
+  });
+
+  it.each([
+    ['arbitrary JSON', '{"foo":"bar"}'],
+    ['a bare array', '[]'],
+    ['a bare number', '42'],
+    ['a JSON null', 'null'],
+    ['version 0', '{"version":0,"months":{},"recurring":[]}'],
+  ])('routes %s to corrupt', async (_label, payload) => {
+    const r = await loadStore(new MemoryKV({ [STORE_KEY]: payload }), { today: TODAY });
+    expect(r.status).toBe('corrupt');
+  });
+
+  it('still loads a genuine v1 store', async () => {
+    const kv = new MemoryKV({ [STORE_KEY]: JSON.stringify(v1Fixture()) });
+    expect((await loadStore(kv, { today: TODAY })).status).toBe('loaded');
+  });
+});
+
+// Finding 4: the pre-existing failure test used MemoryKV.failWrites, which is
+// global, so the BACKUP_KEY write threw first and the STORE_KEY write was never
+// reached. The scenario the P6 ordering exists for -- backup lands, store write
+// fails -- had no coverage at all.
+describe('backup survives when only the store write fails', () => {
+  it('keeps the legacy originals and the backup readable', async () => {
+    const raw = JSON.stringify(V0);
+    const inner = new MemoryKV({ [LEGACY_KEYS[0]]: raw });
+    const kv = selective(inner, (op, k) => (op === 'set' && k === STORE_KEY ? 'disk full' : null));
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('corrupt');
+    expect(await inner.getItem(BACKUP_KEY)).toBe(raw);   // backup landed first
+    expect(await inner.getItem(LEGACY_KEYS[0])).toBe(raw); // originals untouched
+  });
+
+  it('recovers on the next launch once writes work again', async () => {
+    const raw = JSON.stringify(V0);
+    const inner = new MemoryKV({ [LEGACY_KEYS[0]]: raw });
+    let failing = true;
+    const kv = selective(inner, (op, k) => (failing && op === 'set' && k === STORE_KEY ? 'disk full' : null));
+    await loadStore(kv, { today: TODAY });
+    failing = false;
+    const second = await loadStore(kv, { today: TODAY });
+    expect(second.status).toBe('migrated');
+    expect(monthsWithData(second.store)).toEqual(['2026-07', '2026-08']);
+  });
+});

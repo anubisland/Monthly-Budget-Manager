@@ -116,9 +116,19 @@ export async function loadStore(
   if (raw) {
     try {
       const parsed = JSON.parse(raw);
-      // migrateV0toV1 validates the v1 shape and degrades safely if broken.
-      const { store } = migrateV0toV1(parsed, { today: opts?.today });
-      if (isUsable(store)) return { status: 'loaded', store };
+      const { store, migrated } = migrateV0toV1(parsed, { today: opts?.today });
+      // Checking only the OUTPUT is not enough. migrateV0toV1 returns an empty
+      // store for anything it does not recognise, and an empty store passes
+      // isUsable trivially -- so a payload written by a FUTURE version of the
+      // app (version: 2) would load as an empty budget with no error, and the
+      // first autosave would then overwrite the real data. The raw payload has
+      // to be vouched for as well: a genuine v1 store satisfies isUsable(parsed),
+      // and a v0 document comes back with migrated === true. Anything else fell
+      // through to emptyStore() and belongs on the corrupt path, where it is
+      // preserved rather than silently replaced.
+      if (isUsable(store) && (migrated || isUsable(parsed))) {
+        return { status: 'loaded', store };
+      }
       throw new Error('stored value is not a usable budget store');
     } catch (e) {
       // P5: preserve, never delete. A failure to preserve must not mask the
@@ -137,10 +147,11 @@ export async function loadStore(
   try {
     // NOTE: with the current test double (MemoryKV), this catch is
     // unreachable in practice -- `failReads` is a single global flag, so a
-    // read failure here would already have short-circuited the very first
-    // `kv.getItem(STORE_KEY)` call above. A real KVStore backend could still
-    // fail here (e.g. one legacy key readable, another not), so the guard
-    // stays.
+    // Exercised by the selective-failure test: a backend can fail this read
+    // while the STORE_KEY read above succeeded -- one legacy key readable and
+    // another not. Reporting that is better than treating an unreadable device
+    // as an empty one, which would present a first-run experience to someone
+    // who has data.
     legacy = await readLegacy(kv);
   } catch (e) {
     return { status: 'corrupt', store: fresh(), error: String(e) };
