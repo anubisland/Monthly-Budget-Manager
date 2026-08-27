@@ -12,6 +12,7 @@ module.exports = {
     'src/charts/**/*.ts',
     'src/components/**/*.ts',
     'src/entry/**/*.ts',
+    'src/compare/**/*.ts',
     '!src/**/*.test.ts',
   ],
   coverageThreshold: {
