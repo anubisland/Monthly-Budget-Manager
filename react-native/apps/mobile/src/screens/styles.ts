@@ -237,47 +237,6 @@ export const styles = StyleSheet.create({
     width: 50,
     textAlign: 'right',
   },
-  formContainer: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ced4da',
-    borderRadius: 6,
-    padding: 12,
-    marginBottom: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
-  },
-  categoryInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  categoryInput: {
-    flex: 1,
-    marginRight: 8,
-    marginBottom: 0,
-  },
-  pickButton: {
-    backgroundColor: '#6c757d',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-  },
-  pickButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   addButton: {
     backgroundColor: '#007bff',
     padding: 14,
@@ -371,15 +330,6 @@ export const styles = StyleSheet.create({
     color: '#495057',
     marginTop: 16,
     marginBottom: 8,
-  },
-  categoryOption: {
-    padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e9ecef',
-  },
-  categoryOptionText: {
-    fontSize: 16,
-    color: '#212529',
   },
   monthYearOption: {
     padding: 10,
