@@ -160,3 +160,25 @@ describe('makeId', () => {
     expect(ids.size).toBe(500);
   });
 });
+
+// The update path maps over the existing list, passing non-matching entries
+// through untouched. Every other update test uses a single-entry month, so the
+// pass-through arm never ran: editing one expense in a busy month was never
+// shown to leave its neighbours alone. That is exactly what a user would
+// notice, so it is pinned here.
+describe('updating one entry in a busy month', () => {
+  it('leaves every other entry in that month untouched', () => {
+    let s = emptyStore();
+    for (let i = 0; i < 5; i++) {
+      s = upsertEntry(s, '2026-08', 'expense', entry({ id: `e${i}`, name: `Item${i}`, amount: (i + 1) * 100 }));
+    }
+    const before = getMonth(s, '2026-08').expenses.filter((e) => e.id !== 'e2');
+    s = upsertEntry(s, '2026-08', 'expense', entry({ id: 'e2', name: 'Item2', amount: 9999 }));
+    const after = getMonth(s, '2026-08').expenses;
+
+    expect(after).toHaveLength(5);
+    expect(after.find((e) => e.id === 'e2')?.amount).toBe(9999);
+    expect(after.filter((e) => e.id !== 'e2')).toEqual(before);
+    expect(after.map((e) => e.id)).toEqual(['e0', 'e1', 'e2', 'e3', 'e4']); // order preserved
+  });
+});
