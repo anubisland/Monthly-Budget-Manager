@@ -29,12 +29,25 @@ export function needsMigration(raw: unknown): boolean {
   return 'incomes' in raw || 'expenses' in raw || 'meta' in raw;
 }
 
-/** Map a free-text v0 category onto a taxonomy slug, or fall back to `other`. */
-function mapCategory(kind: EntryKind, raw: unknown): string {
-  const text = String(raw ?? '').trim().toLowerCase();
-  if (!text) return OTHER_CATEGORY_ID;
-  const hit = categoriesFor(kind).find((c) => c.id === text);
-  return hit ? hit.id : OTHER_CATEGORY_ID;
+/**
+ * Map a free-text v0 category onto a taxonomy slug, falling back to `other`.
+ *
+ * `unmatchedText` carries the original (trimmed, original-case) text only
+ * when the fallback fires because nothing matched -- never for an empty
+ * category, and never when the text already resolved to a slug (including
+ * when it was literally "other"). That distinction is what lets the caller
+ * append the user's own words to the entry name without also appending an
+ * empty string or a redundant "(Other)".
+ */
+function resolveCategory(
+  kind: EntryKind,
+  raw: unknown,
+): { id: string; unmatchedText: string | null } {
+  const original = String(raw ?? '').trim();
+  if (!original) return { id: OTHER_CATEGORY_ID, unmatchedText: null };
+  const hit = categoriesFor(kind).find((c) => c.id === original.toLowerCase());
+  if (hit) return { id: hit.id, unmatchedText: null };
+  return { id: OTHER_CATEGORY_ID, unmatchedText: original };
 }
 
 function fallbackDate(
@@ -167,10 +180,17 @@ export function migrateV0toV1(
       if (!isValidMonthKey(key)) continue;
 
       seq += 1;
+      const baseName = String(v0row.name ?? '').trim() || (kind === 'income' ? 'Income' : 'Expense');
+      const { id: category, unmatchedText } = resolveCategory(kind, v0row.category);
+      // §4.6 rule 5: the original category text must survive even when it
+      // doesn't match the taxonomy. Appending it to the name is the only
+      // place left to keep it, since the category field itself becomes
+      // 'other'.
+      const name = unmatchedText ? `${baseName} (${unmatchedText})` : baseName;
       const entry: Entry = {
         id: `v0-${seq}`,
-        name: String(v0row.name ?? '').trim() || (kind === 'income' ? 'Income' : 'Expense'),
-        category: mapCategory(kind, v0row.category),
+        name,
+        category,
         // Pass the raw value through -- upsertEntry's parseAmount tolerates
         // strings like "1,500.00". Pre-coercing with Number() here would
         // turn that into NaN and silently zero real money.

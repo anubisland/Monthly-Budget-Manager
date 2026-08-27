@@ -49,7 +49,7 @@ describe('migrateV0toV1', () => {
     const { store } = migrateV0toV1(v0);
     expect(getMonth(store, '2026-08').incomes.map((e) => e.name)).toEqual(['Salary']);
     expect(getMonth(store, '2026-08').expenses.map((e) => e.name).sort()).toEqual([
-      'Mystery',
+      'Mystery (Weird Custom Cat)',
       'No date',
       'Rent',
     ]);
@@ -68,11 +68,17 @@ describe('migrateV0toV1', () => {
     expect(rent?.category).toBe('housing');
   });
 
-  it('sends unmatched categories to other and keeps the item name', () => {
+  it('sends unmatched categories to other and preserves the original category text in the name', () => {
+    // Was: expect(mystery?.name).toBe('Mystery') -- that claim is what F3's
+    // fix corrects. Falling back to 'other' used to drop the original
+    // category text entirely; it is now appended to the name so nothing
+    // the user typed is lost.
     const { store } = migrateV0toV1(v0);
-    const mystery = getMonth(store, '2026-08').expenses.find((e) => e.name === 'Mystery');
+    const mystery = getMonth(store, '2026-08').expenses.find((e) =>
+      e.name.startsWith('Mystery'),
+    );
     expect(mystery?.category).toBe('other');
-    expect(mystery?.name).toBe('Mystery');
+    expect(mystery?.name).toBe('Mystery (Weird Custom Cat)');
   });
 
   it('gives every migrated entry an id', () => {
@@ -312,6 +318,64 @@ describe('migrateV0toV1', () => {
       expect(store.currency).toBe('EGP');
       expect(store.locale).toBe('en');
     });
+  });
+});
+
+// --- FIX 3: falling back to 'other' must not destroy the user's own text. ---
+
+describe('preserving the original category text when mapping falls back to other', () => {
+  it('appends an unmapped, non-empty category to the name and maps the category to other', () => {
+    const { store } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [{ name: 'Cat Food', category: 'Pet Supplies', amount: 30, date: '2026-08-05' }],
+    });
+    const entry = getMonth(store, '2026-08').expenses[0];
+    expect(entry.category).toBe('other');
+    expect(entry.name).toBe('Cat Food (Pet Supplies)');
+  });
+
+  it('leaves the name untouched when the category maps successfully', () => {
+    const { store } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [{ name: 'Groceries', category: 'Food', amount: 40, date: '2026-08-05' }],
+    });
+    const entry = getMonth(store, '2026-08').expenses[0];
+    expect(entry.category).toBe('food');
+    expect(entry.name).toBe('Groceries');
+  });
+
+  it('leaves the name untouched when the category is empty or whitespace-only', () => {
+    const { store } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [
+        { name: 'No Category', category: '', amount: 10, date: '2026-08-05' },
+        { name: 'Blank Category', category: '   ', amount: 10, date: '2026-08-06' },
+      ],
+    });
+    const names = getMonth(store, '2026-08').expenses.map((e) => e.name);
+    expect(names).toEqual(['No Category', 'Blank Category']);
+  });
+
+  it('does not double up parentheses when an already-migrated store is passed through again', () => {
+    const { store: migrated } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [{ name: 'Widget', category: 'Odds And Ends', amount: 5, date: '2026-08-05' }],
+    });
+    const name = getMonth(migrated, '2026-08').expenses[0].name;
+    expect(name).toBe('Widget (Odds And Ends)');
+
+    // needsMigration() is false for a version: 1 payload, so re-running
+    // migration on the already-migrated store passes it through unchanged
+    // rather than appending the category text a second time.
+    const again = migrateV0toV1(migrated);
+    expect(again.migrated).toBe(false);
+    const nameAgain = getMonth(again.store, '2026-08').expenses[0].name;
+    expect(nameAgain).toBe(name);
+    expect(nameAgain.match(/\(/g)?.length).toBe(1);
   });
 });
 
