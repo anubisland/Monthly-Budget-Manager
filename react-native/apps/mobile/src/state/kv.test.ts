@@ -54,6 +54,17 @@ describe('MemoryKV', () => {
     await expect(kv.setItem('a', '1')).rejects.toThrow('disk full');
   });
 
+  // removeItem must respect failWrites too. Task 3's migration deletes the
+  // legacy keys after writing the new store, so it needs to be able to
+  // reproduce a delete that fails.
+  it('applies failWrites to removeItem as well as setItem', async () => {
+    const kv = new MemoryKV({ a: '1' });
+    kv.failWrites = 'disk full';
+    await expect(kv.removeItem('a')).rejects.toThrow('disk full');
+    kv.failWrites = null;
+    expect(await kv.getItem('a')).toBe('1'); // the failed delete changed nothing
+  });
+
   it('can be told to fail reads', async () => {
     const kv = new MemoryKV();
     kv.failReads = 'read error';
