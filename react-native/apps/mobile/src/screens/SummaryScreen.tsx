@@ -1,10 +1,10 @@
 import React from 'react';
 import { Text, View, ScrollView, TouchableOpacity, Alert, Dimensions } from 'react-native';
-import { Entry, formatMoney, makeId, monthLabel, OTHER_CATEGORY_ID } from '@monthly-budget/shared';
+import { formatMoney, monthLabel } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
 import { t } from '../i18n';
 import { categoryLabel } from '../i18n/categoryLabel';
-import { dateForDay } from './dateDisplay';
+import { buildSampleExpenses, buildSampleIncomes } from './sampleData';
 import { styles } from './styles';
 import { Bars } from '../charts/Bars';
 import { Donut } from '../charts/Donut';
@@ -46,21 +46,8 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
   };
 
   const addSampleData = () => {
-    const sampleIncomes: Entry[] = [
-      { id: makeId(), name: 'Salary', category: OTHER_CATEGORY_ID, amount: 5000, date: dateForDay(monthKey, 1) },
-      { id: makeId(), name: 'Freelance', category: OTHER_CATEGORY_ID, amount: 1500, date: dateForDay(monthKey, 15) },
-    ];
-
-    const sampleExpenses: Entry[] = [
-      { id: makeId(), name: 'Rent', category: 'Rent', amount: 1200, date: dateForDay(monthKey, 1) },
-      { id: makeId(), name: 'Groceries', category: 'Food', amount: 400, date: dateForDay(monthKey, 3) },
-      { id: makeId(), name: 'Gas Bill', category: 'Fuel', amount: 80, date: dateForDay(monthKey, 5) },
-      { id: makeId(), name: 'Internet', category: 'Internet', amount: 60, date: dateForDay(monthKey, 10) },
-      { id: makeId(), name: 'Movies', category: 'Entertainment', amount: 25, date: dateForDay(monthKey, 12) },
-    ];
-
-    sampleIncomes.forEach((income) => upsert('income', income));
-    sampleExpenses.forEach((expense) => upsert('expense', expense));
+    buildSampleIncomes(monthKey).forEach((income) => upsert('income', income));
+    buildSampleExpenses(monthKey).forEach((expense) => upsert('expense', expense));
   };
 
   const screenWidth = Dimensions.get('window').width;

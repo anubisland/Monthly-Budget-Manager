@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import {
   BudgetDoc,
+  isKnownCategory,
   monthLabel,
   monthKey as monthKeyForDate,
   OTHER_CATEGORY_ID,
@@ -121,7 +122,14 @@ function BudgetScreen() {
           upsertToMonth(targetMonthKey(expense.date), 'expense', {
             id: makeId(),
             name: expense.name,
-            category: expense.category,
+            // An imported file can carry any free-text category (or one from
+            // an older taxonomy). Anything not in the current taxonomy is
+            // mapped to 'other' here -- the same fallback migration uses --
+            // rather than stored as-is, which would make it untranslatable
+            // by categoryLabel and invisible to nameSuggestions,
+            // amountSuggestions and detectRecurring (all of which key off
+            // real taxonomy ids).
+            category: isKnownCategory('expense', expense.category) ? expense.category : OTHER_CATEGORY_ID,
             amount: expense.amount,
             date: expense.date || dateForDay(monthKey, 1),
           });
