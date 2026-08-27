@@ -56,7 +56,10 @@ artifacts/
 .python-version
 
 # React Native / Node
+# One repo-wide rule rather than a list: a committed node_modules tree got in
+# once through a directory nobody had listed.
 **/node_modules/
+web/coverage/
 react-native/**/.expo/
 react-native/**/.turbo/
 react-native/**/.cache/

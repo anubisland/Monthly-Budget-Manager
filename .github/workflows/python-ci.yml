@@ -30,7 +30,7 @@ jobs:
           pip install pytest pytest-cov ruff
 
       - name: Lint (ruff)
-        run: ruff check budget_manager.py
+        run: ruff check budget_manager.py budget_manager_gui.py tests/
 
       - name: Run tests with coverage
         run: |

@@ -185,6 +185,29 @@ npm run build -w @monthly-budget/adapters
 
 ---
 
+## CI/CD Pipelines
+
+[![Python CI](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/python-ci.yml/badge.svg)](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/python-ci.yml)
+[![Release Build](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/release.yml/badge.svg)](https://github.com/anubisland/Monthly-Budget-Manager/actions/workflows/release.yml)
+
+All pipelines run on GitHub Actions.
+
+| Workflow | Runner | Trigger | What it does |
+|---|---|---|---|
+| `python-ci.yml` | `ubuntu-latest` | Push / PR → `main` | `ruff` lint + `pytest` with ≥80% coverage matrix (Python 3.10, 3.11, 3.12) |
+| `release.yml` | `windows-latest`, `ubuntu-latest`, `macos-latest` | Push / tag `v*.*.*` or manual dispatch | PyInstaller desktop builds (Windows `.zip`, Linux `.tar.gz`, macOS `.zip`) + Briefcase Android APK → GitHub Release |
+| `react-native-build.yml` | `ubuntu-latest`, `macos-latest` | Push / PR → `main` | React Native builds |
+
+### Artifacts
+
+- **Coverage report**: `.coverage` artifact uploaded on Python 3.12 CI runs
+- **Desktop builds**: `BudgetManager-windows-*.zip`, `BudgetManager-linux-*.tar.gz`, `BudgetManager-macos-*.zip` — attached to each GitHub Release
+- **Android APK**: built via Briefcase on Ubuntu; attached to each GitHub Release
+
+> **Note**: macOS builds are unsigned — allow them via System Settings → Privacy & Security. Linux: `chmod +x BudgetManager` after extraction.
+
+---
+
 ## Contributing
 
 1. Fork the repo and create a feature branch

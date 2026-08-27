@@ -21,6 +21,7 @@
     "react": "18.2.0",
     "react-native": "0.74.7",
     "react-native-fs": "^2.20.0",
+    "react-native-restart": "^0.0.27",
     "react-native-svg": "^15.12.1"
   },
   "devDependencies": {
