@@ -55,9 +55,28 @@ describe('t - mutation and state safety', () => {
     expect(result2).toBe('2 entries');
   });
 
-  it('substitutes a placeholder appearing twice in one string', () => {
-    // This tests that the regex replace handles multiple occurrences
-    const result = t('month.entriesCount', 'en', { count: 5 });
-    expect(result).toBe('5 entries');
+  // Previously this used 'month.entriesCount', which holds ONE placeholder --
+  // so it could not reach the multi-occurrence path it was named for. Dropping
+  // the /g flag would have left every real multi-placeholder string half
+  // substituted with the whole suite green.
+  it('substitutes every placeholder in a string that has more than one', () => {
+    const s = t('compare.heading', 'en', { current: 'August 2026', previous: 'July 2026' });
+    expect(s).toBe('August 2026 vs July 2026');
+    expect(s).not.toMatch(/\{\w+\}/);
+  });
+
+  it('substitutes the same placeholder wherever it appears, in both languages', () => {
+    for (const locale of ['en', 'ar'] as const) {
+      const s = t('compare.heading', locale, { current: 'A', previous: 'B' });
+      expect(s).not.toMatch(/\{\w+\}/);
+      expect(s).toContain('A');
+      expect(s).toContain('B');
+    }
+  });
+
+  it('leaves only the unmatched placeholder when one param is missing', () => {
+    const s = t('compare.heading', 'en', { current: 'A' });
+    expect(s).toContain('A');
+    expect(s).toContain('{previous}');
   });
 });

@@ -371,12 +371,28 @@ describe('a draft can start with the kind already known', () => {
     expect(emptyDraft(null).step).toBe('kind');
   });
 
+  // This previously asserted expect(['kind','category']).toContain(d.step),
+  // which cannot fail -- and it was hiding the opposite of what its own title
+  // claimed: back walked a kind-preset sheet onto the kind step it was opened
+  // to skip. The draft now carries a floor and back clamps to it.
   it('going back from the category step stays put when the kind was given', () => {
-    // There is nothing behind the category step in this mode, and landing on a
-    // kind step the screen already answered would be confusing.
     const d = draftReducer(emptyDraft('income'), { type: 'back' });
+    expect(d.step).toBe('category');
     expect(d.kind).toBe('income');
-    expect(['kind', 'category']).toContain(d.step);
+  });
+
+  it('still walks back to the kind step when no kind was given', () => {
+    let d = draftReducer(emptyDraft(), { type: 'pickKind', kind: 'expense' });
+    expect(d.step).toBe('category');
+    d = draftReducer(d, { type: 'back' });
+    expect(d.step).toBe('kind');
+  });
+
+  it('cannot be walked below its floor by repeated backs', () => {
+    let d = emptyDraft('expense');
+    d = draftReducer(d, { type: 'pickCategory', category: 'housing', hasSuggestions: true });
+    for (let i = 0; i < 5; i++) d = draftReducer(d, { type: 'back' });
+    expect(d.step).toBe('category');
   });
 
   it('reset returns to the starting point, not to the kind step', () => {

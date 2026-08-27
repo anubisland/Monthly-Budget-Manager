@@ -389,6 +389,10 @@ describe('a v1 store without the dismissed field', () => {
   it('is rejected when dismissed is present but not an object', () => {
     for (const bad of ['nope', 42, []]) {
       const r = migrateV0toV1({ version: 1, currency: 'USD', locale: 'en', months: {}, recurring: [], dismissed: bad });
+      // months: {} makes monthsWithData [] whether the payload was rejected or
+      // passed through, so it cannot observe the guard. A rejected payload
+      // yields a FRESH store, which is what actually distinguishes them.
+      expect(r.store.dismissed).toEqual({});
       expect(monthsWithData(r.store)).toEqual([]);
     }
   });

@@ -22,6 +22,14 @@ export interface EntryDraft {
   nameIsCustom: boolean;
   amountText: string;
   day: number | null;
+  /**
+   * The earliest step this draft can walk back to.
+   *
+   * A sheet opened from the expenses tab starts at `category` and must not let
+   * `back` land on the kind step it was opened to skip -- the tab already
+   * answered that question.
+   */
+  floor: EntryStep;
 }
 
 export type DraftAction =
@@ -50,6 +58,7 @@ const ORDER: EntryStep[] = ['kind', 'category', 'name', 'amount', 'date'];
 export function emptyDraft(kind: EntryKind | null = null): EntryDraft {
   return {
     step: kind ? 'category' : 'kind',
+    floor: kind ? 'category' : 'kind',
     kind,
     category: '',
     name: '',
@@ -59,9 +68,10 @@ export function emptyDraft(kind: EntryKind | null = null): EntryDraft {
   };
 }
 
-function stepBefore(step: EntryStep): EntryStep {
+function stepBefore(step: EntryStep, floor: EntryStep): EntryStep {
   const i = ORDER.indexOf(step);
-  return i <= 0 ? ORDER[0] : ORDER[i - 1];
+  const min = ORDER.indexOf(floor);
+  return i <= min ? floor : ORDER[i - 1];
 }
 
 /** An amount is usable only if it parses to something above zero. */
@@ -132,7 +142,7 @@ export function draftReducer(draft: EntryDraft, action: DraftAction): EntryDraft
         : draft;
 
     case 'back':
-      return { ...draft, step: stepBefore(draft.step) };
+      return { ...draft, step: stepBefore(draft.step, draft.floor) };
 
     case 'reset':
       // Reset must return to where this sheet STARTED, not to the kind step --
