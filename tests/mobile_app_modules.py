@@ -44,7 +44,7 @@ def _load_mobile_modules():
         _load_by_path("monthly_budget.core", _PKG / "monthly_budget" / "core.py")
         loaded = {
             name: _load_by_path(name, _PKG / f"{name}.py")
-            for name in ("store", "validate", "budget_data", "goals", "api")
+            for name in ("store", "validate", "errors", "decode", "budget_data", "goals", "recurring", "automation", "api")
         }
     finally:
         sys.path.remove(added)
@@ -61,6 +61,9 @@ validate = _MODULES["validate"]
 budget_data = _MODULES["budget_data"]
 goals = _MODULES["goals"]
 api = _MODULES["api"]
+automation = _MODULES["automation"]
+recurring = _MODULES["recurring"]
+decode = _MODULES["decode"]
 
 BudgetData = budget_data.BudgetData
 Goal = budget_data.Goal
@@ -87,7 +90,7 @@ def load_app_module():
         _load_by_path("monthly_budget", _PKG / "monthly_budget" / "__init__.py")
         for sub in ("core", "i18n"):
             _load_by_path(f"monthly_budget.{sub}", _PKG / "monthly_budget" / f"{sub}.py")
-        for name in ("store", "validate", "budget_data", "goals", "api"):
+        for name in ("store", "validate", "errors", "decode", "budget_data", "goals", "recurring", "automation", "api"):
             sys.modules[name] = _MODULES[name]
         return _load_by_path("budget_app", _PKG / "app.py")
     finally:
