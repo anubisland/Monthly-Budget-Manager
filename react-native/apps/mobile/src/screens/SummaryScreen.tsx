@@ -9,6 +9,7 @@ import { Bars } from '../charts/Bars';
 import { Donut } from '../charts/Donut';
 import { colorFor } from '../charts/palette';
 import { rowDirection, textAlign, writingDirection } from '../components/direction';
+import { SuggestionStrip } from '../suggest/SuggestionStrip';
 
 type SummaryScreenProps = {
   onOpenMonthPicker: () => void;
@@ -79,6 +80,8 @@ export function SummaryScreen({ onOpenMonthPicker }: SummaryScreenProps) {
         </Text>
         <Text style={styles.changeText}>{t('screen.tapToChange', store.locale)}</Text>
       </TouchableOpacity>
+
+      <SuggestionStrip />
 
       <View style={styles.statsContainer}>
         <View style={[styles.statCard, { flexDirection: rowDirection(store.locale) }]}>

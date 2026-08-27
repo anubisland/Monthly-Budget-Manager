@@ -152,4 +152,11 @@ export const ar: Record<keyof typeof en, string> = {
   'category.rental': 'الإيجار',
   'category.investment': 'الاستثمار',
   'category.gift': 'الهدية',
+
+  'suggest.heading': 'عناصر متكررة',
+  'suggest.explainer': 'ظهرت هذه العناصر في أشهر سابقة وهي غائبة عن هذا الشهر.',
+  'suggest.accept': 'إضافة',
+  'suggest.acceptLabel': 'إضافة {name}',
+  'suggest.decline': 'ليس هذا الشهر',
+  'suggest.declineLabel': 'ليس هذا الشهر: {name}',
 };

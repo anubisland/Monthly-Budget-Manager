@@ -150,4 +150,11 @@ export const en = {
   'category.rental': 'Rental',
   'category.investment': 'Investment',
   'category.gift': 'Gift',
+
+  'suggest.heading': 'Recurring items',
+  'suggest.explainer': 'These showed up in past months and are missing from this one.',
+  'suggest.accept': 'Add',
+  'suggest.acceptLabel': 'Add {name}',
+  'suggest.decline': 'Not this month',
+  'suggest.declineLabel': 'Not this month: {name}',
 } as const;
