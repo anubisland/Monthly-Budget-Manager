@@ -1,33 +1,78 @@
+// Public surface of @monthly-budget/shared.
+//
+// The legacy block at the bottom exists because apps/desktop imports it and
+// CI builds that app. Those signatures must not change.
+
+import { parseAmount } from './money';
+
+export type { Locale } from './money';
+export { parseAmount, formatMoney } from './money';
+
+export type { MonthKey } from './month';
+export {
+  isValidMonthKey,
+  monthKey,
+  currentMonthKey,
+  prevKey,
+  nextKey,
+  isFutureKey,
+  monthLabel,
+  compareKeys,
+} from './month';
+
+export type {
+  EntryKind,
+  Entry,
+  MonthEntry,
+  RecurringTemplate,
+  BudgetStore,
+  Totals,
+  CategoryAmount,
+} from './model';
+
+export type { Category } from './categories';
+export {
+  EXPENSE_CATEGORIES,
+  INCOME_CATEGORIES,
+  categoriesFor,
+  isKnownCategory,
+  OTHER_CATEGORY_ID,
+} from './categories';
+
+export { makeId } from './ids';
+
+export {
+  emptyStore,
+  getMonth,
+  upsertEntry,
+  removeEntry,
+  monthsWithData,
+} from './store';
+
+export { totalsForMonth, expensesByCategoryForMonth } from './totals';
+
+export type { Delta, DeltaStatus, Metric, CategoryDelta, MonthComparison } from './compare';
+export { makeDelta, compareMonths } from './compare';
+
+export { nameSuggestions, amountSuggestions } from './history';
+
+export { detectRecurring, suggestionsForMonth } from './recurring';
+
+export type { MigrationResult } from './migrate';
+export { needsMigration, migrateV0toV1 } from './migrate';
+
+// ---------------------------------------------------------------------------
+// Legacy API -- consumed by apps/desktop. Do not change these signatures.
+// ---------------------------------------------------------------------------
+
+export { totals, expensesByCategory } from './totals';
+
+// apps/desktop imports Income and Expense and builds them WITHOUT an id.
+// These must stay the loose shapes they are today -- do not alias to Entry.
 export type Income = { name: string; amount: number; date?: string };
 export type Expense = { name: string; category: string; amount: number; date?: string };
 export type Meta = { year: number; month: number; saved_at?: string };
 export type BudgetDoc = { meta: Meta; incomes: Income[]; expenses: Expense[] };
-
-export function parseAmount(v: any): number {
-  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[,\s]/g, ''));
-  if (!isFinite(n) || isNaN(n)) return 0;
-  return Math.round(n * 100) / 100;
-}
-
-export function totals(incomes: Income[], expenses: Expense[]) {
-  const income_total = incomes.reduce((s, r) => s + parseAmount(r.amount), 0);
-  const expense_total = expenses.reduce((s, r) => s + parseAmount(r.amount), 0);
-  const profit = income_total - expense_total;
-  const profit_margin = income_total > 0 ? (profit / income_total) * 100 : 0;
-  return { income_total, expense_total, profit, profit_margin };
-}
-
-export function expensesByCategory(expenses: Expense[]) {
-  const by: Record<string, number> = {};
-  for (const r of expenses) {
-    const k = (r.category || 'Uncategorized').trim() || 'Uncategorized';
-    by[k] = (by[k] ?? 0) + parseAmount(r.amount);
-  }
-  const total = Object.values(by).reduce((a, b) => a + b, 0) || 1;
-  return Object.entries(by)
-    .map(([category, amount]) => ({ category, amount, percent: (amount / total) * 100 }))
-    .sort((a, b) => b.amount - a.amount);
-}
 
 export function serialize(doc: BudgetDoc): string {
   return JSON.stringify(doc, null, 2);
@@ -40,11 +85,20 @@ export function deserialize(text: string): BudgetDoc {
     month: Number(raw?.meta?.month) || new Date().getMonth() + 1,
     saved_at: String(raw?.meta?.saved_at || ''),
   };
-  const incomes: Income[] = Array.isArray(raw?.incomes)
-    ? raw.incomes.map((r: any) => ({ name: String(r?.name || ''), amount: parseAmount(r?.amount), date: r?.date || undefined }))
+  const incomes = Array.isArray(raw?.incomes)
+    ? raw.incomes.map((r: Record<string, unknown>) => ({
+        name: String(r?.name || ''),
+        amount: parseAmount(r?.amount),
+        date: (r?.date as string) || undefined,
+      }))
     : [];
-  const expenses: Expense[] = Array.isArray(raw?.expenses)
-    ? raw.expenses.map((r: any) => ({ name: String(r?.name || ''), category: String(r?.category || 'Uncategorized'), amount: parseAmount(r?.amount), date: r?.date || undefined }))
+  const expenses = Array.isArray(raw?.expenses)
+    ? raw.expenses.map((r: Record<string, unknown>) => ({
+        name: String(r?.name || ''),
+        category: String(r?.category || 'Uncategorized'),
+        amount: parseAmount(r?.amount),
+        date: (r?.date as string) || undefined,
+      }))
     : [];
   return { meta, incomes, expenses };
 }
