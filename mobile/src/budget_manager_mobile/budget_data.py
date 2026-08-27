@@ -9,42 +9,16 @@ and never loses one when you navigate away from it, which is the whole point.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
-from monthly_budget.core import BudgetMonth, Expense, Income
-
+import decode
 import store
-import validate
+from decode import Goal  # re-exported: callers have always imported it from here
 
-
-@dataclass
-class Goal:
-    """A savings target that persists across months.
-
-    ``current`` accumulates deposits from every month until ``target`` is met,
-    so an unfinished goal carries over rather than restarting.
-    """
-
-    name: str
-    target: float
-    current: float = 0.0
-    icon: str = "🎯"
-    target_month: str = ""
-
-    def progress(self) -> float:
-        """Fraction complete, clamped to 1.0. Zero target reads as complete."""
-        if self.target <= 0:
-            return 1.0
-        return min(self.current / self.target, 1.0)
-
-    def done(self) -> bool:
-        return self.current >= self.target > 0
-
-    def remaining(self) -> float:
-        return max(self.target - self.current, 0.0)
+from monthly_budget.core import BudgetMonth, RecurringTransaction, TransactionRule
 
 
 class BudgetData:
@@ -62,6 +36,15 @@ class BudgetData:
         self.dropped: int = 0
         #: False when the last read failed at the I/O level; save() then refuses.
         self.readable: bool = True
+        #: Recurring templates, and the auto-category rules. Both are global
+        #: rather than per-month: a template that only existed in one month
+        #: could never recur.
+        self.recurring: List[RecurringTransaction] = []
+        self.rules: List[TransactionRule] = []
+        #: month key -> template ids already accepted or skipped there. Both
+        #: outcomes land here, so a declined template stops asking this month
+        #: and asks again next month without needing a second record.
+        self.settled: Dict[str, List[int]] = {}
 
     # ── the month in view ────────────────────────────────────────────────────
 
@@ -126,18 +109,33 @@ class BudgetData:
         dropped = doc.get("dropped", 0)
         self.months = {}
         for key, raw in doc["months"].items():
-            budget, lost = _budget_from(raw, key)
+            budget, lost = decode.budget_from(raw, key)
             dropped += lost
             self.months[key] = budget
 
         self.goals = []
         for raw in doc["goals"]:
-            goal = _goal_from(raw)
+            goal = decode.goal_from(raw)
             if goal is None:
                 dropped += 1
             else:
                 self.goals.append(goal)
 
+        self.recurring, lost = decode.templates(
+            doc.get("recurring"), RecurringTransaction, decode.RECURRING_FIELDS
+        )
+        dropped += lost
+        self.rules, lost = decode.templates(
+            doc.get("rules"), TransactionRule, decode.RULE_FIELDS
+        )
+        dropped += lost
+        self.settled, lost = decode.settled(doc.get("settled"))
+        dropped += lost
+
+        # Every decode above must have run before this point. The block used to
+        # sit higher, reading a `dropped` that counted only months and goals —
+        # so a damaged recurring template was dropped, reported in the note, and
+        # never backed up, and the next save deleted it for good.
         # An I/O failure says nothing about the file's contents, so touching it
         # would turn a transient error into permanent loss.
         self.readable = note != "unreadable"
@@ -172,101 +170,28 @@ class BudgetData:
             "current": self.current,
             "months": {k: v.to_dict() for k, v in self.months.items() if not _is_blank(v)},
             "goals": [asdict(g) for g in self.goals],
+            "recurring": [asdict(t) for t in self.recurring],
+            "rules": [asdict(r) for r in self.rules],
+            "settled": {k: sorted(v) for k, v in self.settled.items() if v},
         }
 
     def reset(self) -> None:
         """Clear everything. The UI confirms before calling this."""
         self.months = {}
         self.goals = []
+        self.recurring = []
+        self.rules = []
+        self.settled = {}
         self.current = self.this_month()
 
+    def settled_in(self, month: str) -> List[int]:
+        return self.settled.get(month, [])
 
-# ── building models from stored dicts ────────────────────────────────────────
-# store.py guarantees the containers; these guarantee the elements. A row whose
-# amount is not a number is dropped rather than summed as zero, because a rent
-# that silently becomes 0.00 is worse than a rent that is visibly missing.
-
-def _budget_from(raw: Dict, key: str) -> Tuple[BudgetMonth, int]:
-    """Build one month from stored data, dropping only the rows that are bad.
-
-    Returns the budget and how many rows were discarded.
-
-    This used to catch anything ``bm.from_dict`` raised and return an *empty*
-    month. ``from_dict`` builds every row in one comprehension, so a single
-    malformed row — one missing amount, one unexpected key — emptied the whole
-    month. Nothing recorded it, and the next save dropped the now-blank month
-    from the document entirely: the user's July disappeared for good because
-    one of its rows had a typo in it.
-    """
-    bm = BudgetMonth(month=key)
-    dropped = 0
-
-    # Defaulting to [] here rather than inside _rows is what separates "this
-    # month simply has no incomes" from "the incomes key holds something that
-    # is not a list" — the first is normal, the second is damage worth
-    # reporting, and .get() alone cannot tell them apart.
-    incomes, n = _rows(raw.get("incomes", []), Income, ("name", "amount", "date"))
-    dropped += n
-    expenses, n = _rows(raw.get("expenses", []), Expense, ("name", "amount", "category", "date"))
-    dropped += n
-
-    bm.incomes = incomes
-    bm.expenses = expenses
-    bm.total_budget = validate.amount(raw.get("total_budget"), allow_zero=True) or 0.0
-    return bm, dropped
-
-
-def _rows(raw: object, factory, fields) -> Tuple[List, int]:
-    """Validate a list of stored rows one at a time. Returns (rows, dropped)."""
-    if not isinstance(raw, list):
-        return [], 1
-
-    rows, dropped = [], 0
-    for item in raw:
-        row = _row(item, factory, fields)
-        if row is None:
-            dropped += 1
-        else:
-            rows.append(row)
-    return rows, dropped
-
-
-def _row(item: object, factory, fields):
-    """One income or expense, or None if it cannot be trusted."""
-    if not isinstance(item, dict):
-        return None
-    name = validate.text(item.get("name"))
-    amount = validate.amount(item.get("amount"), allow_zero=True)
-    if name is None or amount is None:
-        return None
-
-    built = {"name": name, "amount": amount}
-    if "category" in fields:
-        built["category"] = validate.text(item.get("category"), limit=40) or "Uncategorized"
-    if "date" in fields:
-        built["date"] = validate.date_text(item.get("date"))
-    return factory(**built)
-
-
-def _goal_from(raw: Dict) -> Optional[Goal]:
-    """One goal, or None if it cannot be trusted."""
-    if not isinstance(raw, dict):
-        return None
-    name = validate.text(raw.get("name"))
-    target = validate.amount(raw.get("target"))
-    if name is None or target is None:
-        return None
-    # A baseline we cannot parse becomes zero, which reads as *less* progress
-    # than the user had. It is counted as a drop by the caller so the file is
-    # backed up before that reduced value is written over the original.
-    baseline = validate.amount(raw.get("current"), allow_zero=True)
-    return Goal(
-        name=name,
-        target=target,
-        current=baseline if baseline is not None else 0.0,
-        icon=raw.get("icon") if isinstance(raw.get("icon"), str) else "🎯",
-        target_month=raw.get("target_month") if isinstance(raw.get("target_month"), str) else "",
-    )
+    def mark_settled(self, month: str, template_id: int) -> None:
+        """Record that a template has been accepted or skipped for ``month``."""
+        ids = self.settled.setdefault(month, [])
+        if template_id not in ids:
+            ids.append(template_id)
 
 
 def _is_blank(bm: BudgetMonth) -> bool:

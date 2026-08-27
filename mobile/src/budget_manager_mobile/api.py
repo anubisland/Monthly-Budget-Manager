@@ -16,20 +16,17 @@ from __future__ import annotations
 import json
 from typing import Callable, Dict
 
-from budget_data import Goal
-
+import automation
 import goals
 import store
 import validate
+from budget_data import Goal
+from errors import ApiError
+from errors import row as _row
 
-
-class ApiError(Exception):
-    """A request we will not carry out, with the status to answer."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.message = message
-        self.status = status
+from monthly_budget.core import (
+    apply_auto_category,
+)
 
 
 def read_payload(raw: bytes) -> Dict:
@@ -57,8 +54,19 @@ def _add_income(app, d: Dict) -> None:
 
 def _add_expense(app, d: Dict) -> None:
     name, amount, date = _entry_fields(app, d)
-    category = validate.text(d.get("category"), limit=40) or "Uncategorized"
-    app.data.month.add_expense(name, amount, category, date)
+    app.data.month.add_expense(name, amount, _category_for(app, d, name), date)
+
+
+def _category_for(app, d: Dict, name: str) -> str:
+    """The category the user chose, or the one their rules imply.
+
+    Rules only fill a gap; an explicit choice always wins. Otherwise correcting
+    a mis-categorised row would be undone the moment it was saved.
+    """
+    chosen = validate.text(d.get("category"), limit=40)
+    if chosen:
+        return chosen
+    return apply_auto_category(name, app.data.rules, "Uncategorized")
 
 
 def _entry_fields(app, d: Dict):
@@ -106,18 +114,6 @@ def _delete_income(app, d: Dict) -> None:
 
 def _delete_expense(app, d: Dict) -> None:
     app.data.month.expenses.pop(_row(d, app.data.month.expenses))
-
-
-def _row(d: Dict, rows) -> int:
-    """A row index that is really in ``rows``.
-
-    ``validate.index`` refuses negatives instead of letting Python wrap them:
-    ``pop(-1)`` would delete the last row for a request naming row -1.
-    """
-    idx = validate.index(d.get("index"), len(rows))
-    if idx is None:
-        raise ApiError("no such row", 404)
-    return idx
 
 
 def _edit_income(app, d: Dict) -> None:
@@ -274,6 +270,12 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/add-goal": _add_goal,
     "/api/delete-goal": _delete_goal,
     "/api/fund-goal": _fund_goal,
+    "/api/add-rule": automation.add_rule,
+    "/api/delete-rule": automation.delete_rule,
+    "/api/add-recurring": automation.add_recurring,
+    "/api/delete-recurring": automation.delete_recurring,
+    "/api/apply-recurring": automation.apply_recurring,
+    "/api/skip-recurring": automation.skip_recurring,
     "/api/set-budget": _set_budget,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,

@@ -77,6 +77,25 @@ header .hdr-btn:active{background:var(--card)}
 .goal-fund[disabled]{background:rgba(128,128,128,.25);color:var(--ts);cursor:default}
 .goal-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
 .goal-foot .spacer{flex:1}
+/* Pending recurring items. A prompt, never an automatic write: the engine has
+   no memory, so applying on sight would double the rent on the next open. */
+.rec-card{border-inline-start:3px solid var(--warn)}
+.rec-item{display:flex;align-items:center;gap:8px;padding:8px 0;
+  border-bottom:1px solid rgba(128,128,128,.12)}
+.rec-item:last-child{border-bottom:none}
+.rec-body{flex:1;min-width:0}
+.rec-name{font-size:13px;font-weight:600}
+.rec-meta{font-size:11px;color:var(--ts)}
+.rec-add{background:var(--pri);color:#fff;border:none;border-radius:var(--radius-sm);
+  padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer}
+.rec-skip{background:none;border:none;color:var(--ts);font-size:12px;cursor:pointer;padding:6px 4px}
+/* Rules and templates in settings */
+.mini-row{display:flex;align-items:center;gap:8px;padding:7px 0;
+  border-bottom:1px solid rgba(128,128,128,.12);font-size:12px}
+.mini-row:last-child{border-bottom:none}
+.mini-row .grow{flex:1;min-width:0}
+.mini-del{background:none;border:none;color:var(--ts);font-size:14px;cursor:pointer;padding:2px 6px}
+.mini-empty{font-size:12px;color:var(--ts);padding:6px 0}
 main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
 .page{display:none;flex-direction:column;gap:12px;animation:fadeIn .25s ease}
 .page.active{display:flex}
@@ -228,6 +247,10 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
   <main id="main">
     <!-- DASHBOARD -->
     <section id="page-home" class="page active">
+      <div class="card rec-card" id="rec-pending" style="display:none">
+        <div class="card-title" id="ct-recurring">Recurring this month</div>
+        <div id="rec-list"></div>
+      </div>
       <div class="safe-card" id="safe-card" style="background:var(--pri);color:#fff">
         <div class="label" id="safe-label" style="color:rgba(255,255,255,.7)">Budget</div>
         <div id="budget-overview"></div>
@@ -362,6 +385,29 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       <div class="setting-group">
         <h3 id="st-theme">Theme</h3>
         <button class="setting-btn" id="theme-btn" onclick="toggleTheme()">🌙 Dark Mode</button>
+      </div>
+      <div class="setting-group">
+        <h3 id="st-rules">Auto-category rules</h3>
+        <div id="rules-list"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input class="form-input" id="rule-pattern" style="flex:1;padding:9px 10px;font-size:13px" placeholder="vodafone">
+          <select class="form-input" id="rule-category" style="flex:1;padding:9px 10px;font-size:13px"></select>
+        </div>
+        <button class="setting-btn" id="btn-add-rule" onclick="addRule()" style="margin-top:6px">+ Add rule</button>
+      </div>
+      <div class="setting-group">
+        <h3 id="st-recurring">Recurring items</h3>
+        <div id="recurring-list"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px" placeholder="Rent">
+          <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" style="width:90px;padding:9px 10px;font-size:13px" placeholder="0">
+        </div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <select class="form-input" id="rec-category" style="flex:1;padding:9px 10px;font-size:13px"></select>
+          <select class="form-input" id="rec-frequency" style="flex:1;padding:9px 10px;font-size:13px"></select>
+          <select class="form-input" id="rec-day" style="width:80px;padding:9px 10px;font-size:13px"></select>
+        </div>
+        <button class="setting-btn" id="btn-add-recurring" onclick="addRecurring()" style="margin-top:6px">+ Add recurring</button>
       </div>
       <div class="setting-group">
         <h3 id="st-data">Data</h3>
@@ -709,6 +755,14 @@ async function delGoal(idx) {
 // ── i18n ──
 const TRANS = {
   en: {
+    freq_monthly: 'Monthly', freq_weekly: 'Weekly', freq_biweekly: 'Every 2 weeks',
+    freq_quarterly: 'Quarterly', freq_yearly: 'Yearly',
+    weekday_0: 'Mon', weekday_1: 'Tue', weekday_2: 'Wed', weekday_3: 'Thu',
+    weekday_4: 'Fri', weekday_5: 'Sat', weekday_6: 'Sun',
+    recurring_due: 'Recurring this month', not_this_month: 'Not now', add_it: 'Add',
+    rules_title: 'Auto-category rules', recurring_title: 'Recurring items',
+    no_rules: 'No rules yet', no_recurring: 'No recurring items yet',
+    rule_hint: 'When a name contains...', add_rule: 'Add rule', add_recurring: 'Add recurring',
     request_failed: 'That could not be done', save_failed: 'Changed, but NOT saved - free some space and try again',
     fund_all: 'All of it',
     cmp_new: 'new', was: 'was', by_category: 'By category',
@@ -751,6 +805,14 @@ const TRANS = {
     currency_label: 'Currency / العملة',
   },
   ar: {
+    freq_monthly: 'شهري', freq_weekly: 'أسبوعي', freq_biweekly: 'كل أسبوعين',
+    freq_quarterly: 'ربع سنوي', freq_yearly: 'سنوي',
+    weekday_0: 'الاثنين', weekday_1: 'الثلاثاء', weekday_2: 'الأربعاء', weekday_3: 'الخميس',
+    weekday_4: 'الجمعة', weekday_5: 'السبت', weekday_6: 'الأحد',
+    recurring_due: 'متكررات هذا الشهر', not_this_month: 'ليس الآن', add_it: 'أضف',
+    rules_title: 'قواعد التصنيف التلقائي', recurring_title: 'المعاملات المتكررة',
+    no_rules: 'لا توجد قواعد بعد', no_recurring: 'لا توجد متكررات بعد',
+    rule_hint: 'إذا احتوى الاسم على...', add_rule: 'أضف قاعدة', add_recurring: 'أضف متكرر',
     request_failed: 'تعذّر تنفيذ ذلك', save_failed: 'تمّ التغيير ولكنه لم يُحفظ — أفرِغ مساحة وأعد المحاولة',
     fund_all: 'المتبقّي كله',
     cmp_new: 'جديد', was: 'كان', by_category: 'حسب التصنيف',
@@ -950,6 +1012,129 @@ function saveBudget() {
   postAndRefresh('/api/set-budget', {total_budget: v});
   toast(t('saved_toast'));
 }
+// ── Managing rules and recurring templates ──
+// Every field that can be a choice is a choice: categories, frequency and day
+// are dropdowns filled from what the app already knows, so the only typing is
+// a name and an amount.
+
+const FREQUENCIES = ['monthly', 'weekly', 'biweekly', 'quarterly', 'yearly'];
+
+function fillSelect(id, values, labeller) {
+  let el = document.getElementById(id);
+  if (!el) return;
+  let previous = el.value;
+  el.innerHTML = values.map(v =>
+    `<option value="${v}">${labeller ? labeller(v) : v}</option>`).join('');
+  if (values.indexOf(previous) >= 0) el.value = previous;
+}
+
+function renderAutomationSettings() {
+  document.getElementById('st-rules').textContent = t('rules_title');
+  document.getElementById('st-recurring').textContent = t('recurring_title');
+  document.getElementById('btn-add-rule').textContent = '+ ' + t('add_rule');
+  document.getElementById('btn-add-recurring').textContent = '+ ' + t('add_recurring');
+  document.getElementById('rule-pattern').placeholder = t('rule_hint');
+
+  fillSelect('rule-category', CATS, tc);
+  fillSelect('rec-category', CATS, tc);
+  fillSelect('rec-frequency', FREQUENCIES, f => t('freq_' + f));
+  // Day means a weekday for weekly templates and a date otherwise, which is
+  // what the engine expects, so the options follow the chosen frequency.
+  let weekly = document.getElementById('rec-frequency').value === 'weekly';
+  let days = weekly ? [0, 1, 2, 3, 4, 5, 6]
+                    : Array.from({length: 31}, (_, i) => i + 1);
+  fillSelect('rec-day', days, d => weekly ? t('weekday_' + d) : String(d));
+
+  let rules = state.rules || [];
+  document.getElementById('rules-list').innerHTML = rules.length ? rules.map((r, i) => `
+    <div class="mini-row">
+      <span class="grow">"${r.pattern}" → ${tc(r.category)}</span>
+      <button class="mini-del" onclick="deleteRule(${i})">✕</button>
+    </div>`).join('') : `<div class="mini-empty">${t('no_rules')}</div>`;
+
+  let templates = state.recurring || [];
+  document.getElementById('recurring-list').innerHTML = templates.length ? templates.map((r, i) => `
+    <div class="mini-row">
+      <span class="grow">${r.description} · ${cs()}${r.amount.toLocaleString()} · ${t('freq_' + r.frequency)}</span>
+      <button class="mini-del" onclick="deleteRecurring(${i})">✕</button>
+    </div>`).join('') : `<div class="mini-empty">${t('no_recurring')}</div>`;
+}
+
+async function addRule() {
+  let pattern = document.getElementById('rule-pattern').value.trim();
+  if (!pattern) { toast(t('rule_hint')); return; }
+  if (await postAndRefresh('/api/add-rule', {
+    pattern: pattern, category: document.getElementById('rule-category').value,
+  })) {
+    document.getElementById('rule-pattern').value = '';
+    toast(t('added_toast'));
+  }
+}
+
+async function deleteRule(index) {
+  await postAndRefresh('/api/delete-rule', {index: index});
+}
+
+async function addRecurring() {
+  let description = document.getElementById('rec-desc').value.trim();
+  let amount = parseFloat(document.getElementById('rec-amount').value);
+  if (!description || !(amount > 0)) { toast(t('enter_amount')); return; }
+  if (await postAndRefresh('/api/add-recurring', {
+    description: description,
+    category: document.getElementById('rec-category').value,
+    amount: amount,
+    frequency: document.getElementById('rec-frequency').value,
+    day: parseInt(document.getElementById('rec-day').value, 10),
+  })) {
+    document.getElementById('rec-desc').value = '';
+    document.getElementById('rec-amount').value = '';
+    toast(t('added_toast'));
+  }
+}
+
+async function deleteRecurring(index) {
+  await postAndRefresh('/api/delete-recurring', {index: index});
+}
+
+// ── Recurring items ──
+// These are offered, never applied on sight. The engine that expands a
+// template into expenses is a pure function with no memory, so anything that
+// applied automatically would add the rent again on every month open.
+
+function renderPendingRecurring() {
+  let card = document.getElementById('rec-pending');
+  let list = state.pending_recurring || [];
+  if (!list.length) { card.style.display = 'none'; return; }
+
+  card.style.display = '';
+  document.getElementById('ct-recurring').textContent = t('recurring_due');
+  document.getElementById('rec-list').innerHTML = list.map(item => {
+    // A weekly template covers several dates in one month, so the total is
+    // what accepting actually costs — not the per-occurrence amount.
+    let meta = tc(item.category) + ' · ' + cs() + item.total.toLocaleString()
+      + (item.count > 1 ? ' (' + item.count + '×)' : '');
+    return `
+      <div class="rec-item">
+        <div class="rec-body">
+          <div class="rec-name">${item.description}</div>
+          <div class="rec-meta">${meta}</div>
+        </div>
+        <button class="rec-skip" onclick="skipRecurring(${item.id})">${t('not_this_month')}</button>
+        <button class="rec-add" onclick="applyRecurring(${item.id})">${t('add_it')}</button>
+      </div>`;
+  }).join('');
+}
+
+async function applyRecurring(id) {
+  if (await postAndRefresh('/api/apply-recurring', {id: id})) toast(t('added_toast'));
+}
+
+async function skipRecurring(id) {
+  // Recorded, not ignored: the template stops asking this month and asks
+  // again next month.
+  await postAndRefresh('/api/skip-recurring', {id: id});
+}
+
 // ── Month comparison ──
 
 // A percentage against a tiny base is arithmetically right and useless to read:
@@ -1101,6 +1286,8 @@ async function goToThisMonth() {
 function render() {
   renderMonthBar();
   renderNotice();
+  renderPendingRecurring();
+  renderAutomationSettings();
   renderComparison();
 
   // Budget overview

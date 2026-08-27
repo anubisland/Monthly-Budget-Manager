@@ -50,6 +50,11 @@ def parse_month_key(key: str) -> Tuple[int, int]:
     year, month = int(parts[0]), int(parts[1])
     if not 1 <= month <= 12:
         raise ValueError(f"month out of range: {key!r}")
+    # datetime.date cannot represent year 0, and the recurring engine builds
+    # dates: "0000-01" passed every other check and then raised out of a GET,
+    # leaving the app unable to render the screen that would move the month.
+    if year < 1:
+        raise ValueError(f"year out of range: {key!r}")
     return year, month
 
 
@@ -145,12 +150,21 @@ def _coerce_v2(raw: Dict, fallback_current: str) -> Dict:
         if is_month_key(k) and isinstance(v, dict)
     }
     current = raw.get("current")
-    return {
+    coerced = {
         "version": SCHEMA_VERSION,
         "current": str(current) if is_month_key(current) else fallback_current,
         "months": clean_months,
         "goals": [g for g in _as_list(raw.get("goals")) if isinstance(g, dict)],
     }
+    # Carried through rather than listed: this function validates the shape of
+    # the document, and the records inside these keys are validated by decode.
+    # Naming them here once meant recurring templates were saved and then
+    # dropped on the next read — which also reset the guard that stops a
+    # template being applied twice, so the rent came back every restart.
+    for passthrough in ("recurring", "rules", "settled"):
+        if passthrough in raw:
+            coerced[passthrough] = raw[passthrough]
+    return coerced
 
 
 def _as_list(value: object) -> list:
