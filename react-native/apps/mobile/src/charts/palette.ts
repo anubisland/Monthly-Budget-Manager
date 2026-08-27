@@ -19,3 +19,13 @@ export function colorFor(index: number): string {
   const n = CATEGORY_COLORS.length;
   return CATEGORY_COLORS[((index % n) + n) % n];
 }
+
+/**
+ * The two series of a month-on-month chart. Deliberately NOT drawn from
+ * CATEGORY_COLORS: "this month" and "last month" are not categories, and
+ * borrowing a category colour makes the legend read as one.
+ */
+export const SERIES_COLORS = {
+  current: '#1B6B57',
+  previous: '#B7C3BC',
+} as const;

@@ -2,9 +2,10 @@ import React from 'react';
 import { Text, View, ScrollView, Dimensions } from 'react-native';
 import { formatMoney, monthLabel, type Metric } from '@monthly-budget/shared';
 import { useBudget } from '../state/BudgetProvider';
-import { t, en, type StringKey } from '../i18n';
+import { t, type StringKey } from '../i18n';
+import { categoryLabel } from '../i18n/categoryLabel';
 import { rowDirection, textAlign, writingDirection } from '../components/direction';
-import { colorFor } from '../charts/palette';
+import { SERIES_COLORS } from '../charts/palette';
 import { GroupedBars } from '../charts/GroupedBars';
 import { comparisonView } from './comparisonModel';
 import { DeltaBadge } from './DeltaBadge';
@@ -16,17 +17,6 @@ const METRIC_LABEL_KEY: Record<Metric, StringKey> = {
   net: 'totals.net',
   margin: 'totals.margin',
 };
-
-/**
- * Category ids are stable and untranslated (see categories.ts); the display
- * name comes from `category.<id>` when that key exists, and falls back to
- * the raw id otherwise -- an entry can carry a free-typed category that
- * predates the fixed taxonomy.
- */
-function categoryLabel(category: string, locale: Parameters<typeof t>[1]): string {
-  const key = `category.${category}` as StringKey;
-  return key in en ? t(key, locale) : category;
-}
 
 export function CompareScreen() {
   const { store, monthKey } = useBudget();
@@ -55,7 +45,9 @@ export function CompareScreen() {
     previous: monthLabel(view.previousKey, locale),
   });
 
-  const seriesColors = [colorFor(0), colorFor(2)];
+  // Not colorFor(): "this month" and "last month" are not categories, and
+  // borrowing a category colour makes the legend read as one.
+  const seriesColors = [SERIES_COLORS.current, SERIES_COLORS.previous];
   const seriesLabels = [t('compare.seriesCurrent', locale), t('compare.seriesPrevious', locale)];
   const chartGroups = view.categories.map((row) => ({
     label: categoryLabel(row.category, locale),

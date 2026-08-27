@@ -13,6 +13,10 @@ module.exports = {
     'src/components/**/*.ts',
     'src/entry/**/*.ts',
     'src/compare/**/*.ts',
+    // A StyleSheet holds no logic and can only be imported by a .tsx, which
+    // testEnvironment: node cannot render -- collecting it reports an
+    // unreachable zero rather than a real gap.
+    '!src/**/styles.ts',
     '!src/**/*.test.ts',
   ],
   coverageThreshold: {
