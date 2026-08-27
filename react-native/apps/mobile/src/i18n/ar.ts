@@ -26,6 +26,7 @@ export const ar: Record<keyof typeof en, string> = {
   'status.saveFailed': 'تعذّر الحفظ. تعديلاتك ما زالت ظاهرة — حاول مرة أخرى.',
   'status.loadCorrupt': 'تعذّرت قراءة بياناتك المحفوظة. تم الاحتفاظ بها ولم تُحذف.',
   'status.migrated': 'تم تنظيم بياناتك في أشهر.',
+  'status.migratedAmountsAltered': 'تم تغيير {count} من المبالغ السالبة إلى صفر، لأن التطبيق لا يدعم المبالغ السالبة.',
 
   'action.retry': 'إعادة المحاولة',
   'action.dismiss': 'إغلاق',

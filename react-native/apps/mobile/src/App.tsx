@@ -31,7 +31,7 @@ import { rowDirection, textAlign, writingDirection } from './components/directio
 
 function BudgetScreen() {
   const {
-    status, monthKey, month, store, error, notice,
+    status, monthKey, month, store, error, notice, amountsAltered,
     goTo, goPrev, goNext, goCurrent, upsert, upsertToMonth, remove, dismissError, dismissNotice,
   } = useBudget();
 
@@ -252,6 +252,7 @@ function BudgetScreen() {
         <View style={[styles.noticeBanner, { flexDirection: rowDirection(store.locale) }]}>
           <Text style={[styles.noticeBannerText, { textAlign: textAlign(store.locale), writingDirection: writingDirection(store.locale) }]}>
             {t('status.migrated', store.locale)}
+            {!!amountsAltered && ` ${t('status.migratedAmountsAltered', store.locale, { count: amountsAltered })}`}
           </Text>
           <TouchableOpacity style={styles.bannerDismissButton} onPress={dismissNotice}>
             <Text style={styles.bannerDismissText}>{t('action.dismiss', store.locale)}</Text>

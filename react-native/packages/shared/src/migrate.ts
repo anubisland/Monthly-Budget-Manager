@@ -1,6 +1,7 @@
 import { isValidMonthKey, monthKey, type MonthKey } from './month';
 import { emptyStore, upsertEntry } from './store';
 import { categoriesFor, OTHER_CATEGORY_ID } from './categories';
+import { parseAmount } from './money';
 import type { BudgetStore, Entry, EntryKind } from './model';
 
 export interface MigrationResult {
@@ -9,6 +10,14 @@ export interface MigrationResult {
   backup: string;
   migrated: boolean;
   entriesMoved: number;
+  /**
+   * How many migrated entries had their amount changed by upsertEntry's
+   * Math.max(0, ...) clamp -- i.e. how many were negative. Migration is
+   * automatic and one-way, and this number is the only signal the UI has
+   * that a refund recorded as a negative silently became 0, and that a
+   * month total may now read higher than the original data did.
+   */
+  amountsAltered: number;
 }
 
 interface V0Entry {
@@ -148,7 +157,7 @@ export function migrateV0toV1(
   if (isRecord(raw) && raw.version === 1) {
     const validated = asUsableV1Store(raw, opts);
     if (validated) {
-      return { store: validated, backup, migrated: false, entriesMoved: 0 };
+      return { store: validated, backup, migrated: false, entriesMoved: 0, amountsAltered: 0 };
     }
     // version: 1 but the shape underneath is unusable (truncated/corrupt
     // payload) -- fall through to the same safe empty-store path as any
@@ -158,12 +167,13 @@ export function migrateV0toV1(
 
   let store = emptyStore({ currency: opts?.currency, locale: opts?.locale });
   if (!needsMigration(raw)) {
-    return { store, backup, migrated: false, entriesMoved: 0 };
+    return { store, backup, migrated: false, entriesMoved: 0, amountsAltered: 0 };
   }
 
   const doc = raw as Record<string, unknown>;
   const meta = isRecord(doc.meta) ? doc.meta : undefined;
   let entriesMoved = 0;
+  let amountsAltered = 0;
   let seq = 0;
 
   const groups: Array<{ kind: EntryKind; rows: unknown }> = [
@@ -197,10 +207,15 @@ export function migrateV0toV1(
         amount: v0row.amount as number,
         date,
       };
+      // upsertEntry clamps with Math.max(0, parseAmount(...)) -- deliberately
+      // not changed here. Comparing the parsed value against that clamp is
+      // how many entries it altered is detected, without duplicating the
+      // clamp logic itself.
+      if (parseAmount(entry.amount) < 0) amountsAltered += 1;
       store = upsertEntry(store, key, kind, entry);
       entriesMoved += 1;
     }
   }
 
-  return { store, backup, migrated: true, entriesMoved };
+  return { store, backup, migrated: true, entriesMoved, amountsAltered };
 }

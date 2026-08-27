@@ -170,10 +170,50 @@ describe('error handling (P7)', () => {
     expect(s.notice).toBe('migrated');
   });
 
+  it('carries how many amounts the migration altered', () => {
+    const s = budgetReducer(init(), {
+      type: 'loaded',
+      store: emptyStore(),
+      notice: 'migrated',
+      amountsAltered: 3,
+    });
+    expect(s.amountsAltered).toBe(3);
+  });
+
+  it('defaults amountsAltered to 0 for a migrated load that omits it', () => {
+    const s = budgetReducer(init(), {
+      type: 'loaded',
+      store: emptyStore(),
+      notice: 'migrated',
+    });
+    expect(s.amountsAltered).toBe(0);
+  });
+
+  it('leaves amountsAltered null for a load that was not a migration', () => {
+    const s = budgetReducer(init(), {
+      type: 'loaded',
+      store: emptyStore(),
+      notice: null,
+      amountsAltered: 5,
+    });
+    expect(s.amountsAltered).toBeNull();
+  });
+
   it('clears the notice on dismiss', () => {
     let s = budgetReducer(init(), { type: 'loaded', store: emptyStore(), notice: 'corrupt' });
     s = budgetReducer(s, { type: 'dismissNotice' });
     expect(s.notice).toBeNull();
+  });
+
+  it('clears amountsAltered on dismiss', () => {
+    let s = budgetReducer(init(), {
+      type: 'loaded',
+      store: emptyStore(),
+      notice: 'migrated',
+      amountsAltered: 2,
+    });
+    s = budgetReducer(s, { type: 'dismissNotice' });
+    expect(s.amountsAltered).toBeNull();
   });
 
   it('loadFailed sets status to error and records the message', () => {

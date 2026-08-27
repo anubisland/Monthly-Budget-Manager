@@ -97,6 +97,25 @@ describe('loadStore — migration (P6)', () => {
     expect(await kv.getItem(LEGACY_KEYS[1])).toBeNull();
   });
 
+  it('reports how many amounts the migration altered', async () => {
+    const withRefund = {
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [{ name: 'Refund', category: 'Food', amount: -40, date: '2026-08-02' }],
+    };
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(withRefund) });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('migrated');
+    expect(r.amountsAltered).toBe(1);
+  });
+
+  it('reports amountsAltered: 0 when nothing needed clamping', async () => {
+    const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
+    const r = await loadStore(kv, { today: TODAY });
+    expect(r.status).toBe('migrated');
+    expect(r.amountsAltered).toBe(0);
+  });
+
   it('does not migrate twice on the next launch', async () => {
     const kv = new MemoryKV({ [LEGACY_KEYS[0]]: JSON.stringify(V0) });
     await loadStore(kv, { today: TODAY });

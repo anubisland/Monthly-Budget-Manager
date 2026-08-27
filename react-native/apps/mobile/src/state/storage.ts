@@ -13,6 +13,8 @@ export interface LoadResult {
   /** Always usable, even when status is 'corrupt'. The app must be able to start. */
   store: BudgetStore;
   entriesMoved?: number;
+  /** How many migrated amounts were negative and got clamped to zero. */
+  amountsAltered?: number;
   error?: string;
   /** Non-fatal diagnostic. Set when the migration succeeded but cleanup did not. */
   warning?: string;
@@ -172,10 +174,12 @@ export async function loadStore(
 
   let store: BudgetStore;
   let entriesMoved: number | undefined;
+  let amountsAltered: number | undefined;
   try {
     const migrated = migrateV0toV1(JSON.parse(legacy.raw), { today: opts?.today });
     store = migrated.store;
     entriesMoved = migrated.entriesMoved;
+    amountsAltered = migrated.amountsAltered;
     // P6: the backup lands BEFORE the new store. If the write of the store
     // fails, the untouched originals plus the backup are still on the device.
     await kv.setItem(BACKUP_KEY, migrated.backup);
@@ -211,6 +215,7 @@ export async function loadStore(
     status: 'migrated',
     store,
     entriesMoved,
+    amountsAltered,
     ...(cleanupErrors.length
       ? { warning: `legacy cleanup failed: ${cleanupErrors.join('; ')}` }
       : {}),

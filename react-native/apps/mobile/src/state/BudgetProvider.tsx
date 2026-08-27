@@ -65,7 +65,7 @@ export function BudgetProvider({
         // Seed the autosave watermark with what we just read, so the next
         // effect does not immediately write the store straight back.
         lastSaved.current = r.store;
-        dispatch({ type: 'loaded', store: r.store, notice });
+        dispatch({ type: 'loaded', store: r.store, notice, amountsAltered: r.amountsAltered });
         if (r.status === 'corrupt' && r.error) {
           dispatch({ type: 'saveFailed', error: r.error });
         }

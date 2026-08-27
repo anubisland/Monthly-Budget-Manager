@@ -24,6 +24,7 @@ export const en = {
   'status.saveFailed': 'Could not save. Your changes are still on screen — try again.',
   'status.loadCorrupt': 'Your saved data could not be read. It has been kept safe, not deleted.',
   'status.migrated': 'Your data has been organised into months.',
+  'status.migratedAmountsAltered': '{count} negative amount(s) were changed to zero, since this app does not support negative amounts.',
 
   'action.retry': 'Try again',
   'action.dismiss': 'Dismiss',

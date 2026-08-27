@@ -24,10 +24,16 @@ export interface BudgetState {
   today: Date;
   error: string | null;
   notice: Notice;
+  /**
+   * How many amounts the migration that produced this store's data altered
+   * (negatives clamped to zero). Only meaningful alongside notice ===
+   * 'migrated'; null otherwise, including once the notice is dismissed.
+   */
+  amountsAltered: number | null;
 }
 
 export type BudgetAction =
-  | { type: 'loaded'; store: BudgetStore; notice: Notice }
+  | { type: 'loaded'; store: BudgetStore; notice: Notice; amountsAltered?: number }
   | { type: 'loadFailed'; error: string }
   | { type: 'goPrev' }
   | { type: 'goNext' }
@@ -51,6 +57,7 @@ export function initialBudgetState(today: Date = new Date()): BudgetState {
     today,
     error: null,
     notice: null,
+    amountsAltered: null,
   };
 }
 
@@ -67,7 +74,13 @@ export function canPersist(state: BudgetState): boolean {
 export function budgetReducer(state: BudgetState, action: BudgetAction): BudgetState {
   switch (action.type) {
     case 'loaded':
-      return { ...state, status: 'ready', store: action.store, notice: action.notice };
+      return {
+        ...state,
+        status: 'ready',
+        store: action.store,
+        notice: action.notice,
+        amountsAltered: action.notice === 'migrated' ? action.amountsAltered ?? 0 : null,
+      };
 
     case 'loadFailed':
       return { ...state, status: 'error', error: action.error };
@@ -141,7 +154,7 @@ export function budgetReducer(state: BudgetState, action: BudgetAction): BudgetS
       return { ...state, error: null };
 
     case 'dismissNotice':
-      return { ...state, notice: null };
+      return { ...state, notice: null, amountsAltered: null };
 
     case 'setLocale':
       // Guarded like every other mutation: a locale set before the load

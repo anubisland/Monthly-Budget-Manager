@@ -112,6 +112,38 @@ describe('migrateV0toV1', () => {
     expect(getMonth(store, '2026-08').expenses[0].amount).toBe(0);
   });
 
+  // --- FIX C: migration must report how many amounts it altered. ---
+
+  it('reports amountsAltered: 1 for a single negative amount', () => {
+    const { amountsAltered } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [],
+      expenses: [{ name: 'Refund', category: 'Food', amount: -40, date: '2026-08-02' }],
+    });
+    expect(amountsAltered).toBe(1);
+  });
+
+  it('reports amountsAltered: 0 when nothing was negative', () => {
+    const { amountsAltered } = migrateV0toV1(v0);
+    expect(amountsAltered).toBe(0);
+  });
+
+  it('counts every altered amount across a mix of negative and positive entries', () => {
+    const { amountsAltered } = migrateV0toV1({
+      meta: { year: 2026, month: 8 },
+      incomes: [
+        { name: 'Salary', amount: 6000, date: '2026-08-01' },
+        { name: 'Bad income', amount: -10, date: '2026-08-01' },
+      ],
+      expenses: [
+        { name: 'Rent', category: 'Housing', amount: 1500, date: '2026-08-01' },
+        { name: 'Refund A', category: 'Food', amount: -40, date: '2026-08-02' },
+        { name: 'Refund B', category: 'Food', amount: -5, date: '2026-08-03' },
+      ],
+    });
+    expect(amountsAltered).toBe(3);
+  });
+
   it('returns an empty v1 store for a v0 document with no entries', () => {
     const { store, entriesMoved } = migrateV0toV1({ meta: { year: 2026, month: 8 } });
     expect(store.version).toBe(1);
