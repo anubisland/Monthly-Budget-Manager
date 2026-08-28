@@ -110,6 +110,34 @@ def _activity():
     except (ImportError, AttributeError):
         return None
 
+def _int(value: int):
+    """A Python int as a java.lang.Integer, or None if that cannot be made.
+
+    ContentValues.put has nine overloads — Byte, Short, Integer, Long, Float,
+    Double and more — so a bare int leaves the Java bridge unable to choose
+    and it refuses rather than guessing:
+
+        ContentValues.put is ambiguous for arguments (str, int)
+
+    That one line was the entire failure. Every other step of the share path
+    reported working, and the line was one I added myself, to set IS_PENDING.
+
+    Two ways to name the type are tried because I have now been wrong four
+    times about which bridge idiom this build uses, and guessing a fifth is
+    not a plan. If neither works the caller skips the flag rather than losing
+    the share: a visible file is a smaller problem than no file.
+    """
+    try:
+        from java.lang import Integer
+        return Integer(int(value))
+    except Exception:  # noqa: BLE001 - bridge types have no common base
+        pass
+    try:
+        from java import jint
+        return jint(int(value))
+    except Exception:  # noqa: BLE001
+        return None
+
 def _publish(activity, path: Path):
     """Copy the file into Downloads via MediaStore and return its content URI.
 
@@ -128,7 +156,13 @@ def _publish(activity, path: Path):
     # to every app the moment it is created, so a failed write leaves a
     # zero-byte budget-2026-08.xlsx in Downloads that the user finds, opens,
     # and is told is corrupt.
-    values.put(MediaStore.MediaColumns.IS_PENDING, 1)
+    # Pending until every byte is written, so a failed write cannot leave a
+    # zero-byte file in Downloads. Skipped rather than fatal if the flag
+    # cannot be typed: the file is then briefly visible while it is written,
+    # which is worth far less than the share itself.
+    pending = _int(1)
+    if pending is not None:
+        values.put(MediaStore.MediaColumns.IS_PENDING, pending)
 
     resolver = activity.getContentResolver()
     uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
@@ -155,9 +189,11 @@ def _publish(activity, path: Path):
             pass
         raise
 
-    done = ContentValues()
-    done.put(MediaStore.MediaColumns.IS_PENDING, 0)
-    resolver.update(uri, done, None, None)
+    ready = _int(0)
+    if ready is not None:
+        done = ContentValues()
+        done.put(MediaStore.MediaColumns.IS_PENDING, ready)
+        resolver.update(uri, done, None, None)
     return uri
 
 
