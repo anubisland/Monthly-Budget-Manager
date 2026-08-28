@@ -345,7 +345,7 @@ def test_a_backup_writes_a_file_and_offers_it_to_the_share_sheet(tmp_path):
 def test_the_backup_holds_everything_needed_to_restore(tmp_path):
     """A backup that omits a month is worse than none: it restores, looks
     plausible, and quietly loses what it left out."""
-    from tests.mobile_app_modules import api, Goal
+    from tests.mobile_app_modules import Goal, api
     app = _app(tmp_path)
     app.data.go_to("2026-07")
     app.data.month.add_income("July", 7000.0, "2026-07-01")
@@ -361,7 +361,7 @@ def test_the_backup_holds_everything_needed_to_restore(tmp_path):
 
 def test_the_backup_round_trips_into_a_fresh_install(tmp_path):
     """The point of the file: it has to open on the other device."""
-    from tests.mobile_app_modules import api, BudgetData
+    from tests.mobile_app_modules import BudgetData, api
     app = _app(tmp_path)
     api.dispatch(app, "/api/backup-file", {})
 
