@@ -11,7 +11,9 @@ sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 import api
 import goals as goals_module
+import pace
 import recurring
+import trend
 import store
 import toga
 from budget_data import BudgetData
@@ -177,6 +179,9 @@ class App(toga.App):
             'rules': [{'pattern': r.pattern, 'category': r.category} for r in self.data.rules],
             'recurring': self._recurring_state(),
             'pending_recurring': self._pending_state(),
+            'pace': self._pace_state(bm),
+            'trend': trend.series(self.data.months, self.data.current),
+            'trend_avg': trend.averages(trend.series(self.data.months, self.data.current)),
         }
 
     def _categories(self, bm):
@@ -229,6 +234,13 @@ class App(toga.App):
                 'total': round(sum(e.amount for e in occurrences), 2),
             })
         return result
+
+    def _pace_state(self, bm):
+        """Whether the month on screen is on track, and where it lands."""
+        year, month = store.parse_month_key(self.data.current)
+        return pace.status(
+            bm.total_expenses(), bm.total_budget, year, month, datetime.now().date(),
+        )
 
     def _previous_summary(self):
         """The month before the one on screen, for the comparison section.

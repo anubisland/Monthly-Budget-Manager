@@ -96,6 +96,17 @@ header .hdr-btn:active{background:var(--card)}
 .mini-row .grow{flex:1;min-width:0}
 .mini-del{background:none;border:none;color:var(--ts);font-size:14px;cursor:pointer;padding:2px 6px}
 .mini-empty{font-size:12px;color:var(--ts);padding:6px 0}
+/* Six-month trend */
+.tr-wrap{display:flex;align-items:flex-end;gap:6px;height:110px;margin:10px 0 4px}
+.tr-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end}
+.tr-bars{display:flex;align-items:flex-end;gap:2px;width:100%;height:100%;justify-content:center}
+.tr-bar{width:8px;border-radius:2px 2px 0 0;min-height:2px}
+.tr-in{background:var(--inc)}
+.tr-ex{background:var(--exp)}
+.tr-lbl{font-size:9px;color:var(--ts);white-space:nowrap}
+.tr-gap{font-size:9px;color:var(--ts);opacity:.5}
+.tr-legend{display:flex;gap:12px;font-size:11px;color:var(--ts);justify-content:center;margin-top:2px}
+.tr-key{display:inline-block;width:8px;height:8px;border-radius:2px;margin-inline-end:4px}
 main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overflow-scrolling:touch;scroll-behavior:smooth}
 .page{display:none;flex-direction:column;gap:12px;animation:fadeIn .25s ease}
 .page.active{display:flex}
@@ -332,6 +343,10 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div id="compare-body"></div>
       </div>
       <div class="card">
+        <div class="card-title" id="ct-trend">Last 6 months</div>
+        <div id="trend-body"></div>
+      </div>
+      <div class="card">
         <div class="card-title" id="ct-inc-vs-exp">Income vs Expenses</div>
         <div id="inc-exp-compare"></div>
       </div>
@@ -485,9 +500,13 @@ const MONTH_NAMES = {
        'يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'],
 };
 
+function monthIndex(month) {
+  return Math.min(Math.max(month, 1), 12) - 1;
+}
+
 function monthName(month) {
   let names = MONTH_NAMES[state.lang] || MONTH_NAMES.en;
-  return names[Math.min(Math.max(month, 1), 12) - 1];
+  return names[monthIndex(month)];
 }
 
 // "2026-08" -> "August 2026". Used for the previous month in the comparison,
@@ -755,6 +774,11 @@ async function delGoal(idx) {
 // ── i18n ──
 const TRANS = {
   en: {
+    no_data: 'No data',
+    pace_on_track: 'On track for the month', pace_ahead: 'Spending ahead of pace',
+    pace_ahead_to: 'Ahead of pace — heading for {n}', pace_over: 'Over budget',
+    pace_marker: 'Where the month has reached', days_left: '{n} days left',
+    trend_title: 'Last 6 months', trend_avg: 'Average', trend_empty: 'Not enough history yet',
     freq_monthly: 'Monthly', freq_weekly: 'Weekly', freq_biweekly: 'Every 2 weeks',
     freq_quarterly: 'Quarterly', freq_yearly: 'Yearly',
     weekday_0: 'Mon', weekday_1: 'Tue', weekday_2: 'Wed', weekday_3: 'Thu',
@@ -805,6 +829,11 @@ const TRANS = {
     currency_label: 'Currency / العملة',
   },
   ar: {
+    no_data: 'لا توجد بيانات',
+    pace_on_track: 'سائر على المسار', pace_ahead: 'تُنفق أسرع من المعتاد',
+    pace_ahead_to: 'أسرع من المعتاد — متجه إلى {n}', pace_over: 'تجاوزتَ الميزانية',
+    pace_marker: 'ما مضى من الشهر', days_left: 'بقي {n} يومًا',
+    trend_title: 'آخر 6 أشهر', trend_avg: 'المتوسط', trend_empty: 'لا يوجد تاريخ كافٍ بعد',
     freq_monthly: 'شهري', freq_weekly: 'أسبوعي', freq_biweekly: 'كل أسبوعين',
     freq_quarterly: 'ربع سنوي', freq_yearly: 'سنوي',
     weekday_0: 'الاثنين', weekday_1: 'الثلاثاء', weekday_2: 'الأربعاء', weekday_3: 'الخميس',
@@ -996,13 +1025,15 @@ function renderBudgetOverview() {
   el.innerHTML = `
     <div class="amount" style="font-size:28px;color:#fff">${cs()}${budget.toLocaleString()}</div>
     <div class="sub" style="margin-top:2px;color:rgba(255,255,255,.7)">${t('total_budget')}</div>
-    <div style="margin:10px 0 6px;height:10px;background:rgba(255,255,255,.2);border-radius:5px;overflow:hidden">
+    <div style="position:relative;margin:10px 0 6px;height:10px;background:rgba(255,255,255,.2);border-radius:5px">
       <div style="height:100%;width:${pct}%;background:${isOver?'#fff':'rgba(255,255,255,.8)'};border-radius:5px;transition:width .4s"></div>
+      ${paceMarker()}
     </div>
     <div style="display:flex;justify-content:space-between;font-size:12px;color:#fff">
       <span><strong>${cs()}${spent.toLocaleString()}</strong> ${t('spent')} (${pct.toFixed(0)}%)</span>
       <span style="color:${isOver?'rgba(255,200,200,.9)':'rgba(255,255,255,.7)'}"><strong>${cs()}${Math.max(0,remaining).toLocaleString()}</strong> ${isOver?t('over_by'):t('remaining')}</span>
     </div>
+    ${paceLine()}
   `;
 }
 
@@ -1094,6 +1125,111 @@ async function addRecurring() {
 
 async function deleteRecurring(index) {
   await postAndRefresh('/api/delete-recurring', {index: index});
+}
+
+// ── Six-month trend ──
+// Two months answer "was this month worse than last?", which one holiday can
+// decide. Six answer "am I improving?", which is the question worth asking.
+
+// Written in full, once, below the chart: the axis has numbers so the reader
+// still needs to be told which months they are.
+function spanLabel(points) {
+  if (!points.length) return '';
+  let first = points[0].month.split('-');
+  let last = points[points.length - 1].month.split('-');
+  let start = monthName(parseInt(first[1], 10)) + (first[0] !== last[0] ? ' ' + first[0] : '');
+  return start + ' – ' + monthName(parseInt(last[1], 10)) + ' ' + last[0];
+}
+
+function renderTrend() {
+  let el = document.getElementById('trend-body');
+  if (!el) return;
+  document.getElementById('ct-trend').textContent = t('trend_title');
+
+  let points = state.trend || [];
+  let avg = state.trend_avg || {months: 0};
+  if (!avg.months) {
+    el.innerHTML = `<div class="cmp-empty">${t('trend_empty')}</div>`;
+    return;
+  }
+
+  // One scale for both series and every month, so the bars are comparable
+  // across the whole chart. Scaling each column to itself would make every
+  // month look identical.
+  let max = Math.max(1, ...points.map(p => Math.max(p.income, p.expenses)));
+  let columns = points.map(p => {
+    // The axis label is the month number, not its name. A number needs no
+    // translation, cannot be truncated into a broken word, and carries no
+    // joined-script shaping to get wrong — which is exactly the failure that
+    // slicing a name to three characters produced in Arabic. The full names
+    // appear once in the subtitle below, where there is room for them.
+    let label = String(parseInt(p.month.split('-')[1], 10));
+    if (p.empty) {
+      // Drawn as a gap, not as a zero: nothing recorded is not the same claim
+      // as nothing spent, and a zero column asserts the second.
+      return `<div class="tr-col"><div class="tr-bars"><span class="tr-gap">—</span></div>
+              <div class="tr-lbl">${label}</div></div>`;
+    }
+    let h = v => Math.max(2, v / max * 100);
+    return `<div class="tr-col">
+        <div class="tr-bars">
+          <div class="tr-bar tr-in" style="height:${h(p.income)}%"></div>
+          <div class="tr-bar tr-ex" style="height:${h(p.expenses)}%"></div>
+        </div>
+        <div class="tr-lbl">${label}</div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="tr-wrap">${columns}</div>
+    <div class="tr-legend">
+      <span><i class="tr-key tr-in"></i>${t('income')}</span>
+      <span><i class="tr-key tr-ex"></i>${t('expenses')}</span>
+    </div>
+    <div class="cmp-sub" style="margin-top:6px;text-align:center">${spanLabel(points)}</div>
+    <div class="cmp-sub" style="text-align:center">
+      ${t('trend_avg')} · ${t('income')} ${cs()}${avg.income.toLocaleString()}
+      · ${t('expenses')} ${cs()}${avg.expenses.toLocaleString()}
+      (${avg.months})
+    </div>`;
+}
+
+// ── Spending pace ──
+// The marker is the whole idea: a tick on the budget bar at the point the
+// month has reached. Fill past the tick means spending faster than the month
+// is passing, read at a glance with no arithmetic and no second number.
+
+function paceMarker() {
+  let p = state.pace;
+  if (!p || p.state === 'no_budget' || !p.elapsed) return '';
+  // inset-inline-start, not left: under dir="rtl" the bar fills from the
+  // right, and a marker pinned to the left would sit at the wrong end of it.
+  return `<div title="${t('pace_marker')}" style="position:absolute;top:-3px;bottom:-3px;
+    inset-inline-start:${Math.min(p.elapsed, 100)}%;width:2px;background:rgba(0,0,0,.35);
+    border-radius:1px"></div>`;
+}
+
+function paceLine() {
+  let p = state.pace;
+  if (!p || p.state === 'no_budget') return '';
+
+  let text, colour;
+  if (p.state === 'over') {
+    text = t('pace_over');
+    colour = 'rgba(255,200,200,.95)';
+  } else if (p.state === 'ahead') {
+    // The projection is the actionable part: "spending fast" is a feeling,
+    // "landing at 4,100 against 3,000" is a number to act on.
+    text = p.projected
+      ? t('pace_ahead_to').replace('{n}', cs() + Math.round(p.projected).toLocaleString())
+      : t('pace_ahead');
+    colour = 'rgba(255,224,178,.95)';
+  } else {
+    text = t('pace_on_track');
+    colour = 'rgba(255,255,255,.75)';
+  }
+  let days = p.days_left > 0 ? ' · ' + t('days_left').replace('{n}', p.days_left) : '';
+  return `<div style="margin-top:6px;font-size:11px;color:${colour}">${text}${days}</div>`;
 }
 
 // ── Recurring items ──
@@ -1289,6 +1425,7 @@ function render() {
   renderPendingRecurring();
   renderAutomationSettings();
   renderComparison();
+  renderTrend();
 
   // Budget overview
   renderBudgetOverview();
@@ -1513,7 +1650,7 @@ function renderDonut() {
   let cats = Object.entries(state.categories).filter(([k,v]) => v.amount > 0);
   if (cats.length === 0) {
     ctx.fillStyle = 'var(--ts)'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('No data', s/2, s/2);
+    ctx.fillText(t('no_data'), s/2, s/2);
     return;
   }
   
@@ -1561,7 +1698,7 @@ function renderIncomeDonut() {
   let entries = Object.entries(groups).filter(([k,v]) => v > 0);
   if (entries.length === 0) {
     ctx.fillStyle = 'var(--ts)'; ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('No data', s/2, s/2);
+    ctx.fillText(t('no_data'), s/2, s/2);
     return;
   }
   let total = entries.reduce((s, [k,v]) => s + v, 0);
