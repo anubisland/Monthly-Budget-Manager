@@ -217,12 +217,22 @@ def test_sharing_a_file_that_was_never_written_says_so(tmp_path):
     assert shared is False and "not created" in reason
 
 
-def test_sharing_off_android_reports_the_platform_not_a_crash(tmp_path):
+def test_sharing_without_the_android_bridge_says_so_precisely(tmp_path):
+    """The reason used to read "not available on this platform", which blamed
+    Android for a mistake of mine: the probe imported android.content.Intent,
+    the Pyjnius idiom, while Briefcase packages this app with Chaquopy, whose
+    bridge is java.jclass. The import failed on a real phone and the app
+    reported the platform as lacking a feature it has. A wrong diagnosis in an
+    error message is worse than none — it sends the next reader away from the
+    cause.
+    """
     from tests.mobile_app_modules import share
     target = tmp_path / "present.xlsx"
     target.write_bytes(b"x")
+
     shared, reason = share.share(target)
-    assert shared is False and "not available" in reason
+    assert shared is False
+    assert "bridge" in reason, "name the missing piece, not the platform"
 
 
 def test_the_spreadsheet_mime_type_is_the_real_one(tmp_path):
