@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
 
 import api
+import chrome
 import goals as goals_module
 import pace
 import recurring
@@ -117,10 +118,6 @@ class App(toga.App):
         # translated and changes with the tab, so the native chrome only
         # repeated it in English and took a strip of screen to do it.
         self.main_window = toga.MainWindow(title=self.formal_name)
-        try:
-            self.main_window.toolbar.clear()
-        except (AttributeError, NotImplementedError):
-            pass
         self._web = toga.WebView(
             url=f'http://127.0.0.1:{self._port}/',
             style=Pack(flex=1)
@@ -128,6 +125,10 @@ class App(toga.App):
         self.main_window.content = self._web
         print(f"[budget] WebView loading http://127.0.0.1:{self._port}/")
         self.main_window.show()
+        # After show(): the ActionBar does not exist until the window is up.
+        hidden, reason = chrome.hide_title_bar()
+        if not hidden:
+            print(f"[budget] title bar still shown: {reason}")
 
     @property
     def bm(self):
