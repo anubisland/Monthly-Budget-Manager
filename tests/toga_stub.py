@@ -19,8 +19,13 @@ class _Paths:
 class App:
     """Stands in for toga.App, which normally calls startup() itself."""
 
-    def __init__(self, formal_name="Test", app_id="test.app", data_dir=None):
+    def __init__(self, formal_name="Test", app_id="test.app", data_dir=None,
+                 version="9.9.9"):
         self.formal_name = formal_name
+        #: Briefcase sets this from pyproject.toml. Without it here, a check of
+        #: what the app reports its version to be came back empty and looked
+        #: like an app bug rather than a gap in the stub.
+        self.version = version
         self.paths = _Paths(Path(data_dir) if data_dir else None)
 
 

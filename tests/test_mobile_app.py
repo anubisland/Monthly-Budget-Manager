@@ -240,3 +240,25 @@ def test_the_previous_arrow_precedes_the_next_one_in_the_markup():
     previous button must come first for it to sit on the left."""
     page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
     assert page.index('id="month-prev"') < page.index('id="month-next"')
+
+
+def test_the_about_screen_reports_the_version_the_app_was_built_with(tmp_path):
+    """It carried "v1.0" as literal text in the page, so it stayed at 1.0
+    however far pyproject.toml moved — a hand-written copy of a value that has
+    a real source drifts from it silently, and nothing complains."""
+    instance = app_module.App("Test", "test.app", data_dir=tmp_path)
+    instance.startup()
+    try:
+        _, state = get(instance)
+        assert state["version"] == instance.version
+    finally:
+        instance._server.shutdown()
+        instance._server.server_close()
+
+
+def test_only_one_place_writes_the_about_text():
+    """There were two, and the older one appended a hardcoded version after
+    the newer one had run, so the real number never reached the screen."""
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert page.count("about-text") == 2, "the element, and exactly one writer"
+    assert "v1.0'" not in page, "no version may be written into the page"

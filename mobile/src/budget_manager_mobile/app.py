@@ -151,6 +151,18 @@ class App(toga.App):
         folder.mkdir(parents=True, exist_ok=True)
         return folder / name
 
+    def app_version(self):
+        """The version Briefcase built, not a number typed into the page.
+
+        The About screen carried "v1.0" as literal text, so it stayed at 1.0
+        however far pyproject.toml moved — a hand-written copy of a value that
+        has a real source drifts from it silently.
+        """
+        try:
+            return str(self.version)
+        except AttributeError:
+            return ""
+
     def today_iso(self):
         return datetime.now().strftime('%Y-%m-%d')
 
@@ -199,6 +211,7 @@ class App(toga.App):
             'total_budget': bm.total_budget,
             'goals': self._goals_state(),
             'dark': self.dark, 'lang': self.lang, 'currency': self.currency,
+            'version': self.app_version(),
             'today': self.today_iso(),
             'note': self.data.note,
             'dropped': self.data.dropped,

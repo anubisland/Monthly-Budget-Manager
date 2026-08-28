@@ -483,10 +483,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       </div>
       <div class="setting-group">
         <h3 id="st-about"></h3>
-        <div class="card" id="about-text" style="font-size:12px;color:var(--ts);text-align:center;padding:12px">
-          Budget Manager · Free &amp; Open Source<br>
-          v1.0
-        </div>
+        <div class="card" id="about-text" style="font-size:12px;color:var(--ts);text-align:center;padding:12px"></div>
       </div>
     </section>
   </main>
@@ -841,6 +838,7 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
+    open_source: 'Free & Open Source',
     l_rule_when: 'When the name contains', l_rule_then: 'file it under',
     rule_example: 'Example: type "vodafone" and choose Internet. Then "Vodafone bill" is filed as Internet on its own.',
     l_rec_desc: 'What is it', l_rec_amount: 'Amount', l_rec_category: 'Category',
@@ -905,6 +903,7 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
+    open_source: 'مجّاني ومفتوح المصدر',
     l_rule_when: 'إذا احتوى الاسم على', l_rule_then: 'صنّفه كـ',
     rule_example: 'مثال: اكتب «فودافون» واختر إنترنت. بعدها «فاتورة فودافون» تُصنّف إنترنت وحدها.',
     l_rec_desc: 'ما هي', l_rec_amount: 'المبلغ', l_rec_category: 'التصنيف',
@@ -995,8 +994,6 @@ function applyI18n() {
     let m = {0: t('name'), 1: t('target'), 2: t('icon')};
     if (m[i]) el.textContent = m[i];
   });
-  let at = document.getElementById('about-text');
-  if (at) at.innerHTML = t('about_text') + '<br>v1.0';
   // Action buttons
   let agBtn = document.querySelector('[onclick="addGoal()"]');
   if (agBtn) agBtn.textContent = t('add_goal_btn');
@@ -1184,6 +1181,15 @@ function renderAutomationSettings() {
   document.getElementById('st-rules').textContent = t('rules_title');
   document.getElementById('hint-rules').textContent = t('rules_hint');
   document.getElementById('hint-recurring').textContent = t('recurring_hint');
+  // From the server, which reads it from the app bundle. The page used to
+  // carry the number as text, so it never moved.
+  // One writer for this element. There were two, and the older one wrote a
+  // hardcoded v1.0 after this ran, so the real version never showed.
+  let about = document.getElementById('about-text');
+  if (about) {
+    about.innerHTML = t('about_text') +
+      (state.version ? '<br>v' + state.version : '');
+  }
   let labels = {
     'l-rule-when': 'l_rule_when', 'l-rule-then': 'l_rule_then',
     'hint-rule-example': 'rule_example', 'hint-rec-example': 'rec_example',
