@@ -6,6 +6,7 @@ re-implementation of it.
 """
 
 import json
+import pathlib
 import urllib.error
 import urllib.request
 
@@ -176,3 +177,66 @@ def test_a_request_cannot_escape_the_web_directory(live, path):
         assert "BudgetAPIHandler" not in body, f"{path} served application source"
     except urllib.error.HTTPError as err:
         assert err.code in (400, 404)
+
+
+# ── the defaults a first launch actually gets ────────────────────────────────
+
+def test_a_fresh_install_opens_in_arabic_with_egyptian_pounds(tmp_path):
+    """Checked against the real App, not the test double: fake_app.py pins its
+    own values, so a change of default here would not show up there."""
+    instance = app_module.App("Test", "test.app", data_dir=tmp_path)
+    instance.startup()
+    try:
+        _, state = get(instance)
+        assert state["lang"] == "ar"
+        assert state["currency"] == "EGP"
+    finally:
+        instance._server.shutdown()
+        instance._server.server_close()
+
+
+def test_a_saved_language_beats_the_default(tmp_path):
+    """The default must only apply to a first run; changing it must not undo
+    a choice the user already made."""
+    (tmp_path / "settings.json").write_text(
+        json.dumps({"dark": False, "lang": "en", "currency": "USD"}), "utf-8"
+    )
+    instance = app_module.App("Test", "test.app", data_dir=tmp_path)
+    instance.startup()
+    try:
+        _, state = get(instance)
+        assert state["lang"] == "en" and state["currency"] == "USD"
+    finally:
+        instance._server.shutdown()
+        instance._server.server_close()
+
+
+def test_the_page_falls_back_to_the_same_language_the_server_defaults_to():
+    """The default was written twice — app.py and a `|| 'en'` in index.html —
+    and the page's copy would have silently overridden the server's."""
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert "state.lang = state.lang || 'ar';" in page
+
+
+# ── the month arrows point along time, not along the text ────────────────────
+
+def test_the_month_bar_is_pinned_to_physical_direction():
+    """Left is the previous month and right is the next one, in both
+    languages.
+
+    An earlier version applied the RTL mirroring rule here, which is correct
+    for reading order — back in a browser, next in a list — and wrong for
+    time. Months run left to right on a number line in every calendar and
+    every chart, Arabic ones included, so the bar is pinned to ltr and only
+    the label follows the page direction.
+    """
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert "#month-bar{direction:ltr}" in page
+    assert "scaleX(-1)" not in page, "the glyphs must not be mirrored"
+
+
+def test_the_previous_arrow_precedes_the_next_one_in_the_markup():
+    """With the bar pinned to ltr, document order is visual order, so the
+    previous button must come first for it to sit on the left."""
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert page.index('id="month-prev"') < page.index('id="month-next"')

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>Budget</title>
+<title>Budget Manager</title>
 <style>
 :root {
   --bg: #f0f2f5; --card: #fff; --tx: #1a1a2e; --ts: #6b7280;
@@ -39,11 +39,14 @@ header .hdr-btn:active{background:var(--card)}
 #month-bar .mb-label:active{background:rgba(128,128,128,.08)}
 #month-bar .mb-past{font-size:10px;font-weight:600;color:#fff;background:var(--warn);
   padding:2px 6px;border-radius:8px}
-/* Flexbox already reverses the main axis under dir="rtl", so the buttons land
-   in the right places on their own — reversing again here would undo it. Only
-   the glyphs need flipping: a left-pointing chevron means "back" in English and
-   "forward" in Arabic. */
-[dir="rtl"] #month-bar .mb-arrow{transform:scaleX(-1)}
+/* The arrows are fixed to physical direction: left is always the previous
+   month and right is always the next one, in both languages. Under dir="rtl"
+   flexbox would reverse the row and put "previous" on the right, so the bar
+   is pinned to ltr; the label sets its own direction back so the month name
+   still reads correctly. Time here is a number line, not a sentence, and the
+   arrows point along it rather than along the text. */
+#month-bar{direction:ltr}
+#month-bar .mb-label{direction:inherit}
 /* Load notices. Shown once, dismissible, and never for the ordinary case —
    a banner the user sees every launch is a banner they stop reading. */
 #notice{display:none;margin:8px 16px 0;padding:10px 12px;border-radius:var(--radius-sm);
@@ -96,6 +99,10 @@ header .hdr-btn:active{background:var(--card)}
 .mini-row .grow{flex:1;min-width:0}
 .mini-del{background:none;border:none;color:var(--ts);font-size:14px;cursor:pointer;padding:2px 6px}
 .mini-empty{font-size:12px;color:var(--ts);padding:6px 0}
+/* One line under a heading, saying what the feature is for rather than what
+   it is called. Both of these were shipped with names only, and the names
+   describe the mechanism, not the benefit. */
+.hint{font-size:11px;color:var(--ts);line-height:1.5;margin:2px 0 8px}
 /* Six-month trend */
 .tr-wrap{display:flex;align-items:flex-end;gap:6px;height:110px;margin:10px 0 4px}
 .tr-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end}
@@ -308,7 +315,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
             <option value="Side Work">🔧 Side Work</option>
             <option value="Other">📌 Other</option>
           </select>
-          <input class="form-input" id="input-name-exp" placeholder="e.g. Groceries" autocomplete="off" style="display:none">
+          <input class="form-input" id="input-name-exp" autocomplete="off" style="display:none">
         </div>
         <div class="form-group">
           <label id="l-amount">Amount</label>
@@ -373,7 +380,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div class="card-title" id="ct-new-goal">New Goal</div>
         <div class="form-group">
           <label>Name</label>
-          <input class="form-input" id="g-name" placeholder="Vacation" autocomplete="off">
+          <input class="form-input" id="g-name" autocomplete="off">
         </div>
         <div class="form-group">
           <label id="l-target">Target</label>
@@ -403,6 +410,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       </div>
       <div class="setting-group">
         <h3 id="st-rules">Auto-category rules</h3>
+        <div class="hint" id="hint-rules"></div>
         <div id="rules-list"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
           <input class="form-input" id="rule-pattern" style="flex:1;padding:9px 10px;font-size:13px" placeholder="vodafone">
@@ -412,9 +420,10 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       </div>
       <div class="setting-group">
         <h3 id="st-recurring">Recurring items</h3>
+        <div class="hint" id="hint-recurring"></div>
         <div id="recurring-list"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
-          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px" placeholder="Rent">
+          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px">
           <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" style="width:90px;padding:9px 10px;font-size:13px" placeholder="0">
         </div>
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -431,7 +440,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <button class="setting-btn" id="btn-restore" onclick="restore()">📂 Restore</button>
         </div>
         <button class="setting-btn" id="btn-export" onclick="exportXLSX()" style="margin-top:6px">📊 Export XLSX</button>
-        <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)">🗑 Reset All</button>
+        <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)"></button>
       </div>
       <div class="setting-group">
         <h3 id="st-budget">Budget</h3>
@@ -805,6 +814,10 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
+    ph_goal: 'e.g. a holiday', ph_recurring: 'e.g. rent', ph_rule: 'e.g. vodafone', ph_entry: 'e.g. groceries',
+    rules_hint: 'Type a word once, and every future entry containing it gets that category automatically. Picking a category yourself always wins.',
+    recurring_hint: 'Set up a bill once — rent, a subscription — and it is offered at the start of each month. One tap adds it; nothing is added without you.',
+    reset_confirm_btn: 'Tap again to erase everything', reset_all_btn: '🗑 Reset All',
     safe_to_spend: 'Safe to Spend', income: 'Income', expenses: 'Expenses', net: 'Net',
     active_goal: 'Active Goal', budget_progress: 'Budget', recent: 'Recent',
     no_entries: 'No entries yet', no_budget: 'No budget limits set',
@@ -860,6 +873,10 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
+    ph_goal: 'مثلًا إجازة', ph_recurring: 'مثلًا الإيجار', ph_rule: 'مثلًا فودافون', ph_entry: 'مثلًا بقالة',
+    rules_hint: 'اكتب كلمة مرة واحدة، وكل حركة قادمة تحتويها تأخذ هذا التصنيف تلقائيًا. واختيارك الصريح يفوز دائمًا.',
+    recurring_hint: 'عرّف فاتورة مرة واحدة — إيجارًا أو اشتراكًا — فتُعرَض عليك أوّل كل شهر. نقرة واحدة تُضيفها، ولا يُضاف شيء بدونك.',
+    reset_confirm_btn: 'اضغط مرة أخرى لمحو كل شيء', reset_all_btn: '🗑 حذف الكل',
     safe_to_spend: 'صافي الرصيد', income: 'الدخل', expenses: 'المصروفات', net: 'الصافي',
     active_goal: 'الهدف النشط', budget_progress: 'الميزانية', recent: 'آخر الحركات',
     no_entries: 'لا توجد حركات بعد', no_budget: 'لا توجد حدود ميزانية',
@@ -965,8 +982,7 @@ function applyI18n() {
     let el = document.getElementById(id);
     if (el) el.textContent = t(key);
   }
-  let targetLbl = document.getElementById('l-target');
-  if (targetLbl) targetLbl.textContent = t('target') + ' (' + cs() + ')';
+
   // Total Budget label & Save button
   let budgetLbl = document.querySelector('.setting-group h3 + div span');
   if (budgetLbl) budgetLbl.textContent = t('total_budget') + ':';
@@ -991,15 +1007,49 @@ async function setLang(l) {
   toast(t('lang_changed'));
 }
 async function toggleTheme() {
-  let d = await api('/api/toggle-theme');
-  state.dark = d.dark;
-  document.documentElement.classList.toggle('dark', state.dark);
-  document.getElementById('theme-btn').textContent = state.dark ? t('light_mode') : t('dark_mode');
+  // Must be a POST. api() picks its method from whether a body was passed, so
+  // calling it with none sent a GET — which the server answers only for
+  // /api/data and /api/backup. The theme button was a silent 404.
+  if (!await postAndRefresh('/api/toggle-theme', {})) return;
+  applyTheme();
 }
+
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', !!state.dark);
+  let btn = document.getElementById('theme-btn');
+  if (btn) btn.textContent = state.dark ? t('light_mode') : t('dark_mode');
+}
+// Two taps instead of confirm(). An Android WebView answers the blocking
+// dialogs false unless the host app implements onJsConfirm, so this function
+// returned at its first line and never deleted anything — while looking like a
+// button the user had simply thought better of pressing.
+let resetArmed = false;
+
 async function resetAll() {
-  if (!confirm(t('reset_confirm'))) return;
-  await postAndRefresh('/api/reset', {});
-  toast(t('saved_toast'));
+  let btn = document.getElementById('btn-reset');
+  if (!resetArmed) {
+    resetArmed = true;
+    btn.textContent = t('reset_confirm_btn');
+    btn.style.background = 'var(--exp)';
+    btn.style.color = '#fff';
+    clearTimeout(btn._t);
+    // Disarms itself, so a stray tap cannot leave the button primed to wipe
+    // everything the next time it happens to be touched.
+    btn._t = setTimeout(disarmReset, 5000);
+    return;
+  }
+  disarmReset();
+  if (await postAndRefresh('/api/reset', {})) toast(t('saved_toast'));
+}
+
+function disarmReset() {
+  resetArmed = false;
+  let btn = document.getElementById('btn-reset');
+  if (!btn) return;
+  clearTimeout(btn._t);
+  btn.textContent = t('reset_all_btn');
+  btn.style.background = '';
+  btn.style.color = 'var(--exp)';
 }
 async function backup() {
   let d;
@@ -1093,7 +1143,10 @@ function fillSelect(id, values, labeller) {
 }
 
 function renderAutomationSettings() {
+  disarmReset();
   document.getElementById('st-rules').textContent = t('rules_title');
+  document.getElementById('hint-rules').textContent = t('rules_hint');
+  document.getElementById('hint-recurring').textContent = t('recurring_hint');
   document.getElementById('st-recurring').textContent = t('recurring_title');
   document.getElementById('btn-add-rule').textContent = '+ ' + t('add_rule');
   document.getElementById('btn-add-recurring').textContent = '+ ' + t('add_recurring');
@@ -1225,6 +1278,32 @@ function renderTrend() {
       · ${t('expenses')} ${cs()}${avg.expenses.toLocaleString()}
       (${avg.months})
     </div>`;
+}
+
+// Labels that name the currency belong here, not in applyI18n(). That
+// function is called only when the language changes, so a label built from
+// both the language and the currency was left showing the old symbol after a
+// currency change — "Target ($)" under a budget in ج.م. render() runs after
+// every refresh whatever caused it, so no path can forget it.
+function renderCurrencyLabels() {
+  let target = document.getElementById('l-target');
+  if (target) target.textContent = t('target') + ' (' + cs() + ')';
+  setPlaceholders();
+}
+
+// Example text inside inputs is content like any other, and three of these
+// were written straight into the HTML in English — so an Arabic user saw
+// "Vacation" and "Rent" prompting them. Set here rather than in the markup so
+// they follow the language like everything else.
+function setPlaceholders() {
+  let hints = {
+    'g-name': 'ph_goal', 'rec-desc': 'ph_recurring',
+    'rule-pattern': 'ph_rule', 'input-name-exp': 'ph_entry',
+  };
+  for (let id in hints) {
+    let el = document.getElementById(id);
+    if (el) el.placeholder = t(hints[id]);
+  }
 }
 
 // ── Spending pace ──
@@ -1462,6 +1541,7 @@ async function goToThisMonth() {
 }
 
 function render() {
+  renderCurrencyLabels();
   renderMonthBar();
   renderNotice();
   renderPendingRecurring();
@@ -1513,7 +1593,7 @@ function render() {
   // Goals list
   renderGoals();
   // Theme button
-  document.documentElement.classList.toggle('dark', state.dark);
+  applyTheme();
   document.getElementById('theme-btn').textContent = state.dark ? '☀️ Light Mode' : '🌙 Dark Mode';
   document.getElementById('lang-en').classList.toggle('active', state.lang === 'en');
   document.getElementById('lang-ar').classList.toggle('active', state.lang === 'ar');
@@ -1838,7 +1918,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   setDate('today');
   switchAddTab('inc');
   document.getElementById('date-picker').value = state.today;
-  state.lang = state.lang || 'en';
+  // Falls back only if the server sent nothing at all. The default itself
+  // lives in app.py — writing it in both places is how two defaults drift
+  // apart, and this one would have quietly overridden the other.
+  state.lang = state.lang || 'ar';
   applyI18n();
   document.getElementById('title').textContent = t('title');
 });
