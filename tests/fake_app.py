@@ -17,9 +17,15 @@ class FakeApp:
         self.dark = False
         self.lang = "en"
         self.currency = "USD"
+        self.last_export = None
+        self.export_dir = tmp_path / "exports"
         self.saved_data = 0
         self.saved_settings = 0
         self.save_error = None
+
+    def export_path(self, name):
+        self.export_dir.mkdir(parents=True, exist_ok=True)
+        return self.export_dir / name
 
     def today_iso(self):
         return self._today.strftime("%Y-%m-%d")

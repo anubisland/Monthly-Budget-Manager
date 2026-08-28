@@ -13,9 +13,9 @@ import api
 import goals as goals_module
 import pace
 import recurring
-import trend
 import store
 import toga
+import trend
 from budget_data import BudgetData
 from toga.style import Pack
 
@@ -99,6 +99,8 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
 class App(toga.App):
     def startup(self):
         self.dark = False; self.lang = "en"; self.currency = "USD"
+        #: Outcome of the last export, for the UI to report. See api._export.
+        self.last_export = None
         self._i18n = I18n.get_instance()
         self._setup_storage()
         self._load_settings()
@@ -124,6 +126,18 @@ class App(toga.App):
         used to touch a single budget now touches the current one.
         """
         return self.data.month
+
+    def export_path(self, name):
+        """Where an export goes.
+
+        A dedicated subdirectory, not the data directory: the only thing a
+        share sheet should ever be able to reach is a file the user asked for,
+        and data.json sitting beside it would be one mis-selection away from
+        being sent somewhere.
+        """
+        folder = self._dd / "exports"
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder / name
 
     def today_iso(self):
         return datetime.now().strftime('%Y-%m-%d')
@@ -176,6 +190,7 @@ class App(toga.App):
             'today': self.today_iso(),
             'note': self.data.note,
             'dropped': self.data.dropped,
+            'last_export': self.last_export,
             'rules': [{'pattern': r.pattern, 'category': r.category} for r in self.data.rules],
             'recurring': self._recurring_state(),
             'pending_recurring': self._pending_state(),
