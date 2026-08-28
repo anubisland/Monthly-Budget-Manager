@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
-<title>Budget</title>
+<title>Budget Manager</title>
 <style>
 :root {
   --bg: #f0f2f5; --card: #fff; --tx: #1a1a2e; --ts: #6b7280;
@@ -1838,7 +1838,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   setDate('today');
   switchAddTab('inc');
   document.getElementById('date-picker').value = state.today;
-  state.lang = state.lang || 'en';
+  // Falls back only if the server sent nothing at all. The default itself
+  // lives in app.py — writing it in both places is how two defaults drift
+  // apart, and this one would have quietly overridden the other.
+  state.lang = state.lang || 'ar';
   applyI18n();
   document.getElementById('title').textContent = t('title');
 });

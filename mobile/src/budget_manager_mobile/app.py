@@ -98,7 +98,11 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
 
 class App(toga.App):
     def startup(self):
-        self.dark = False; self.lang = "en"; self.currency = "USD"
+        # Arabic and Egyptian pounds by default: the app is used in Arabic, and
+        # opening in English meant changing two settings before the first entry.
+        # Both remain switchable in Settings, and a saved choice always wins —
+        # _load_settings runs after this and overwrites it.
+        self.dark = False; self.lang = "ar"; self.currency = "EGP"
         #: Outcome of the last export, for the UI to report. See api._export.
         self.last_export = None
         self._i18n = I18n.get_instance()
@@ -109,7 +113,14 @@ class App(toga.App):
         if self.data.note:
             print(f"[budget] data loaded with note: {self.data.note}")
         self._start_server()
-        self.main_window = toga.MainWindow(title="Budget")
+        # No system title bar. The page carries its own heading, which is
+        # translated and changes with the tab, so the native chrome only
+        # repeated it in English and took a strip of screen to do it.
+        self.main_window = toga.MainWindow(title=self.formal_name)
+        try:
+            self.main_window.toolbar.clear()
+        except (AttributeError, NotImplementedError):
+            pass
         self._web = toga.WebView(
             url=f'http://127.0.0.1:{self._port}/',
             style=Pack(flex=1)
