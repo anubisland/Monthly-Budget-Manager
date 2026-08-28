@@ -617,10 +617,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
-          name: Monthly Budget Manager ${{ env.VERSION }}
+          name: "Nightly ${{ env.VERSION }} (not a release)"
           body_path: release-notes.md
           draft: false
-          prerelease: false
+          # Marked pre-release so it cannot outrank a real one. These are named
+          # by date — v2026.08.28, then .29 — so they sort above every semantic
+          # version forever, and GitHub shows the newest as "Latest". The owner
+          # opened one expecting the current app and found version 0.1.0 with
+          # the com.example package: a nightly build from before the work,
+          # wearing a tag that pointed at today's commit.
+          prerelease: true
           generate_release_notes: false
           files: assets/*
 
