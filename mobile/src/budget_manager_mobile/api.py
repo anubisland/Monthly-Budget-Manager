@@ -14,16 +14,17 @@ a route that did nothing.
 from __future__ import annotations
 
 import json
-from typing import Callable, Dict
+from typing import Callable, Dict, Optional
 
 import automation
+import decode
 import goals
 import report
 import share
 import store
 import validate
 import xlsx
-from budget_data import Goal
+from budget_data import BudgetData, Goal
 from errors import ApiError
 from errors import row as _row
 
@@ -227,6 +228,95 @@ def _fund_goal(app, d: Dict) -> None:
 
 # ── exporting ────────────────────────────────────────────────────────────────
 
+def _preview_restore(app, d: Dict) -> None:
+    """Read a backup and describe what replacing the current data would cost.
+
+    Restoring is the most destructive thing the app can do: it replaces
+    everything. The storage layer protects the user from a corrupt file; it
+    cannot protect them from a deliberate overwrite, so the decision is shown
+    before it is taken rather than confirmed with a bare "are you sure".
+    """
+    incoming = _incoming(app, d)
+    app.pending_restore = incoming["doc"]
+    app.restore_preview = _difference(app.data, incoming["data"])
+
+
+def _apply_restore(app, d: Dict) -> None:
+    """Replace everything with the previewed backup.
+
+    Only from a preview: the document has to have been read and shown before
+    it can be applied, so no request can overwrite the data in one step.
+    """
+    doc = getattr(app, "pending_restore", None)
+    if doc is None:
+        raise ApiError("nothing has been previewed to restore", 409)
+
+    # The current data is written aside first. A restore is reversible for
+    # exactly as long as that file survives, which is what makes trying one
+    # a safe thing to do.
+    before = app.export_path(f"before-restore-{app.data.current}.json")
+    try:
+        before.write_text(
+            json.dumps(app.data.to_doc(), indent=2, ensure_ascii=False), "utf-8"
+        )
+    except OSError as err:
+        raise ApiError(f"could not save the current data first: {err}", 507)
+
+    store.write_doc(app.data._path, doc)
+    app.data.load()
+    app.pending_restore = None
+    app.restore_preview = None
+    app.last_export = {"path": str(before), "shared": False, "reason": "kept as a safety copy"}
+
+
+def _incoming(app, d: Dict) -> Dict:
+    """Parse pasted backup text into a document and a BudgetData to compare."""
+    text = d.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError("paste the contents of a backup file")
+    try:
+        raw = json.loads(text)
+    except ValueError as err:
+        raise ApiError(f"that is not a readable backup: {err}")
+
+    doc, note = store.migrate(raw, app.data.this_month())
+    if note in ("unreadable", "future-version"):
+        raise ApiError("that file was not written by this app")
+
+    scratch = BudgetData(app.export_path("_preview.json"), today=app.data._today)
+    scratch.months = {k: decode.budget_from(v, k)[0] for k, v in doc["months"].items()}
+    scratch.goals = [g for g in (decode.goal_from(r) for r in doc["goals"]) if g]
+    return {"doc": doc, "data": scratch}
+
+
+def _difference(current, incoming) -> Dict:
+    """What each side holds, month by month, so the choice is informed."""
+    months = sorted(set(current.months) | set(incoming.months))
+    rows = []
+    for key in months:
+        mine, theirs = current.months.get(key), incoming.months.get(key)
+        rows.append({
+            "month": key,
+            "mine": _month_summary(mine),
+            "theirs": _month_summary(theirs),
+        })
+    return {
+        "months": rows,
+        "goals_now": len(current.goals),
+        "goals_after": len(incoming.goals),
+    }
+
+
+def _month_summary(budget) -> Optional[Dict]:
+    if budget is None:
+        return None
+    return {
+        "entries": len(budget.incomes) + len(budget.expenses),
+        "income": round(budget.total_income(), 2),
+        "expenses": round(budget.total_expenses(), 2),
+    }
+
+
 def _backup(app, d: Dict) -> None:
     """Write the whole data file out and offer it to the share sheet.
 
@@ -337,6 +427,8 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/skip-recurring": automation.skip_recurring,
     "/api/export": _export,
     "/api/backup-file": _backup,
+    "/api/preview-restore": _preview_restore,
+    "/api/restore": _apply_restore,
     "/api/set-budget": _set_budget,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,
@@ -349,7 +441,7 @@ _SETTINGS_ROUTES = frozenset({"/api/toggle-theme", "/api/set-language", "/api/se
 
 #: Routes that change nothing worth persisting. Saving after one of these
 #: would rewrite the data file for an operation that only read it.
-_READ_ONLY_ROUTES = frozenset({"/api/export", "/api/backup-file"})
+_READ_ONLY_ROUTES = frozenset({"/api/export", "/api/backup-file", "/api/preview-restore"})
 
 
 def dispatch(app, path: str, payload: Dict) -> None:

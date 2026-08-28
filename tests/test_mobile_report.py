@@ -396,3 +396,102 @@ def test_the_backup_name_says_which_month_it_was_taken_in(tmp_path):
     app = _app(tmp_path)
     api.dispatch(app, "/api/backup-file", {})
     assert app.data.current in pathlib.Path(app.last_export["path"]).name
+
+
+# ── restoring: the one operation that replaces everything ────────────────────
+
+def _backup_text(tmp_path, month="2026-07", income=7000.0):
+    """A backup taken on another device."""
+    from tests.mobile_app_modules import BudgetData
+    other = BudgetData(tmp_path / "other" / "data.json", today=date(2026, 8, 27))
+    other._path.parent.mkdir(parents=True, exist_ok=True)
+    other.go_to(month)
+    other.month.add_income("Tablet", income, f"{month}-01")
+    return json.dumps(other.to_doc(), ensure_ascii=False)
+
+
+def test_a_preview_changes_nothing(tmp_path):
+    """Reading a backup must never be the same act as applying it."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    before = app.data.month.total_income()
+
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+
+    assert app.data.month.total_income() == before
+    assert app.restore_preview is not None
+
+
+def test_the_preview_shows_both_sides_month_by_month(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+
+    rows = {r["month"]: r for r in app.restore_preview["months"]}
+    assert rows["2026-08"]["mine"]["income"] == 8000.0
+    assert rows["2026-08"]["theirs"] is None, "the backup has no August"
+    assert rows["2026-07"]["theirs"]["income"] == 7000.0
+
+
+def test_restoring_requires_a_preview_first(tmp_path):
+    """No single request may replace the data."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    with pytest.raises(api.ApiError) as caught:
+        api.dispatch(app, "/api/restore", {})
+    assert caught.value.status == 409
+    assert app.data.month.total_income() == 8000.0
+
+
+def test_restoring_replaces_the_data(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+
+    assert app.data.months["2026-07"].total_income() == 7000.0
+    assert "2026-08" not in app.data.months, "the backup did not have it"
+
+
+def test_the_previous_data_is_kept_before_it_is_replaced(tmp_path):
+    """A restore is reversible for as long as that file survives, which is
+    what makes trying one a safe thing to do."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+
+    kept = json.loads(pathlib.Path(app.last_export["path"]).read_text("utf-8"))
+    assert kept["months"]["2026-08"]["incomes"][0]["amount"] == 8000.0
+
+
+def test_a_second_restore_needs_a_second_preview(tmp_path):
+    """The pending document is consumed, so a stray tap cannot repeat it."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+    with pytest.raises(api.ApiError):
+        api.dispatch(app, "/api/restore", {})
+
+
+@pytest.mark.parametrize("text", ["", "   ", "not json", "[]", '{"version": 99}'])
+def test_something_that_is_not_a_backup_is_refused(tmp_path, text):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    with pytest.raises(api.ApiError):
+        api.dispatch(app, "/api/preview-restore", {"text": text})
+    assert app.data.month.total_income() == 8000.0
+
+
+def test_a_backup_from_this_app_restores_with_no_complaint(tmp_path):
+    """The round trip that matters: back up here, restore there."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    text = pathlib.Path(app.last_export["path"]).read_text("utf-8")
+
+    api.dispatch(app, "/api/preview-restore", {"text": text})
+    api.dispatch(app, "/api/restore", {})
+    assert app.data.month.total_income() == 8000.0
+    assert app.data.note is None

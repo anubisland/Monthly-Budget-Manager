@@ -120,6 +120,16 @@ header .hdr-btn:active{background:var(--card)}
 .rule-form .pair{display:flex;gap:8px}
 .rule-form .pair > div{flex:1;min-width:0}
 .mini-label{font-size:11px;font-weight:600;color:var(--ts);margin-top:6px;display:block}
+/* The restore comparison. Shown before anything is replaced, because a
+   confirmation dialog asks whether you are sure without telling you what
+   you would lose. */
+.rst-row{display:flex;gap:8px;padding:6px 0;font-size:11px;
+  border-bottom:1px solid rgba(128,128,128,.12)}
+.rst-row:last-child{border-bottom:none}
+.rst-m{flex:0 0 62px;font-weight:600}
+.rst-side{flex:1;min-width:0}
+.rst-gone{color:var(--exp);font-weight:600}
+.rst-new{color:var(--inc);font-weight:600}
 /* Six-month trend */
 .tr-wrap{display:flex;align-items:flex-end;gap:6px;height:110px;margin:10px 0 4px}
 .tr-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end}
@@ -473,9 +483,17 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <h3 id="st-data"></h3>
         <div class="setting-row">
           <button class="setting-btn" id="btn-backup" onclick="backup()">💾 Backup</button>
-          <button class="setting-btn" id="btn-restore" onclick="restore()">📂 Restore</button>
+          <button class="setting-btn" id="btn-restore" onclick="toggleRestore()"></button>
         </div>
         <button class="setting-btn" id="btn-export" onclick="exportXLSX()" style="margin-top:6px">📊 Export XLSX</button>
+        <div id="restore-panel" style="display:none;margin-top:8px">
+          <label class="mini-label" id="l-restore"></label>
+          <textarea class="form-input" id="restore-text" rows="4"
+            style="width:100%;padding:9px 10px;font-size:12px;font-family:monospace"></textarea>
+          <div class="hint" id="hint-restore"></div>
+          <button class="setting-btn" id="btn-preview-restore" onclick="previewRestore()"></button>
+          <div id="restore-diff"></div>
+        </div>
         <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)"></button>
       </div>
       <div class="setting-group">
@@ -848,6 +866,12 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
+    restore_btn: '📂 Restore from a backup', l_restore: 'Paste the backup here',
+    restore_hint: 'Open the backup file you shared to this device, copy everything in it, and paste it here. Nothing changes until you have seen what it would replace.',
+    restore_paste_first: 'Paste a backup first', preview_restore_btn: 'Show me what would change',
+    rst_heading: 'Now, against the backup', rst_now: 'now', rst_after: 'after',
+    rst_goals: 'Goals: {a} now, {b} after.', rst_losing: '{n} month(s) would be removed.',
+    rst_apply: 'Replace my data with this backup', rst_done: 'Restored',
     open_source: 'Free & Open Source',
     l_rule_when: 'When the name contains', l_rule_then: 'file it under',
     rule_example: 'Example: type "vodafone" and choose Internet. Then "Vodafone bill" is filed as Internet on its own.',
@@ -913,6 +937,12 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
+    restore_btn: '📂 استعادة من نسخة', l_restore: 'الصق النسخة هنا',
+    restore_hint: 'افتح ملفّ النسخة الذي أرسلتَه لهذا الجهاز، وانسخ محتواه كله، والصقه هنا. لا يتغيّر شيء حتى ترى ماذا سيُستبدل.',
+    restore_paste_first: 'الصق النسخة أوّلًا', preview_restore_btn: 'أرِني ماذا سيتغيّر',
+    rst_heading: 'الآن، مقابل النسخة', rst_now: 'الآن', rst_after: 'بعدها',
+    rst_goals: 'الأهداف: {a} الآن، {b} بعدها.', rst_losing: 'ستُحذف {n} شهرًا.',
+    rst_apply: 'استبدل بياناتي بهذه النسخة', rst_done: 'تمّت الاستعادة',
     open_source: 'مجّاني ومفتوح المصدر',
     l_rule_when: 'إذا احتوى الاسم على', l_rule_then: 'صنّفه كـ',
     rule_example: 'مثال: اكتب «فودافون» واختر إنترنت. بعدها «فاتورة فودافون» تُصنّف إنترنت وحدها.',
@@ -1122,8 +1152,67 @@ function reportFileResult() {
   let name = parts.split('/').pop();
   toast(t('export_saved').replace('{path}', name));
 }
-function restore() { toast(t('restore_unavailable')); }
+// Restoring replaces everything, so it is three deliberate steps: paste the
+// backup, see what it would change, then apply. A confirmation dialog would
+// ask whether you are sure without telling you what you would lose.
+function toggleRestore() {
+  let panel = document.getElementById('restore-panel');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  if (panel.style.display === 'none') clearRestore();
+}
 
+function clearRestore() {
+  document.getElementById('restore-text').value = '';
+  document.getElementById('restore-diff').innerHTML = '';
+}
+
+async function previewRestore() {
+  let text = document.getElementById('restore-text').value.trim();
+  if (!text) { toast(t('restore_paste_first')); return; }
+  if (!await postAndRefresh('/api/preview-restore', {text: text})) return;
+  renderRestoreDiff();
+}
+
+function renderRestoreDiff() {
+  let el = document.getElementById('restore-diff');
+  let d = state.restore_preview;
+  if (!d) { el.innerHTML = ''; return; }
+
+  let rows = d.months.map(m => {
+    // Red for what disappears, green for what arrives.
+    // Both totals, not just expenses: a month of pure income showed as
+    // "0" and read as empty, which is the opposite of what it is — and
+    // this table exists to prevent a decision made on a wrong impression.
+    let side = s => s ? '+' + cs() + s.income.toLocaleString() +
+                        ' / -' + cs() + s.expenses.toLocaleString() : '—';
+    let mine = side(m.mine);
+    let theirs = side(m.theirs);
+    let lost = m.mine && !m.theirs;
+    let gained = !m.mine && m.theirs;
+    return `<div class="rst-row">
+        <span class="rst-m">${monthKeyLabel(m.month)}</span>
+        <span class="rst-side ${lost ? 'rst-gone' : ''}">${t('rst_now')}: ${mine}</span>
+        <span class="rst-side ${gained ? 'rst-new' : ''}">${t('rst_after')}: ${theirs}</span>
+      </div>`;
+  }).join('');
+
+  let losing = d.months.filter(m => m.mine && !m.theirs).length;
+  el.innerHTML = `
+    <div class="cmp-sub" style="margin-top:8px">${t('rst_heading')}</div>
+    ${rows}
+    <div class="hint" style="margin-top:8px">${t('rst_goals')
+      .replace('{a}', d.goals_now).replace('{b}', d.goals_after)}</div>
+    ${losing ? `<div class="hint rst-gone">${t('rst_losing').replace('{n}', losing)}</div>` : ''}
+    <button class="setting-btn danger" style="color:var(--exp)"
+      onclick="applyRestore()">${t('rst_apply')}</button>`;
+}
+
+async function applyRestore() {
+  if (!await postAndRefresh('/api/restore', {})) return;
+  clearRestore();
+  document.getElementById('restore-panel').style.display = 'none';
+  toast(t('rst_done'));
+}
 async function exportXLSX() {
   if (!await postAndRefresh('/api/export', {month: state.month_key})) return;
   reportFileResult();
@@ -1195,6 +1284,8 @@ function renderAutomationSettings() {
       (state.version ? '<br>v' + state.version : '');
   }
   let labels = {
+    'btn-restore': 'restore_btn', 'l-restore': 'l_restore',
+    'hint-restore': 'restore_hint', 'btn-preview-restore': 'preview_restore_btn',
     'l-rule-when': 'l_rule_when', 'l-rule-then': 'l_rule_then',
     'hint-rule-example': 'rule_example', 'hint-rec-example': 'rec_example',
     'l-rec-desc': 'l_rec_desc', 'l-rec-amount': 'l_rec_amount',
