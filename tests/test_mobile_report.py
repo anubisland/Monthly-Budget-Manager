@@ -495,3 +495,24 @@ def test_a_backup_from_this_app_restores_with_no_complaint(tmp_path):
     api.dispatch(app, "/api/restore", {})
     assert app.data.month.total_income() == 8000.0
     assert app.data.note is None
+
+
+def test_a_failed_share_says_which_step_was_missing(tmp_path):
+    """Four releases went out guessing at which piece of the Android path was
+    unavailable. The app knew and did not say: share() returned a reason and
+    the UI printed a file name instead. One message back now settles what four
+    rounds of guessing did not."""
+    from tests.mobile_app_modules import share
+    target = tmp_path / "present.xlsx"
+    target.write_bytes(b"x")
+
+    shared, reason = share.share(target)
+    assert shared is False
+    for step in ("MainActivity", "Intent", "MediaStore"):
+        assert step in reason, f"{step} must be reported either way"
+
+
+def test_the_diagnosis_names_every_step_of_the_path():
+    from tests.mobile_app_modules import share
+    line = share.diagnose()
+    assert line.count("=") >= 3, "one verdict per step"

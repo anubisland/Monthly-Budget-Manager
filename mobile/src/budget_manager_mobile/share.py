@@ -53,7 +53,7 @@ def share(path: Path, title: str = "") -> Tuple[bool, Optional[str]]:
         # reason) pair — and with it the path to a file that does exist.
         activity = _activity()
         if activity is None:
-            return False, "no android activity (running off-device?)"
+            return False, "no activity [%s]" % diagnose()
         uri = _publish(activity, path)
         if uri is None:
             return False, "could not publish the file"
@@ -63,27 +63,47 @@ def share(path: Path, title: str = "") -> Tuple[bool, Optional[str]]:
         # Deliberately broad: the Java bridge raises platform exception types
         # that share no Python base class, and losing a written export to an
         # unanticipated one would be worse than reporting it.
-        return False, f"sharing failed: {err}"
+        return False, "failed: %s [%s]" % (err, diagnose())
+
+
+def diagnose() -> str:
+    """Which step of the share path is available, as a short readable line.
+
+    Four releases went out claiming to fix sharing, each based on a guess at
+    which piece was missing. This reports it instead. The string is shown to
+    the user when the share sheet does not open, so one message back settles
+    what four rounds of guessing did not.
+    """
+    steps = []
+    try:
+        from org.beeware.android import MainActivity
+        steps.append("MainActivity=yes")
+        try:
+            steps.append("singleton=%s" % ("yes" if MainActivity.singletonThis else "none"))
+        except Exception as err:  # noqa: BLE001
+            steps.append("singleton=err:%s" % type(err).__name__)
+    except Exception as err:  # noqa: BLE001
+        steps.append("MainActivity=no:%s" % type(err).__name__)
+
+    for label, module, name in (
+        ("Intent", "android.content", "Intent"),
+        ("MediaStore", "android.provider", "MediaStore"),
+    ):
+        try:
+            __import__(module, fromlist=[name])
+            steps.append("%s=yes" % label)
+        except Exception as err:  # noqa: BLE001
+            steps.append("%s=no:%s" % (label, type(err).__name__))
+    return " ".join(steps)
 
 
 def _activity():
-    """The Activity, taken the way toga-android itself takes it.
-
-    Two earlier attempts guessed at this instead of reading the code that
-    already works in this exact build — first suspecting the import style,
-    then rewriting every Java lookup around a different bridge. Neither was
-    the problem. toga-android imports Android classes plainly, and it holds
-    the Activity as MainActivity.singletonThis, set up before any of our code
-    runs. The import was right all along; walking toga.App.app._impl.native to
-    find the Activity was not, and that is the line both rewrites left alone.
-    """
+    """The Activity, taken the way toga-android itself takes it."""
     try:
         from org.beeware.android import MainActivity
         return MainActivity.singletonThis
     except (ImportError, AttributeError):
         pass
-    # Fallback for a build where that class moved: toga keeps the same object
-    # on the app implementation.
     try:
         import toga
         return toga.App.app._impl.native
