@@ -315,7 +315,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
             <option value="Side Work">🔧 Side Work</option>
             <option value="Other">📌 Other</option>
           </select>
-          <input class="form-input" id="input-name-exp" placeholder="e.g. Groceries" autocomplete="off" style="display:none">
+          <input class="form-input" id="input-name-exp" autocomplete="off" style="display:none">
         </div>
         <div class="form-group">
           <label id="l-amount">Amount</label>
@@ -380,7 +380,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div class="card-title" id="ct-new-goal">New Goal</div>
         <div class="form-group">
           <label>Name</label>
-          <input class="form-input" id="g-name" placeholder="Vacation" autocomplete="off">
+          <input class="form-input" id="g-name" autocomplete="off">
         </div>
         <div class="form-group">
           <label id="l-target">Target</label>
@@ -423,7 +423,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div class="hint" id="hint-recurring"></div>
         <div id="recurring-list"></div>
         <div style="display:flex;gap:6px;margin-top:8px">
-          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px" placeholder="Rent">
+          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px">
           <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" style="width:90px;padding:9px 10px;font-size:13px" placeholder="0">
         </div>
         <div style="display:flex;gap:6px;margin-top:6px">
@@ -814,6 +814,7 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
+    ph_goal: 'e.g. a holiday', ph_recurring: 'e.g. rent', ph_rule: 'e.g. vodafone', ph_entry: 'e.g. groceries',
     rules_hint: 'Type a word once, and every future entry containing it gets that category automatically. Picking a category yourself always wins.',
     recurring_hint: 'Set up a bill once — rent, a subscription — and it is offered at the start of each month. One tap adds it; nothing is added without you.',
     reset_confirm_btn: 'Tap again to erase everything', reset_all_btn: '🗑 Reset All',
@@ -872,6 +873,7 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
+    ph_goal: 'مثلًا إجازة', ph_recurring: 'مثلًا الإيجار', ph_rule: 'مثلًا فودافون', ph_entry: 'مثلًا بقالة',
     rules_hint: 'اكتب كلمة مرة واحدة، وكل حركة قادمة تحتويها تأخذ هذا التصنيف تلقائيًا. واختيارك الصريح يفوز دائمًا.',
     recurring_hint: 'عرّف فاتورة مرة واحدة — إيجارًا أو اشتراكًا — فتُعرَض عليك أوّل كل شهر. نقرة واحدة تُضيفها، ولا يُضاف شيء بدونك.',
     reset_confirm_btn: 'اضغط مرة أخرى لمحو كل شيء', reset_all_btn: '🗑 حذف الكل',
@@ -980,8 +982,7 @@ function applyI18n() {
     let el = document.getElementById(id);
     if (el) el.textContent = t(key);
   }
-  let targetLbl = document.getElementById('l-target');
-  if (targetLbl) targetLbl.textContent = t('target') + ' (' + cs() + ')';
+
   // Total Budget label & Save button
   let budgetLbl = document.querySelector('.setting-group h3 + div span');
   if (budgetLbl) budgetLbl.textContent = t('total_budget') + ':';
@@ -1279,6 +1280,32 @@ function renderTrend() {
     </div>`;
 }
 
+// Labels that name the currency belong here, not in applyI18n(). That
+// function is called only when the language changes, so a label built from
+// both the language and the currency was left showing the old symbol after a
+// currency change — "Target ($)" under a budget in ج.م. render() runs after
+// every refresh whatever caused it, so no path can forget it.
+function renderCurrencyLabels() {
+  let target = document.getElementById('l-target');
+  if (target) target.textContent = t('target') + ' (' + cs() + ')';
+  setPlaceholders();
+}
+
+// Example text inside inputs is content like any other, and three of these
+// were written straight into the HTML in English — so an Arabic user saw
+// "Vacation" and "Rent" prompting them. Set here rather than in the markup so
+// they follow the language like everything else.
+function setPlaceholders() {
+  let hints = {
+    'g-name': 'ph_goal', 'rec-desc': 'ph_recurring',
+    'rule-pattern': 'ph_rule', 'input-name-exp': 'ph_entry',
+  };
+  for (let id in hints) {
+    let el = document.getElementById(id);
+    if (el) el.placeholder = t(hints[id]);
+  }
+}
+
 // ── Spending pace ──
 // The marker is the whole idea: a tick on the budget bar at the point the
 // month has reached. Fill past the tick means spending faster than the month
@@ -1514,6 +1541,7 @@ async function goToThisMonth() {
 }
 
 function render() {
+  renderCurrencyLabels();
   renderMonthBar();
   renderNotice();
   renderPendingRecurring();
