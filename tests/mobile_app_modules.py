@@ -22,7 +22,7 @@ from pathlib import Path
 #: Loaded in dependency order: each imports only the ones before it.
 _MOBILE_MODULES = (
     "store", "validate", "errors", "decode",
-    "budget_data", "goals", "recurring", "automation", "api",
+    "budget_data", "goals", "recurring", "automation", "pace", "trend", "api",
 )
 
 _MOBILE_SRC = Path(__file__).resolve().parents[1] / "mobile" / "src"
@@ -70,6 +70,8 @@ api = _MODULES["api"]
 automation = _MODULES["automation"]
 recurring = _MODULES["recurring"]
 decode = _MODULES["decode"]
+pace = _MODULES["pace"]
+trend = _MODULES["trend"]
 
 BudgetData = budget_data.BudgetData
 Goal = budget_data.Goal
