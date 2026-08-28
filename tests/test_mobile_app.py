@@ -216,3 +216,27 @@ def test_the_page_falls_back_to_the_same_language_the_server_defaults_to():
     and the page's copy would have silently overridden the server's."""
     page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
     assert "state.lang = state.lang || 'ar';" in page
+
+
+# ── the month arrows point along time, not along the text ────────────────────
+
+def test_the_month_bar_is_pinned_to_physical_direction():
+    """Left is the previous month and right is the next one, in both
+    languages.
+
+    An earlier version applied the RTL mirroring rule here, which is correct
+    for reading order — back in a browser, next in a list — and wrong for
+    time. Months run left to right on a number line in every calendar and
+    every chart, Arabic ones included, so the bar is pinned to ltr and only
+    the label follows the page direction.
+    """
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert "#month-bar{direction:ltr}" in page
+    assert "scaleX(-1)" not in page, "the glyphs must not be mirrored"
+
+
+def test_the_previous_arrow_precedes_the_next_one_in_the_markup():
+    """With the bar pinned to ltr, document order is visual order, so the
+    previous button must come first for it to sit on the left."""
+    page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
+    assert page.index('id="month-prev"') < page.index('id="month-next"')
