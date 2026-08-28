@@ -245,6 +245,7 @@ def test_share_reaches_the_activity_the_way_toga_does(tmp_path):
     that was actually wrong, and neither rewrite touched it.
     """
     import inspect
+
     from tests.mobile_app_modules import share
 
     source = inspect.getsource(share)
