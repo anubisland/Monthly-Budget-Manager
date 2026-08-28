@@ -1138,6 +1138,70 @@ async function backup() {
   reportFileResult();
 }
 
+// Restoring replaces everything, so it is three deliberate steps: paste the
+// backup, see what it would change, then apply. A confirmation dialog would
+// ask whether you are sure without telling you what you would lose.
+//
+// This block was written once and then lost: a later edit replaced the range
+// of text it sat in, leaving the button in the HTML calling a function that
+// no longer existed. Nothing caught it, because every test of restoring
+// called the Python route directly and none of them opened this page.
+function toggleRestore() {
+  let panel = document.getElementById('restore-panel');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  if (panel.style.display === 'none') clearRestore();
+}
+
+function clearRestore() {
+  document.getElementById('restore-text').value = '';
+  document.getElementById('restore-diff').innerHTML = '';
+}
+
+async function previewRestore() {
+  let text = document.getElementById('restore-text').value.trim();
+  if (!text) { toast(t('restore_paste_first')); return; }
+  if (!await postAndRefresh('/api/preview-restore', {text: text})) return;
+  renderRestoreDiff();
+}
+
+function renderRestoreDiff() {
+  let el = document.getElementById('restore-diff');
+  let d = state.restore_preview;
+  if (!d) { el.innerHTML = ''; return; }
+
+  let rows = d.months.map(m => {
+    // Both totals, not just expenses: a month of pure income would show as
+    // "0" and read as empty, in the one table whose purpose is to stop a
+    // decision being made on a wrong impression.
+    let side = s => s ? '+' + cs() + s.income.toLocaleString() +
+                        ' / -' + cs() + s.expenses.toLocaleString() : '—';
+    let lost = m.mine && !m.theirs;
+    let gained = !m.mine && m.theirs;
+    return `<div class="rst-row">
+        <span class="rst-m">${monthKeyLabel(m.month)}</span>
+        <span class="rst-side ${lost ? 'rst-gone' : ''}">${t('rst_now')}: ${side(m.mine)}</span>
+        <span class="rst-side ${gained ? 'rst-new' : ''}">${t('rst_after')}: ${side(m.theirs)}</span>
+      </div>`;
+  }).join('');
+
+  let losing = d.months.filter(m => m.mine && !m.theirs).length;
+  el.innerHTML = `
+    <div class="cmp-sub" style="margin-top:8px">${t('rst_heading')}</div>
+    ${rows}
+    <div class="hint" style="margin-top:8px">${t('rst_goals')
+      .replace('{a}', d.goals_now).replace('{b}', d.goals_after)}</div>
+    ${losing ? `<div class="hint rst-gone">${t('rst_losing').replace('{n}', losing)}</div>` : ''}
+    <button class="setting-btn danger" style="color:var(--exp)"
+      onclick="applyRestore()">${t('rst_apply')}</button>`;
+}
+
+async function applyRestore() {
+  if (!await postAndRefresh('/api/restore', {})) return;
+  clearRestore();
+  document.getElementById('restore-panel').style.display = 'none';
+  toast(t('rst_done'));
+}
+
 // Shared by backup and export. A share sheet that opened needs no message;
 // a fallback does, and only the file name is any use — the full path lives
 // inside app-private storage that no file manager can open.
