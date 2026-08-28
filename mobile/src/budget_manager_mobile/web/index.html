@@ -648,10 +648,12 @@ async function postAndRefresh(path, data) {
 }
 
 // ── Toast ──
-function toast(msg) {
+function toast(msg, ms) {
   let t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');
-  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove('show'), 2000);
+  clearTimeout(t._t);
+  // Diagnostics need longer on screen than confirmations do.
+  t._t = setTimeout(() => t.classList.remove('show'), ms || 2000);
 }
 
 // ── Navigation ──
@@ -1143,75 +1145,16 @@ function reportFileResult() {
   let result = state.last_export;
   if (!result) { toast(t('request_failed')); return; }
   if (result.shared) return;
-  // Split on both separators without a regex. Writing one here means
-  // escaping a backslash through however many layers of quoting sit
-  // between the source and the file, and it has silently lost one
-  // before — leaving a Windows path unsplit and the whole path in the
-  // toast, which is exactly what this line exists to avoid.
+
+  // Show why. This is the one number that matters when the share sheet does
+  // not open, and it was being thrown away: the app knew the reason, printed
+  // a file name instead, and left the diagnosis to guesswork across four
+  // releases. A message the user can read back is worth more than a tidier
+  // one they cannot act on.
   let parts = String(result.path).split(String.fromCharCode(92)).pop();
   let name = parts.split('/').pop();
-  toast(t('export_saved').replace('{path}', name));
-}
-// Restoring replaces everything, so it is three deliberate steps: paste the
-// backup, see what it would change, then apply. A confirmation dialog would
-// ask whether you are sure without telling you what you would lose.
-function toggleRestore() {
-  let panel = document.getElementById('restore-panel');
-  panel.style.display = panel.style.display === 'none' ? '' : 'none';
-  if (panel.style.display === 'none') clearRestore();
-}
-
-function clearRestore() {
-  document.getElementById('restore-text').value = '';
-  document.getElementById('restore-diff').innerHTML = '';
-}
-
-async function previewRestore() {
-  let text = document.getElementById('restore-text').value.trim();
-  if (!text) { toast(t('restore_paste_first')); return; }
-  if (!await postAndRefresh('/api/preview-restore', {text: text})) return;
-  renderRestoreDiff();
-}
-
-function renderRestoreDiff() {
-  let el = document.getElementById('restore-diff');
-  let d = state.restore_preview;
-  if (!d) { el.innerHTML = ''; return; }
-
-  let rows = d.months.map(m => {
-    // Red for what disappears, green for what arrives.
-    // Both totals, not just expenses: a month of pure income showed as
-    // "0" and read as empty, which is the opposite of what it is — and
-    // this table exists to prevent a decision made on a wrong impression.
-    let side = s => s ? '+' + cs() + s.income.toLocaleString() +
-                        ' / -' + cs() + s.expenses.toLocaleString() : '—';
-    let mine = side(m.mine);
-    let theirs = side(m.theirs);
-    let lost = m.mine && !m.theirs;
-    let gained = !m.mine && m.theirs;
-    return `<div class="rst-row">
-        <span class="rst-m">${monthKeyLabel(m.month)}</span>
-        <span class="rst-side ${lost ? 'rst-gone' : ''}">${t('rst_now')}: ${mine}</span>
-        <span class="rst-side ${gained ? 'rst-new' : ''}">${t('rst_after')}: ${theirs}</span>
-      </div>`;
-  }).join('');
-
-  let losing = d.months.filter(m => m.mine && !m.theirs).length;
-  el.innerHTML = `
-    <div class="cmp-sub" style="margin-top:8px">${t('rst_heading')}</div>
-    ${rows}
-    <div class="hint" style="margin-top:8px">${t('rst_goals')
-      .replace('{a}', d.goals_now).replace('{b}', d.goals_after)}</div>
-    ${losing ? `<div class="hint rst-gone">${t('rst_losing').replace('{n}', losing)}</div>` : ''}
-    <button class="setting-btn danger" style="color:var(--exp)"
-      onclick="applyRestore()">${t('rst_apply')}</button>`;
-}
-
-async function applyRestore() {
-  if (!await postAndRefresh('/api/restore', {})) return;
-  clearRestore();
-  document.getElementById('restore-panel').style.display = 'none';
-  toast(t('rst_done'));
+  let why = result.reason ? ' — ' + result.reason : '';
+  toast(t('export_saved').replace('{path}', name) + why, 8000);
 }
 async function exportXLSX() {
   if (!await postAndRefresh('/api/export', {month: state.month_key})) return;
