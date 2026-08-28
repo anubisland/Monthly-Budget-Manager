@@ -5,6 +5,7 @@ then verified by reading the written file back, rather than by trusting that
 the writer was called.
 """
 
+import json
 import pathlib
 import zipfile
 from datetime import date
@@ -325,3 +326,172 @@ def test_share_returns_a_pair_even_when_finding_the_activity_raises(tmp_path, mo
     monkeypatch.setattr(share, "_activity", explode)
     shared, reason = share.share(target)
     assert shared is False and "bridge failure" in reason
+
+
+# ── the backup button ────────────────────────────────────────────────────────
+
+def test_a_backup_writes_a_file_and_offers_it_to_the_share_sheet(tmp_path):
+    """It used to build a Blob and click an <a download>, which needs a
+    DownloadListener the Android WebView does not register — so nothing was
+    written, nothing was shared, and the toast said "saved" regardless."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+
+    written = pathlib.Path(app.last_export["path"])
+    assert written.exists() and written.name.startswith("budget-backup-")
+
+
+def test_the_backup_holds_everything_needed_to_restore(tmp_path):
+    """A backup that omits a month is worse than none: it restores, looks
+    plausible, and quietly loses what it left out."""
+    from tests.mobile_app_modules import Goal, api
+    app = _app(tmp_path)
+    app.data.go_to("2026-07")
+    app.data.month.add_income("July", 7000.0, "2026-07-01")
+    app.data.go_to("2026-08")
+    app.data.goals.append(Goal(name="Car", target=1000.0))
+    api.dispatch(app, "/api/backup-file", {})
+
+    saved = json.loads(pathlib.Path(app.last_export["path"]).read_text("utf-8"))
+    assert sorted(saved["months"]) == ["2026-07", "2026-08"]
+    assert saved["goals"][0]["name"] == "Car"
+    assert saved["current"] == "2026-08"
+
+
+def test_the_backup_round_trips_into_a_fresh_install(tmp_path):
+    """The point of the file: it has to open on the other device."""
+    from tests.mobile_app_modules import BudgetData, api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+
+    other = tmp_path / "tablet" / "data.json"
+    other.parent.mkdir()
+    other.write_text(pathlib.Path(app.last_export["path"]).read_text("utf-8"), "utf-8")
+
+    restored = BudgetData(other, today=app._today)
+    restored.load()
+    assert restored.note is None, "a backup must load as ordinary data"
+    assert restored.month.total_income() == 8000.0
+
+
+def test_arabic_survives_the_backup_unescaped(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    app.data.month.add_expense("إيجار الشقة", 3000.0, "Rent", "2026-08-02")
+    api.dispatch(app, "/api/backup-file", {})
+    assert "إيجار الشقة" in pathlib.Path(app.last_export["path"]).read_text("utf-8")
+
+
+def test_a_backup_does_not_rewrite_the_data_file(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    assert app.saved_data == 0
+
+
+def test_the_backup_name_says_which_month_it_was_taken_in(tmp_path):
+    """Two backups on one device should not overwrite each other silently."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    assert app.data.current in pathlib.Path(app.last_export["path"]).name
+
+
+# ── restoring: the one operation that replaces everything ────────────────────
+
+def _backup_text(tmp_path, month="2026-07", income=7000.0):
+    """A backup taken on another device."""
+    from tests.mobile_app_modules import BudgetData
+    other = BudgetData(tmp_path / "other" / "data.json", today=date(2026, 8, 27))
+    other._path.parent.mkdir(parents=True, exist_ok=True)
+    other.go_to(month)
+    other.month.add_income("Tablet", income, f"{month}-01")
+    return json.dumps(other.to_doc(), ensure_ascii=False)
+
+
+def test_a_preview_changes_nothing(tmp_path):
+    """Reading a backup must never be the same act as applying it."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    before = app.data.month.total_income()
+
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+
+    assert app.data.month.total_income() == before
+    assert app.restore_preview is not None
+
+
+def test_the_preview_shows_both_sides_month_by_month(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+
+    rows = {r["month"]: r for r in app.restore_preview["months"]}
+    assert rows["2026-08"]["mine"]["income"] == 8000.0
+    assert rows["2026-08"]["theirs"] is None, "the backup has no August"
+    assert rows["2026-07"]["theirs"]["income"] == 7000.0
+
+
+def test_restoring_requires_a_preview_first(tmp_path):
+    """No single request may replace the data."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    with pytest.raises(api.ApiError) as caught:
+        api.dispatch(app, "/api/restore", {})
+    assert caught.value.status == 409
+    assert app.data.month.total_income() == 8000.0
+
+
+def test_restoring_replaces_the_data(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+
+    assert app.data.months["2026-07"].total_income() == 7000.0
+    assert "2026-08" not in app.data.months, "the backup did not have it"
+
+
+def test_the_previous_data_is_kept_before_it_is_replaced(tmp_path):
+    """A restore is reversible for as long as that file survives, which is
+    what makes trying one a safe thing to do."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+
+    kept = json.loads(pathlib.Path(app.last_export["path"]).read_text("utf-8"))
+    assert kept["months"]["2026-08"]["incomes"][0]["amount"] == 8000.0
+
+
+def test_a_second_restore_needs_a_second_preview(tmp_path):
+    """The pending document is consumed, so a stray tap cannot repeat it."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/preview-restore", {"text": _backup_text(tmp_path)})
+    api.dispatch(app, "/api/restore", {})
+    with pytest.raises(api.ApiError):
+        api.dispatch(app, "/api/restore", {})
+
+
+@pytest.mark.parametrize("text", ["", "   ", "not json", "[]", '{"version": 99}'])
+def test_something_that_is_not_a_backup_is_refused(tmp_path, text):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    with pytest.raises(api.ApiError):
+        api.dispatch(app, "/api/preview-restore", {"text": text})
+    assert app.data.month.total_income() == 8000.0
+
+
+def test_a_backup_from_this_app_restores_with_no_complaint(tmp_path):
+    """The round trip that matters: back up here, restore there."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    text = pathlib.Path(app.last_export["path"]).read_text("utf-8")
+
+    api.dispatch(app, "/api/preview-restore", {"text": text})
+    api.dispatch(app, "/api/restore", {})
+    assert app.data.month.total_income() == 8000.0
+    assert app.data.note is None

@@ -106,6 +106,11 @@ class App(toga.App):
         self.dark = False; self.lang = "ar"; self.currency = "EGP"
         #: Outcome of the last export, for the UI to report. See api._export.
         self.last_export = None
+        #: A backup that has been read and shown but not yet applied, and the
+        #: comparison shown for it. Restoring replaces everything, so it takes
+        #: two steps by construction rather than by a confirmation dialog.
+        self.pending_restore = None
+        self.restore_preview = None
         self._i18n = I18n.get_instance()
         self._setup_storage()
         self._load_settings()
@@ -216,6 +221,7 @@ class App(toga.App):
             'note': self.data.note,
             'dropped': self.data.dropped,
             'last_export': self.last_export,
+            'restore_preview': self.restore_preview,
             'rules': [{'pattern': r.pattern, 'category': r.category} for r in self.data.rules],
             'recurring': self._recurring_state(),
             'pending_recurring': self._pending_state(),
