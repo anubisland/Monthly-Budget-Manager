@@ -227,6 +227,30 @@ def _fund_goal(app, d: Dict) -> None:
 
 # ── exporting ────────────────────────────────────────────────────────────────
 
+def _backup(app, d: Dict) -> None:
+    """Write the whole data file out and offer it to the share sheet.
+
+    The button used to build a Blob and click an <a download>, which needs the
+    host WebView to register a DownloadListener — Android does not, so the
+    click did nothing while the toast said "saved". Sharing is the same path
+    the spreadsheet export already uses, and it is the only one that gets a
+    file off the phone and onto another device.
+    """
+    path = app.export_path(f"budget-backup-{app.data.current}.json")
+    try:
+        path.write_text(
+            json.dumps(app.data.to_doc(), indent=2, ensure_ascii=False), "utf-8"
+        )
+    except OSError as err:
+        raise ApiError(f"could not write the backup: {err}", 507)
+
+    try:
+        shared, reason = share.share(path, "Budget backup")
+    except Exception as err:  # noqa: BLE001 - see _export
+        shared, reason = False, f"sharing failed: {err}"
+    app.last_export = {"path": str(path), "shared": shared, "reason": reason}
+
+
 def _export(app, d: Dict) -> None:
     """Write the month on screen as a spreadsheet, then offer to share it.
 
@@ -312,6 +336,7 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/apply-recurring": automation.apply_recurring,
     "/api/skip-recurring": automation.skip_recurring,
     "/api/export": _export,
+    "/api/backup-file": _backup,
     "/api/set-budget": _set_budget,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,
@@ -322,9 +347,9 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
 #: Routes that change only settings, which live in their own file.
 _SETTINGS_ROUTES = frozenset({"/api/toggle-theme", "/api/set-language", "/api/set-currency"})
 
-#: Routes that change nothing worth persisting. Saving after an export would
-#: rewrite the data file for an operation that only read it.
-_READ_ONLY_ROUTES = frozenset({"/api/export"})
+#: Routes that change nothing worth persisting. Saving after one of these
+#: would rewrite the data file for an operation that only read it.
+_READ_ONLY_ROUTES = frozenset({"/api/export", "/api/backup-file"})
 
 
 def dispatch(app, path: str, payload: Dict) -> None:

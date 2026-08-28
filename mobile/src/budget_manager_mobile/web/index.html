@@ -1096,48 +1096,37 @@ function disarmReset() {
   btn.style.color = 'var(--exp)';
 }
 async function backup() {
-  let d;
-  try {
-    d = await api('/api/backup');
-  } catch (err) {
-    toast(t('request_failed'));
-    return;
-  }
-  // An <a download> needs the host WebView to register a DownloadListener,
-  // which is not guaranteed on Android. The click can therefore do nothing at
-  // all, so success is no longer announced unconditionally — the previous
-  // version said "saved" whether or not anything was.
-  let saved = false;
-  try {
-    let a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], {type: 'application/json'}));
-    a.download = 'budget_backup.json';
-    a.click();
-    saved = typeof a.download === 'string';
-  } catch (err) {
-    saved = false;
-  }
-  toast(saved ? t('saved_toast') : t('backup_unavailable'));
+  // Same path as the spreadsheet export: write the file, then hand it to the
+  // share sheet. The old version built a Blob and clicked an <a download>,
+  // which needs a DownloadListener the Android WebView does not register —
+  // and then reported success by checking that the `download` attribute
+  // exists, which it always does. It said "saved" every time, saved nothing,
+  // and named no place to look.
+  if (!await postAndRefresh('/api/backup-file', {})) return;
+  reportFileResult();
 }
 
+// Shared by backup and export. A share sheet that opened needs no message;
+// a fallback does, and only the file name is any use — the full path lives
+// inside app-private storage that no file manager can open.
+function reportFileResult() {
+  let result = state.last_export;
+  if (!result) { toast(t('request_failed')); return; }
+  if (result.shared) return;
+  // Split on both separators without a regex. Writing one here means
+  // escaping a backslash through however many layers of quoting sit
+  // between the source and the file, and it has silently lost one
+  // before — leaving a Windows path unsplit and the whole path in the
+  // toast, which is exactly what this line exists to avoid.
+  let parts = String(result.path).split(String.fromCharCode(92)).pop();
+  let name = parts.split('/').pop();
+  toast(t('export_saved').replace('{path}', name));
+}
 function restore() { toast(t('restore_unavailable')); }
 
 async function exportXLSX() {
   if (!await postAndRefresh('/api/export', {month: state.month_key})) return;
-  let result = state.last_export;
-  if (!result) { toast(t('request_failed')); return; }
-  // On success the system share sheet is already open, so there is nothing to
-  // announce. The message is only for the case where it could not open, and
-  // then it has to say where the file went — otherwise the export is real and
-  // the user has no way to reach it.
-  if (!result.shared) {
-    // The share sheet is the intended outcome; a path is what is left when
-    // it could not open, and only the file name is any use on a phone —
-    // the full path is longer than the toast and leads somewhere a file
-    // manager cannot reach anyway.
-    let name = String(result.path).split(/[\/]/).pop();
-    toast(t('export_saved').replace('{path}', name));
-  }
+  reportFileResult();
 }
 
 // ── Render ──

@@ -5,6 +5,7 @@ then verified by reading the written file back, rather than by trusting that
 the writer was called.
 """
 
+import json
 import pathlib
 import zipfile
 from datetime import date
@@ -325,3 +326,73 @@ def test_share_returns_a_pair_even_when_finding_the_activity_raises(tmp_path, mo
     monkeypatch.setattr(share, "_activity", explode)
     shared, reason = share.share(target)
     assert shared is False and "bridge failure" in reason
+
+
+# ── the backup button ────────────────────────────────────────────────────────
+
+def test_a_backup_writes_a_file_and_offers_it_to_the_share_sheet(tmp_path):
+    """It used to build a Blob and click an <a download>, which needs a
+    DownloadListener the Android WebView does not register — so nothing was
+    written, nothing was shared, and the toast said "saved" regardless."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+
+    written = pathlib.Path(app.last_export["path"])
+    assert written.exists() and written.name.startswith("budget-backup-")
+
+
+def test_the_backup_holds_everything_needed_to_restore(tmp_path):
+    """A backup that omits a month is worse than none: it restores, looks
+    plausible, and quietly loses what it left out."""
+    from tests.mobile_app_modules import api, Goal
+    app = _app(tmp_path)
+    app.data.go_to("2026-07")
+    app.data.month.add_income("July", 7000.0, "2026-07-01")
+    app.data.go_to("2026-08")
+    app.data.goals.append(Goal(name="Car", target=1000.0))
+    api.dispatch(app, "/api/backup-file", {})
+
+    saved = json.loads(pathlib.Path(app.last_export["path"]).read_text("utf-8"))
+    assert sorted(saved["months"]) == ["2026-07", "2026-08"]
+    assert saved["goals"][0]["name"] == "Car"
+    assert saved["current"] == "2026-08"
+
+
+def test_the_backup_round_trips_into_a_fresh_install(tmp_path):
+    """The point of the file: it has to open on the other device."""
+    from tests.mobile_app_modules import api, BudgetData
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+
+    other = tmp_path / "tablet" / "data.json"
+    other.parent.mkdir()
+    other.write_text(pathlib.Path(app.last_export["path"]).read_text("utf-8"), "utf-8")
+
+    restored = BudgetData(other, today=app._today)
+    restored.load()
+    assert restored.note is None, "a backup must load as ordinary data"
+    assert restored.month.total_income() == 8000.0
+
+
+def test_arabic_survives_the_backup_unescaped(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    app.data.month.add_expense("إيجار الشقة", 3000.0, "Rent", "2026-08-02")
+    api.dispatch(app, "/api/backup-file", {})
+    assert "إيجار الشقة" in pathlib.Path(app.last_export["path"]).read_text("utf-8")
+
+
+def test_a_backup_does_not_rewrite_the_data_file(tmp_path):
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    assert app.saved_data == 0
+
+
+def test_the_backup_name_says_which_month_it_was_taken_in(tmp_path):
+    """Two backups on one device should not overwrite each other silently."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/backup-file", {})
+    assert app.data.current in pathlib.Path(app.last_export["path"]).name
