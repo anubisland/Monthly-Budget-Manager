@@ -245,7 +245,15 @@ def _export(app, d: Dict) -> None:
     except xlsx.ExportError as err:
         raise ApiError(str(err), 500)
 
-    shared, reason = share.share(path, f"Budget {month}")
+    # Guarded a second time on purpose. share() is written to return a pair
+    # rather than raise, but it drives a platform bridge that can surprise it,
+    # and a spreadsheet that was written must never be lost to a failure in
+    # handing it over — the user would be told the request failed and never
+    # learn the file is there.
+    try:
+        shared, reason = share.share(path, f"Budget {month}")
+    except Exception as err:  # noqa: BLE001 - see above
+        shared, reason = False, f"sharing failed: {err}"
     app.last_export = {"path": str(path), "shared": shared, "reason": reason}
 
 

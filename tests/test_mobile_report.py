@@ -230,3 +230,69 @@ def test_the_spreadsheet_mime_type_is_the_real_one(tmp_path):
     from tests.mobile_app_modules import share
     assert share.mime_for(pathlib.Path("a.xlsx")).endswith("spreadsheetml.sheet")
     assert share.mime_for(pathlib.Path("a.unknown")) == "application/octet-stream"
+
+
+# ── defects found by independent review ──────────────────────────────────────
+
+def _format_codes(path):
+    import re
+    with zipfile.ZipFile(path) as archive:
+        return re.findall(r'formatCode="([^"]*)"', archive.read("xl/styles.xml").decode("utf-8"))
+
+
+@pytest.mark.parametrize("currency", ["USD", "SAR", "AED", "MAD", "EGP", "JPY"])
+def test_the_currency_is_quoted_so_money_is_not_read_as_a_date(data, tmp_path, currency):
+    """Unquoted letters in an Excel number format are format codes, not text:
+    D is day, M is month, S is second. "USD#,##0.00" is therefore a date
+    format, and 8500 renders as 09/04/1923 — for the default currency, on a
+    fresh install, in every money cell of every sheet.
+    """
+    path = xlsx.write(report.build(data, "2026-08", currency), tmp_path / "r.xlsx")
+    assert f'&quot;{currency}&quot;#,##0.00' in _format_codes(path)
+
+
+def test_a_quote_inside_the_currency_cannot_break_the_file(data, tmp_path):
+    """It would close the literal early and produce a workbook Excel refuses
+    to open. The currency comes from a request and is only length-checked."""
+    path = xlsx.write(report.build(data, "2026-08", 'A"B'), tmp_path / "r.xlsx")
+    assert zipfile.is_zipfile(path)
+    assert '&quot;AB&quot;#,##0.00' in _format_codes(path)
+
+
+def test_no_currency_leaves_a_plain_number_format(data, tmp_path):
+    path = xlsx.write(report.build(data, "2026-08", ""), tmp_path / "r.xlsx")
+    assert "#,##0.00" in _format_codes(path)
+
+
+def test_an_export_survives_a_share_that_raises(tmp_path, monkeypatch):
+    """share() promises a (shared, reason) pair, but it drives a platform
+    bridge. One escaping exception would cost the user a spreadsheet that was
+    already written, and they would be told only that the request failed.
+    """
+    from tests.mobile_app_modules import api, share
+    app = _app(tmp_path)
+
+    def explode(*_args, **_kwargs):
+        raise RuntimeError("java bridge went sideways")
+
+    monkeypatch.setattr(share, "share", explode)
+    api.dispatch(app, "/api/export", {})
+
+    assert app.last_export["shared"] is False
+    assert "java bridge" in app.last_export["reason"]
+    assert pathlib.Path(app.last_export["path"]).exists(), "the file must still be there"
+
+
+def test_share_returns_a_pair_even_when_finding_the_activity_raises(tmp_path, monkeypatch):
+    """_activity() sat outside the try, so anything it raised beyond
+    ImportError and AttributeError escaped share() entirely."""
+    from tests.mobile_app_modules import share
+    target = tmp_path / "present.xlsx"
+    target.write_bytes(b"x")
+
+    def explode():
+        raise RuntimeError("bridge failure")
+
+    monkeypatch.setattr(share, "_activity", explode)
+    shared, reason = share.share(target)
+    assert shared is False and "bridge failure" in reason

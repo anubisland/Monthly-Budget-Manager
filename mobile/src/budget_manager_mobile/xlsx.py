@@ -59,7 +59,15 @@ def write(report: Dict, path: Path) -> Path:
 
 
 def _styles(workbook, currency: str) -> Dict:
-    money = f'{currency}#,##0.00' if currency else '#,##0.00'
+    # The currency must be quoted. Unquoted letters in an Excel number format
+    # are format codes, not text: D is day, M is month, S is second. The app
+    # stores a three-letter code, so "USD#,##0.00" is read as a date format and
+    # every money cell renders as 09/04/1923 instead of a number — for USD, the
+    # default, and for most of the currencies in the list. A stray quote inside
+    # the value would end the literal and produce a file Excel refuses to open,
+    # so it is stripped first.
+    safe = str(currency).replace('"', "")
+    money = f'"{safe}"#,##0.00' if safe else '#,##0.00'
     return {
         "title": workbook.add_format({"bold": True, "font_size": 14}),
         "head": workbook.add_format({"bold": True, "bg_color": "#EEEEEE", "border": 1}),

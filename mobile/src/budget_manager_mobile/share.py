@@ -46,10 +46,14 @@ def share(path: Path, title: str = "") -> Tuple[bool, Optional[str]]:
     if not path.exists():
         return False, "the file was not created"
 
-    activity = _activity()
-    if activity is None:
-        return False, "sharing is not available on this platform"
     try:
+        # Inside the try: _activity() reaches into the Java bridge, which
+        # raises platform types beyond the ImportError and AttributeError it
+        # catches. One escaping from here would lose the caller its (shared,
+        # reason) pair — and with it the path to a file that does exist.
+        activity = _activity()
+        if activity is None:
+            return False, "sharing is not available on this platform"
         uri = _publish(activity, path)
         if uri is None:
             return False, "could not publish the file"
@@ -89,17 +93,40 @@ def _publish(activity, path: Path):
     values.put(MediaStore.MediaColumns.DISPLAY_NAME, path.name)
     values.put(MediaStore.MediaColumns.MIME_TYPE, mime_for(path))
     values.put(MediaStore.MediaColumns.RELATIVE_PATH, "Download")
+    # Pending until the bytes are all there. Without this the row is visible
+    # to every app the moment it is created, so a failed write leaves a
+    # zero-byte budget-2026-08.xlsx in Downloads that the user finds, opens,
+    # and is told is corrupt.
+    values.put(MediaStore.MediaColumns.IS_PENDING, 1)
 
     resolver = activity.getContentResolver()
     uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
     if uri is None:
         return None
 
-    stream = resolver.openOutputStream(uri)
     try:
-        stream.write(path.read_bytes())
-    finally:
-        stream.close()
+        stream = resolver.openOutputStream(uri)
+        if stream is None:
+            # Documented as possible, and calling write() on it would raise an
+            # AttributeError that close() then replaces with a second one,
+            # burying the real cause in the reason string.
+            raise OSError("could not open the destination for writing")
+        try:
+            stream.write(path.read_bytes())
+        finally:
+            stream.close()
+    except Exception:
+        # The row exists and is empty. Removing it is better than leaving a
+        # broken file behind under a name that promises a report.
+        try:
+            resolver.delete(uri, None, None)
+        except Exception:  # noqa: BLE001 - cleanup must not mask the original
+            pass
+        raise
+
+    done = ContentValues()
+    done.put(MediaStore.MediaColumns.IS_PENDING, 0)
+    resolver.update(uri, done, None, None)
     return uri
 
 
