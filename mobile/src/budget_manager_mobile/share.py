@@ -53,7 +53,7 @@ def share(path: Path, title: str = "") -> Tuple[bool, Optional[str]]:
         # reason) pair — and with it the path to a file that does exist.
         activity = _activity()
         if activity is None:
-            return False, "no android bridge (running off-device?)"
+            return False, "no android activity (running off-device?)"
         uri = _publish(activity, path)
         if uri is None:
             return False, "could not publish the file"
@@ -66,36 +66,29 @@ def share(path: Path, title: str = "") -> Tuple[bool, Optional[str]]:
         return False, f"sharing failed: {err}"
 
 
-def _jclass(name: str):
-    """A Java class by name, or None if there is no bridge.
+def _activity():
+    """The Activity, taken the way toga-android itself takes it.
 
-    Briefcase packages this app with Chaquopy, whose bridge is `java.jclass`.
-    The first version probed for `android.content.Intent` as a plain import,
-    which is the Pyjnius idiom rather than the Chaquopy one — so the import
-    failed on a real phone and the app concluded that sharing was "not
-    available on this platform". It was available; the way in was wrong, and
-    the message blamed the platform for it.
+    Two earlier attempts guessed at this instead of reading the code that
+    already works in this exact build — first suspecting the import style,
+    then rewriting every Java lookup around a different bridge. Neither was
+    the problem. toga-android imports Android classes plainly, and it holds
+    the Activity as MainActivity.singletonThis, set up before any of our code
+    runs. The import was right all along; walking toga.App.app._impl.native to
+    find the Activity was not, and that is the line both rewrites left alone.
     """
     try:
-        from java import jclass
-    except ImportError:
-        return None
-    try:
-        return jclass(name)
-    except Exception:  # noqa: BLE001 - the bridge raises platform types
-        return None
-
-
-def _activity():
-    """The Android Activity, or None anywhere else."""
-    if _jclass("android.content.Intent") is None:
-        return None
+        from org.beeware.android import MainActivity
+        return MainActivity.singletonThis
+    except (ImportError, AttributeError):
+        pass
+    # Fallback for a build where that class moved: toga keeps the same object
+    # on the app implementation.
     try:
         import toga
         return toga.App.app._impl.native
     except (ImportError, AttributeError):
         return None
-
 
 def _publish(activity, path: Path):
     """Copy the file into Downloads via MediaStore and return its content URI.
@@ -104,10 +97,8 @@ def _publish(activity, path: Path):
     later export overwrites a known location instead of depending on whatever
     the user did with the shared one.
     """
-    ContentValues = _jclass("android.content.ContentValues")
-    MediaStore = _jclass("android.provider.MediaStore")
-    if ContentValues is None or MediaStore is None:
-        return None
+    from android.content import ContentValues
+    from android.provider import MediaStore
 
     values = ContentValues()
     values.put(MediaStore.MediaColumns.DISPLAY_NAME, path.name)
@@ -151,7 +142,8 @@ def _publish(activity, path: Path):
 
 
 def _send(activity, uri, mime: str, title: str) -> None:
-    Intent = _jclass("android.content.Intent")
+    from android.content import Intent
+
     intent = Intent(Intent.ACTION_SEND)
     intent.setType(mime)
     intent.putExtra(Intent.EXTRA_STREAM, uri)

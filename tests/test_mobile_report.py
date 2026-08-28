@@ -217,7 +217,7 @@ def test_sharing_a_file_that_was_never_written_says_so(tmp_path):
     assert shared is False and "not created" in reason
 
 
-def test_sharing_without_the_android_bridge_says_so_precisely(tmp_path):
+def test_sharing_without_an_android_activity_says_so_precisely(tmp_path):
     """The reason used to read "not available on this platform", which blamed
     Android for a mistake of mine: the probe imported android.content.Intent,
     the Pyjnius idiom, while Briefcase packages this app with Chaquopy, whose
@@ -232,7 +232,25 @@ def test_sharing_without_the_android_bridge_says_so_precisely(tmp_path):
 
     shared, reason = share.share(target)
     assert shared is False
-    assert "bridge" in reason, "name the missing piece, not the platform"
+    assert "activity" in reason, "name the missing piece, not the platform"
+
+
+def test_share_reaches_the_activity_the_way_toga_does(tmp_path):
+    """Pinned because I got it wrong twice by guessing.
+
+    First I probed for android.content.Intent as a Pyjnius import; then I
+    rewrote everything around java.jclass for Chaquopy. Reading toga-android
+    settled it: it imports `from android.content import Intent` plainly, and
+    it holds the Activity as `MainActivity.singletonThis` — which was the part
+    that was actually wrong, and neither rewrite touched it.
+    """
+    import inspect
+    from tests.mobile_app_modules import share
+
+    source = inspect.getsource(share)
+    assert "from org.beeware.android import MainActivity" in source
+    assert "singletonThis" in source
+    assert "jclass" not in source, "the Chaquopy detour was a wrong turn"
 
 
 def test_the_spreadsheet_mime_type_is_the_real_one(tmp_path):
