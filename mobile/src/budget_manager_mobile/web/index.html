@@ -773,7 +773,9 @@ async function delGoal(idx) {
 
 // ── i18n ──
 const TRANS = {
-  en: {
+  en: { export_saved: 'Saved to {path}',
+    backup_unavailable: 'This device cannot download files here — use Export instead',
+    restore_unavailable: 'Restoring is only available in the desktop app',
     no_data: 'No data',
     pace_on_track: 'On track for the month', pace_ahead: 'Spending ahead of pace',
     pace_ahead_to: 'Ahead of pace — heading for {n}', pace_over: 'Over budget',
@@ -828,7 +830,9 @@ const TRANS = {
     set_in_settings: 'Set a total budget in Settings', save_budget: 'Save Budget',
     currency_label: 'Currency / العملة',
   },
-  ar: {
+  ar: { export_saved: 'حُفِظ في {path}',
+    backup_unavailable: 'هذا الجهاز لا يدعم التنزيل هنا — استخدم التصدير',
+    restore_unavailable: 'الاسترجاع متاح في تطبيق سطح المكتب فقط',
     no_data: 'لا توجد بيانات',
     pace_on_track: 'سائر على المسار', pace_ahead: 'تُنفق أسرع من المعتاد',
     pace_ahead_to: 'أسرع من المعتاد — متجه إلى {n}', pace_over: 'تجاوزتَ الميزانية',
@@ -998,15 +1002,44 @@ async function resetAll() {
   toast(t('saved_toast'));
 }
 async function backup() {
-  let d = await api('/api/backup');
-  let blob = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
-  let a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'budget_backup.json'; a.click();
-  toast(t('saved_toast'));
+  let d;
+  try {
+    d = await api('/api/backup');
+  } catch (err) {
+    toast(t('request_failed'));
+    return;
+  }
+  // An <a download> needs the host WebView to register a DownloadListener,
+  // which is not guaranteed on Android. The click can therefore do nothing at
+  // all, so success is no longer announced unconditionally — the previous
+  // version said "saved" whether or not anything was.
+  let saved = false;
+  try {
+    let a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(d, null, 2)], {type: 'application/json'}));
+    a.download = 'budget_backup.json';
+    a.click();
+    saved = typeof a.download === 'string';
+  } catch (err) {
+    saved = false;
+  }
+  toast(saved ? t('saved_toast') : t('backup_unavailable'));
 }
-function restore() { toast('Open settings in desktop app to restore'); }
-function exportXLSX() { toast('Use desktop app for XLSX export'); }
+
+function restore() { toast(t('restore_unavailable')); }
+
+async function exportXLSX() {
+  if (!await postAndRefresh('/api/export', {month: state.month_key})) return;
+  let result = state.last_export;
+  if (!result) { toast(t('request_failed')); return; }
+  // On success the system share sheet is already open, so there is nothing to
+  // announce. The message is only for the case where it could not open, and
+  // then it has to say where the file went — otherwise the export is real and
+  // the user has no way to reach it.
+  if (!result.shared) {
+    toast(t('export_saved').replace('{path}', result.path));
+  }
+}
 
 // ── Render ──
 function renderBudgetOverview() {

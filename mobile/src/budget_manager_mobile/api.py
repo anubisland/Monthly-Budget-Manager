@@ -18,8 +18,11 @@ from typing import Callable, Dict
 
 import automation
 import goals
+import report
+import share
 import store
 import validate
+import xlsx
 from budget_data import Goal
 from errors import ApiError
 from errors import row as _row
@@ -222,6 +225,38 @@ def _fund_goal(app, d: Dict) -> None:
         raise ApiError("that goal is already fully funded")
 
 
+# ── exporting ────────────────────────────────────────────────────────────────
+
+def _export(app, d: Dict) -> None:
+    """Write the month on screen as a spreadsheet, then offer to share it.
+
+    The write and the share are separate outcomes on purpose. A file that was
+    written but not shared is still a success — the user has it, and is told
+    where — while treating the pair as one operation would throw away a good
+    export because the share sheet was unavailable.
+    """
+    month = d.get("month")
+    if not store.is_month_key(month):
+        month = app.data.current
+
+    path = app.export_path(f"budget-{month}.xlsx")
+    try:
+        xlsx.write(report.build(app.data, month, app.currency), path)
+    except xlsx.ExportError as err:
+        raise ApiError(str(err), 500)
+
+    # Guarded a second time on purpose. share() is written to return a pair
+    # rather than raise, but it drives a platform bridge that can surprise it,
+    # and a spreadsheet that was written must never be lost to a failure in
+    # handing it over — the user would be told the request failed and never
+    # learn the file is there.
+    try:
+        shared, reason = share.share(path, f"Budget {month}")
+    except Exception as err:  # noqa: BLE001 - see above
+        shared, reason = False, f"sharing failed: {err}"
+    app.last_export = {"path": str(path), "shared": shared, "reason": reason}
+
+
 # ── settings and whole-file operations ───────────────────────────────────────
 
 def _set_budget(app, d: Dict) -> None:
@@ -276,6 +311,7 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/delete-recurring": automation.delete_recurring,
     "/api/apply-recurring": automation.apply_recurring,
     "/api/skip-recurring": automation.skip_recurring,
+    "/api/export": _export,
     "/api/set-budget": _set_budget,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,
@@ -285,6 +321,10 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
 
 #: Routes that change only settings, which live in their own file.
 _SETTINGS_ROUTES = frozenset({"/api/toggle-theme", "/api/set-language", "/api/set-currency"})
+
+#: Routes that change nothing worth persisting. Saving after an export would
+#: rewrite the data file for an operation that only read it.
+_READ_ONLY_ROUTES = frozenset({"/api/export"})
 
 
 def dispatch(app, path: str, payload: Dict) -> None:
@@ -300,6 +340,8 @@ def dispatch(app, path: str, payload: Dict) -> None:
 
     handler(app, payload)
 
+    if path in _READ_ONLY_ROUTES:
+        return
     if path in _SETTINGS_ROUTES:
         app.save_settings()
     else:
