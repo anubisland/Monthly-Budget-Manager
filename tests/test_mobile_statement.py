@@ -60,7 +60,11 @@ def test_headers_are_found_by_substring_and_case_insensitively():
 
 
 def test_arabic_headers_are_recognised():
-    headers = ["\u0627\u0644\u062a\u0627\u0631\u064a\u062e", "\u0627\u0644\u0628\u064a\u0627\u0646", "\u0627\u0644\u0645\u0628\u0644\u063a"]
+    headers = [
+        "\u0627\u0644\u062a\u0627\u0631\u064a\u062e",
+        "\u0627\u0644\u0628\u064a\u0627\u0646",
+        "\u0627\u0644\u0645\u0628\u0644\u063a",
+    ]
     assert statement.find_column(headers, statement.NAME_HEADERS) == 1
     assert statement.find_column(headers, statement.AMOUNT_HEADERS) == 2
 
