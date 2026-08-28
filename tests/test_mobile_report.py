@@ -516,3 +516,32 @@ def test_the_diagnosis_names_every_step_of_the_path():
     from tests.mobile_app_modules import share
     line = share.diagnose()
     assert line.count("=") >= 3, "one verdict per step"
+
+
+def test_no_bare_integer_is_handed_to_contentvalues():
+    """The whole share failure was one line.
+
+    ContentValues.put has nine numeric overloads, so a bare Python int leaves
+    the Java bridge unable to choose and it refuses:
+
+        ContentValues.put is ambiguous for arguments (str, int)
+
+    Every other step reported working. This guards the shape rather than the
+    behaviour, because the behaviour needs a device — a literal number passed
+    to put() is the mistake, and it must not come back.
+    """
+    import inspect
+    import re
+
+    from tests.mobile_app_modules import share
+
+    source = inspect.getsource(share)
+    bare = re.findall(r"\.put\([^)]*,\s*-?\d+\s*\)", source)
+    assert not bare, f"pass these through _int(): {bare}"
+
+
+def test_the_integer_helper_degrades_instead_of_raising():
+    """Off a device neither bridge exists. Publishing must continue without
+    the pending flag rather than lose the share to it."""
+    from tests.mobile_app_modules import share
+    assert share._int(1) is None
