@@ -1,7 +1,7 @@
 [tool.briefcase]
 project_name = "Budget Manager"
 bundle = "org.elwazir"
-version = "1.0.1"
+version = "1.0.2"
 url = "https://github.com/anubisland/Monthly-Budget-Manager"
 license = { file = "LICENSE" }
 author = "melwazeer"
