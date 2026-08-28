@@ -164,3 +164,63 @@ def test_the_warning_does_fire_once_the_month_is_clearly_lost():
     result = pace.status(5200.0, 6000.0, *AUG, date(2026, 8, 20))
     assert result["state"] == "ahead"
     assert result["days_left"] == 11, "and there is still time to act on it"
+
+
+# ── defects found by independent review ──────────────────────────────────────
+
+def test_the_ahead_band_is_open_at_every_point_of_the_month():
+    """The structural guarantee, not a spot check.
+
+    'ahead' needs `used > share + margin` while `used < 1.0`, so it is
+    reachable only while `share + margin < 1`. Without the cap the taper only
+    approached 0.10 in the limit, and the sum crossed 1.0 at 87% of the month:
+    from there nothing could be ahead, because anything that far over was
+    already caught by 'over'. The badge went silent for the last five days of
+    every month — exactly the days on which it can still be acted upon.
+    """
+    for percent in range(1, 100):
+        share = percent / 100
+        assert share + pace.margin_at(share) < 1.0, f"band closed at {percent}% elapsed"
+
+
+def test_the_same_overspend_does_not_stop_warning_as_the_month_ends():
+    """96.7% used warned on the 24th and read as on track on the 28th."""
+    for day in (24, 25, 26):
+        result = pace.status(2900.0, 3000.0, 2026, 9, date(2026, 9, day))
+        assert result["state"] == "ahead", f"day {day}"
+
+
+def test_the_late_month_still_distinguishes_close_from_clearly_over():
+    """The fix opens the band; it does not make everything a warning."""
+    late = date(2026, 9, 28)
+    assert pace.status(2800.0, 3000.0, 2026, 9, late)["state"] == "on_track"
+    assert pace.status(2950.0, 3000.0, 2026, 9, late)["state"] == "ahead"
+
+
+def test_the_cap_leaves_the_early_month_alone():
+    """It binds only past about 60% of the month, so rent on the 1st is still
+    quiet and the mid-month trade-off is unchanged."""
+    assert pace.status(1000.0, 3000.0, *AUG, date(2026, 8, 4))["state"] == "on_track"
+    assert pace.status(3900.0, 6000.0, *AUG, MID_AUG)["state"] == "on_track"
+
+
+def test_a_month_that_has_not_started_is_never_off_track():
+    """forecast() refuses a future month; status() did not, so share was 0,
+    the margin was at its widest, and any future month holding more than a
+    third of its budget read as 'spending ahead of pace' — for days on which
+    nothing can have been spent.
+    """
+    for spent in (1500.0, 3100.0):
+        result = pace.status(spent, 3000.0, 2026, 12, date(2026, 8, 27))
+        assert result["state"] == "not_started"
+        assert result["projected"] is None
+
+
+def test_a_future_month_is_reachable_when_the_clock_moves_backwards():
+    """The stored month and `today` come from different clocks: BudgetData
+    captures its date once at construction, while the pace is computed against
+    datetime.now(). A device crossing a month boundary backwards — a westward
+    timezone change, or NTP correcting a fast clock — puts the two out of step.
+    """
+    result = pace.status(2000.0, 3000.0, 2026, 9, date(2026, 8, 31))
+    assert result["state"] == "not_started"

@@ -1199,9 +1199,18 @@ function renderTrend() {
 // month has reached. Fill past the tick means spending faster than the month
 // is passing, read at a glance with no arithmetic and no second number.
 
+//: Pace states with nothing to say. A state absent from this list falls
+//: through to the on-track wording, so anything new must be listed here or
+//: it silently claims the month is fine.
+const QUIET_PACE_STATES = ['no_budget', 'not_started'];
+
 function paceMarker() {
   let p = state.pace;
-  if (!p || p.state === 'no_budget' || !p.elapsed) return '';
+  // Both states mean there is nothing to mark: no budget to measure against,
+  // or a month that has not begun. Listing them explicitly rather than
+  // falling through keeps a new state from silently inheriting the on-track
+  // rendering, which is what happened when 'not_started' was added.
+  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0 || !p.elapsed) return '';
   // inset-inline-start, not left: under dir="rtl" the bar fills from the
   // right, and a marker pinned to the left would sit at the wrong end of it.
   return `<div title="${t('pace_marker')}" style="position:absolute;top:-3px;bottom:-3px;
@@ -1211,7 +1220,7 @@ function paceMarker() {
 
 function paceLine() {
   let p = state.pace;
-  if (!p || p.state === 'no_budget') return '';
+  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0) return '';
 
   let text, colour;
   if (p.state === 'over') {

@@ -38,6 +38,11 @@ AHEAD_MARGIN = 0.10
 #: it.
 EARLY_TOLERANCE = 0.25
 
+#: Ceiling on the margin as a share of the month still to run. It binds only
+#: past about 60% of the month, so it leaves the early tolerance alone and
+#: keeps the "ahead" band open right up to the point where "over" takes over.
+LATE_CAP = 0.5
+
 
 def days_in(year: int, month: int) -> int:
     return calendar.monthrange(year, month)[1]
@@ -95,6 +100,15 @@ def status(spent: float, budget: float, year: int, month: int, today: date) -> D
         "state": "no_budget",
         "used": 0.0,
     }
+    # A month that has not started cannot be off track. forecast() already
+    # refuses one; without the same guard here, share is 0, the margin is at
+    # its widest, and any future month holding more than a third of its budget
+    # reads as "spending ahead of pace" — for days on which nothing can have
+    # been spent. Reachable when the device clock moves backwards over a month
+    # boundary, since the stored month and `today` come from different clocks.
+    if (year, month) > (today.year, today.month):
+        result["state"] = "not_started"
+        return result
     if budget <= 0:
         return result
 
@@ -127,8 +141,16 @@ def margin_at(share: float) -> float:
     Wide early, narrow late. Without the taper a single fixed payment on the
     1st fires the badge every month, and a badge that always fires is a badge
     nobody reads — which costs more than the warning saves.
+
+    The cap is what makes "narrow late" true. Without it the taper only reached
+    0.10 in the limit, so ``share + margin`` passed 1.0 at 87% of the month and
+    the whole band closed: from then on nothing could be "ahead", because
+    anything that far over was already caught by "over". The same 96.7% spend
+    warned on the 24th and read as on track on the 28th — and those last days
+    are exactly when the warning can still be acted on.
     """
-    return AHEAD_MARGIN + max(0.0, 1.0 - share) * EARLY_TOLERANCE
+    taper = AHEAD_MARGIN + max(0.0, 1.0 - share) * EARLY_TOLERANCE
+    return min(taper, max(0.0, 1.0 - share) * LATE_CAP)
 
 
 def _days_left(year: int, month: int, today: date) -> int:
