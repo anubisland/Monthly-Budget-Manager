@@ -80,6 +80,15 @@ header .hdr-btn:active{background:var(--card)}
 .goal-fund[disabled]{background:rgba(128,128,128,.25);color:var(--ts);cursor:default}
 .goal-foot{display:flex;align-items:center;gap:8px;margin-top:2px}
 .goal-foot .spacer{flex:1}
+/* Amount buttons for funding a goal. Their own class: .chip is the category
+   selector from the add screen, which carries color:#fff and expects the
+   caller to inject a background per category — borrowing it here produced
+   white text on white. */
+.fund-amounts{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.fund-amt{background:var(--pri);color:#fff;border:none;border-radius:16px;
+  padding:7px 14px;font-size:12px;font-weight:600;cursor:pointer}
+.fund-amt:active{transform:scale(.96)}
+.fund-amt.all{background:var(--inc)}
 /* Pending recurring items. A prompt, never an automatic write: the engine has
    no memory, so applying on sight would double the rent on the next open. */
 .rec-card{border-inline-start:3px solid var(--warn)}
@@ -787,9 +796,10 @@ function fundPicker(goal, idx) {
     let label = (v === goal.remaining)
       ? t('fund_all') + ' (' + cs() + v.toLocaleString() + ')'
       : cs() + v.toLocaleString();
-    return `<button class="chip" onclick="fundGoal(${idx}, ${v})">${label}</button>`;
+    let kind = v === goal.remaining ? 'fund-amt all' : 'fund-amt';
+    return `<button class="${kind}" onclick="fundGoal(${idx}, ${v})">${label}</button>`;
   }).join('');
-  return `<div class="chips" style="margin-top:8px">${chips}</div>`;
+  return `<div class="fund-amounts">${chips}</div>`;
 }
 
 async function fundGoal(idx, amount) {
@@ -1121,7 +1131,12 @@ async function exportXLSX() {
   // then it has to say where the file went — otherwise the export is real and
   // the user has no way to reach it.
   if (!result.shared) {
-    toast(t('export_saved').replace('{path}', result.path));
+    // The share sheet is the intended outcome; a path is what is left when
+    // it could not open, and only the file name is any use on a phone —
+    // the full path is longer than the toast and leads somewhere a file
+    // manager cannot reach anyway.
+    let name = String(result.path).split(/[\/]/).pop();
+    toast(t('export_saved').replace('{path}', name));
   }
 }
 
