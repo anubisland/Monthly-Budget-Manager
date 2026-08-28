@@ -103,6 +103,14 @@ header .hdr-btn:active{background:var(--card)}
    it is called. Both of these were shipped with names only, and the names
    describe the mechanism, not the benefit. */
 .hint{font-size:11px;color:var(--ts);line-height:1.5;margin:2px 0 8px}
+/* Forms that read as sentences. Two bare boxes side by side gave no clue
+   which was the condition and which the result — the question "what do I
+   write here?" was the form's fault, not the user's. */
+.rule-form{margin-top:8px;display:flex;flex-direction:column;gap:2px}
+.rule-form .form-input{padding:9px 10px;font-size:13px;width:100%}
+.rule-form .pair{display:flex;gap:8px}
+.rule-form .pair > div{flex:1;min-width:0}
+.mini-label{font-size:11px;font-weight:600;color:var(--ts);margin-top:6px;display:block}
 /* Six-month trend */
 .tr-wrap{display:flex;align-items:flex-end;gap:6px;height:110px;margin:10px 0 4px}
 .tr-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;height:100%;justify-content:flex-end}
@@ -245,7 +253,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
 <body>
 <div id="app">
   <header>
-    <h1 id="title">Budget</h1>
+    <h1 id="title"></h1>
     <div style="display:flex;gap:4px">
       <button class="hdr-btn" id="hdr-more" style="display:none">←</button>
     </div>
@@ -266,11 +274,11 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
     <!-- DASHBOARD -->
     <section id="page-home" class="page active">
       <div class="card rec-card" id="rec-pending" style="display:none">
-        <div class="card-title" id="ct-recurring">Recurring this month</div>
+        <div class="card-title" id="ct-recurring"></div>
         <div id="rec-list"></div>
       </div>
       <div class="safe-card" id="safe-card" style="background:var(--pri);color:#fff">
-        <div class="label" id="safe-label" style="color:rgba(255,255,255,.7)">Budget</div>
+        <div class="label" id="safe-label" style="color:rgba(255,255,255,.7)"></div>
         <div id="budget-overview"></div>
       </div>
       <div class="stats-row">
@@ -283,15 +291,15 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <button class="exp-btn" onclick="showPage('add','exp')">+ Expense</button>
       </div>
       <div class="card" id="goal-card" style="display:none">
-        <div class="card-title" id="ct-active-goal">Active Goal</div>
+        <div class="card-title" id="ct-active-goal"></div>
         <div id="goal-content"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-budget">Budget</div>
+        <div class="card-title" id="ct-budget"></div>
         <div id="budget-bars"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-recent">Recent</div>
+        <div class="card-title" id="ct-recent"></div>
         <div id="recent-list"></div>
       </div>
     </section>
@@ -304,7 +312,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       </div>
       <div class="card">
         <div class="form-group" id="name-group">
-          <label id="l-name">Description</label>
+          <label id="l-name"></label>
           <select class="form-input" id="input-name-inc">
             <option value="Salary/Wage">💰 Salary / Wage</option>
             <option value="Freelance">💻 Freelance</option>
@@ -318,27 +326,27 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <input class="form-input" id="input-name-exp" autocomplete="off" style="display:none">
         </div>
         <div class="form-group">
-          <label id="l-amount">Amount</label>
+          <label id="l-amount"></label>
           <input class="form-input amount" id="input-amount" type="number" step="0.01" min="0" placeholder="0.00" inputmode="decimal">
         </div>
         <div class="form-group" id="cat-group">
-          <label id="l-category">Category</label>
+          <label id="l-category"></label>
           <div class="chips" id="cat-chips"></div>
         </div>
         <div class="form-group">
-          <label id="l-date">Date</label>
+          <label id="l-date"></label>
           <div class="date-bar" id="date-bar">
-            <button class="date-btn active today" onclick="setDate('today')" id="d-today">Today</button>
-            <button class="date-btn yest" onclick="setDate('yesterday')" id="d-yest">Yesterday</button>
-            <button class="date-btn custom" onclick="setDate('custom')" id="d-custom">Custom</button>
+            <button class="date-btn active today" onclick="setDate('today')" id="d-today"></button>
+            <button class="date-btn yest" onclick="setDate('yesterday')" id="d-yest"></button>
+            <button class="date-btn custom" onclick="setDate('custom')" id="d-custom"></button>
           </div>
           <input class="date-picker" id="date-picker" type="date" onchange="onDatePick(this.value)" style="position:absolute;opacity:0;width:1px;height:1px;pointer-events:none">
           <div style="text-align:center;font-size:13px;font-weight:500;color:var(--pri);margin-top:4px" id="date-display"></div>
         </div>
-        <button class="add-btn inc" id="add-btn" onclick="handleAdd()">Add Income</button>
+        <button class="add-btn inc" id="add-btn" onclick="handleAdd()"></button>
       </div>
       <div class="card">
-        <div class="card-title" id="l-history">History</div>
+        <div class="card-title" id="l-history"></div>
         <div id="add-history"></div>
       </div>
     </section>
@@ -346,7 +354,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
     <!-- BUDGET -->
     <section id="page-budget" class="page">
       <div class="card">
-        <div class="card-title" id="ct-compare">Month comparison</div>
+        <div class="card-title" id="ct-compare"></div>
         <div id="compare-body"></div>
       </div>
       <div class="card">
@@ -354,21 +362,21 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div id="trend-body"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-inc-vs-exp">Income vs Expenses</div>
+        <div class="card-title" id="ct-inc-vs-exp"></div>
         <div id="inc-exp-compare"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-income-sources">Income Sources</div>
+        <div class="card-title" id="ct-income-sources"></div>
         <div id="income-donut-wrap" style="display:flex;justify-content:center;margin:4px 0"><canvas id="income-donut" width="200" height="200"></canvas></div>
         <div id="income-donut-legend"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-spending">Spending by Category</div>
+        <div class="card-title" id="ct-spending"></div>
         <div id="donut-wrap"><canvas id="donut" width="200" height="200"></canvas></div>
         <div id="donut-legend"></div>
       </div>
       <div class="card">
-        <div class="card-title" id="ct-cat-breakdown">Category Breakdown</div>
+        <div class="card-title" id="ct-cat-breakdown"></div>
         <div id="budget-detail"></div>
       </div>
     </section>
@@ -377,13 +385,13 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
     <!-- GOALS -->
     <section id="page-goals" class="page">
       <div class="card">
-        <div class="card-title" id="ct-new-goal">New Goal</div>
+        <div class="card-title" id="ct-new-goal"></div>
         <div class="form-group">
           <label>Name</label>
           <input class="form-input" id="g-name" autocomplete="off">
         </div>
         <div class="form-group">
-          <label id="l-target">Target</label>
+          <label id="l-target"></label>
           <input class="form-input" id="g-target" type="number" step="0.01" min="0" placeholder="1000" inputmode="decimal">
         </div>
         <div class="form-group">
@@ -405,36 +413,55 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         </div>
       </div>
       <div class="setting-group">
-        <h3 id="st-theme">Theme</h3>
+        <h3 id="st-theme"></h3>
         <button class="setting-btn" id="theme-btn" onclick="toggleTheme()">🌙 Dark Mode</button>
       </div>
       <div class="setting-group">
         <h3 id="st-rules">Auto-category rules</h3>
         <div class="hint" id="hint-rules"></div>
         <div id="rules-list"></div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          <input class="form-input" id="rule-pattern" style="flex:1;padding:9px 10px;font-size:13px" placeholder="vodafone">
-          <select class="form-input" id="rule-category" style="flex:1;padding:9px 10px;font-size:13px"></select>
+        <div class="rule-form">
+          <label class="mini-label" id="l-rule-when"></label>
+          <input class="form-input" id="rule-pattern">
+          <label class="mini-label" id="l-rule-then"></label>
+          <select class="form-input" id="rule-category"></select>
+          <div class="hint" id="hint-rule-example"></div>
         </div>
         <button class="setting-btn" id="btn-add-rule" onclick="addRule()" style="margin-top:6px">+ Add rule</button>
       </div>
       <div class="setting-group">
-        <h3 id="st-recurring">Recurring items</h3>
+        <h3 id="st-recurring"></h3>
         <div class="hint" id="hint-recurring"></div>
         <div id="recurring-list"></div>
-        <div style="display:flex;gap:6px;margin-top:8px">
-          <input class="form-input" id="rec-desc" style="flex:1;padding:9px 10px;font-size:13px">
-          <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" style="width:90px;padding:9px 10px;font-size:13px" placeholder="0">
-        </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <select class="form-input" id="rec-category" style="flex:1;padding:9px 10px;font-size:13px"></select>
-          <select class="form-input" id="rec-frequency" style="flex:1;padding:9px 10px;font-size:13px"></select>
-          <select class="form-input" id="rec-day" style="width:80px;padding:9px 10px;font-size:13px"></select>
+        <div class="rule-form">
+          <label class="mini-label" id="l-rec-desc"></label>
+          <input class="form-input" id="rec-desc">
+          <div class="pair">
+            <div>
+              <label class="mini-label" id="l-rec-amount"></label>
+              <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" placeholder="0">
+            </div>
+            <div>
+              <label class="mini-label" id="l-rec-category"></label>
+              <select class="form-input" id="rec-category"></select>
+            </div>
+          </div>
+          <div class="pair">
+            <div>
+              <label class="mini-label" id="l-rec-frequency"></label>
+              <select class="form-input" id="rec-frequency" onchange="renderAutomationSettings()"></select>
+            </div>
+            <div>
+              <label class="mini-label" id="l-rec-day"></label>
+              <select class="form-input" id="rec-day"></select>
+            </div>
+          </div>
+          <div class="hint" id="hint-rec-example"></div>
         </div>
         <button class="setting-btn" id="btn-add-recurring" onclick="addRecurring()" style="margin-top:6px">+ Add recurring</button>
       </div>
       <div class="setting-group">
-        <h3 id="st-data">Data</h3>
+        <h3 id="st-data"></h3>
         <div class="setting-row">
           <button class="setting-btn" id="btn-backup" onclick="backup()">💾 Backup</button>
           <button class="setting-btn" id="btn-restore" onclick="restore()">📂 Restore</button>
@@ -443,7 +470,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)"></button>
       </div>
       <div class="setting-group">
-        <h3 id="st-budget">Budget</h3>
+        <h3 id="st-budget"></h3>
         <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
           <span style="font-size:13px;color:var(--ts);white-space:nowrap">Total Monthly Budget:</span>
           <input class="form-input" id="input-total-budget" type="number" min="0" step="100" style="flex:1;padding:10px 12px;font-size:14px" inputmode="numeric" placeholder="0">
@@ -455,7 +482,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <select class="form-input" id="sel-currency" onchange="setCurrency(this.value)" style="padding:10px 12px;font-size:14px"></select>
       </div>
       <div class="setting-group">
-        <h3 id="st-about">About</h3>
+        <h3 id="st-about"></h3>
         <div class="card" id="about-text" style="font-size:12px;color:var(--ts);text-align:center;padding:12px">
           Budget Manager · Free &amp; Open Source<br>
           v1.0
@@ -814,7 +841,12 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
-    ph_goal: 'e.g. a holiday', ph_recurring: 'e.g. rent', ph_rule: 'e.g. vodafone', ph_entry: 'e.g. groceries',
+    l_rule_when: 'When the name contains', l_rule_then: 'file it under',
+    rule_example: 'Example: type "vodafone" and choose Internet. Then "Vodafone bill" is filed as Internet on its own.',
+    l_rec_desc: 'What is it', l_rec_amount: 'Amount', l_rec_category: 'Category',
+    l_rec_frequency: 'How often', l_rec_day: 'Which day',
+    rec_example: 'Example: Rent, 3000, monthly, day 1 — offered on the 1st of every month. Add as many as you like; there is no limit.',
+    ph_goal: 'e.g. a holiday', ph_recurring: 'e.g. rent', ph_rule: 'vodafone', ph_entry: 'e.g. groceries',
     rules_hint: 'Type a word once, and every future entry containing it gets that category automatically. Picking a category yourself always wins.',
     recurring_hint: 'Set up a bill once — rent, a subscription — and it is offered at the start of each month. One tap adds it; nothing is added without you.',
     reset_confirm_btn: 'Tap again to erase everything', reset_all_btn: '🗑 Reset All',
@@ -873,7 +905,12 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
-    ph_goal: 'مثلًا إجازة', ph_recurring: 'مثلًا الإيجار', ph_rule: 'مثلًا فودافون', ph_entry: 'مثلًا بقالة',
+    l_rule_when: 'إذا احتوى الاسم على', l_rule_then: 'صنّفه كـ',
+    rule_example: 'مثال: اكتب «فودافون» واختر إنترنت. بعدها «فاتورة فودافون» تُصنّف إنترنت وحدها.',
+    l_rec_desc: 'ما هي', l_rec_amount: 'المبلغ', l_rec_category: 'التصنيف',
+    l_rec_frequency: 'كل كم', l_rec_day: 'أيّ يوم',
+    rec_example: 'مثال: إيجار، 3000، شهري، يوم 1 — يُعرَض عليك أوّل كل شهر. أضف ما شئت، لا يوجد حدّ أقصى.',
+    ph_goal: 'مثلًا إجازة', ph_recurring: 'مثلًا الإيجار', ph_rule: 'فودافون', ph_entry: 'مثلًا بقالة',
     rules_hint: 'اكتب كلمة مرة واحدة، وكل حركة قادمة تحتويها تأخذ هذا التصنيف تلقائيًا. واختيارك الصريح يفوز دائمًا.',
     recurring_hint: 'عرّف فاتورة مرة واحدة — إيجارًا أو اشتراكًا — فتُعرَض عليك أوّل كل شهر. نقرة واحدة تُضيفها، ولا يُضاف شيء بدونك.',
     reset_confirm_btn: 'اضغط مرة أخرى لمحو كل شيء', reset_all_btn: '🗑 حذف الكل',
@@ -1147,6 +1184,17 @@ function renderAutomationSettings() {
   document.getElementById('st-rules').textContent = t('rules_title');
   document.getElementById('hint-rules').textContent = t('rules_hint');
   document.getElementById('hint-recurring').textContent = t('recurring_hint');
+  let labels = {
+    'l-rule-when': 'l_rule_when', 'l-rule-then': 'l_rule_then',
+    'hint-rule-example': 'rule_example', 'hint-rec-example': 'rec_example',
+    'l-rec-desc': 'l_rec_desc', 'l-rec-amount': 'l_rec_amount',
+    'l-rec-category': 'l_rec_category', 'l-rec-frequency': 'l_rec_frequency',
+    'l-rec-day': 'l_rec_day',
+  };
+  for (let id in labels) {
+    let el = document.getElementById(id);
+    if (el) el.textContent = t(labels[id]);
+  }
   document.getElementById('st-recurring').textContent = t('recurring_title');
   document.getElementById('btn-add-rule').textContent = '+ ' + t('add_rule');
   document.getElementById('btn-add-recurring').textContent = '+ ' + t('add_recurring');
@@ -1297,8 +1345,10 @@ function renderCurrencyLabels() {
 // they follow the language like everything else.
 function setPlaceholders() {
   let hints = {
-    'g-name': 'ph_goal', 'rec-desc': 'ph_recurring',
-    'rule-pattern': 'ph_rule', 'input-name-exp': 'ph_entry',
+    'g-name': 'ph_goal',
+    'rec-desc': 'ph_recurring',
+    'rule-pattern': 'ph_rule',
+    'input-name-exp': 'ph_entry',
   };
   for (let id in hints) {
     let el = document.getElementById(id);
@@ -1361,10 +1411,14 @@ function paceLine() {
 function renderPendingRecurring() {
   let card = document.getElementById('rec-pending');
   let list = state.pending_recurring || [];
+  // Set before the early return. English text written into the HTML is a
+  // debt: it works until some path skips the line that replaces it, and this
+  // one skipped it whenever there was nothing pending — leaving an English
+  // heading in an Arabic interface the moment the card first appeared.
+  document.getElementById('ct-recurring').textContent = t('recurring_due');
   if (!list.length) { card.style.display = 'none'; return; }
 
   card.style.display = '';
-  document.getElementById('ct-recurring').textContent = t('recurring_due');
   document.getElementById('rec-list').innerHTML = list.map(item => {
     // A weekly template covers several dates in one month, so the total is
     // what accepting actually costs — not the per-occurrence amount.
