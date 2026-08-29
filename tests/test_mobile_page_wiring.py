@@ -158,3 +158,18 @@ def test_the_page_sends_every_label_the_spreadsheet_uses():
         re.search(r"function reportLabels\(\)\s*\{(.*?)\n\}", PAGE, re.S).group(1)))
     missing = sorted(defaults - sent)
     assert not missing, f"the file uses these but the page never sends them: {missing}"
+
+
+def test_the_export_sends_everything_the_writer_presents():
+    """Three times now the same bug: a value stored one way and displayed
+    another reached the file in its stored form — English category names, then
+    the reading direction, then the currency code behind its symbol. Every key
+    the presentation step reads must be one the page actually sends."""
+    source = (MOBILE / "api.py").read_text("utf-8")
+    presentation = re.search(
+        r"def _presentation\(.*?\n(?=\ndef )", source, re.S).group(0)
+    read = set(re.findall(r'd\.get\("(\w+)"\)', presentation))
+    sent = set(re.findall(
+        r"(\w+):", re.search(r"/api/export',\s*\{(.*?)\}\)\)", PAGE, re.S).group(1)))
+    missing = sorted(read - sent - {"month"})
+    assert not missing, f"the writer reads these but the page never sends them: {missing}"

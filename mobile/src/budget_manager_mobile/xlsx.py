@@ -15,7 +15,6 @@ from datetime import date as _date
 from pathlib import Path
 from typing import Dict, List
 
-
 #: Every word the spreadsheet shows. English here is the fallback; the page
 #: sends its own translations with the request, so the words in the file are
 #: the same ones on screen. Translating them again in Python would create a
@@ -97,7 +96,12 @@ def _styles(workbook, currency: str) -> Dict:
     # default, and for most of the currencies in the list. A stray quote inside
     # the value would end the literal and produce a file Excel refuses to open,
     # so it is stripped first.
-    safe = str(currency).replace('"', "")
+    # The backslash goes with it. In a number format it escapes the next
+    # character, so a symbol ending in one turns the closing quote into a
+    # literal and leaves the string unterminated — the same file Excel refuses
+    # to open. This mattered less when the currency came from a fixed list;
+    # the page now sends the symbol it is showing, so it is request text.
+    safe = str(currency).replace('"', "").replace("\\", "")
     money = f'"{safe}"#,##0.00' if safe else '#,##0.00'
     # Data cells carry the same border as the header. Bordering only the
     # header left a boxed heading floating over unruled rows, which reads as a

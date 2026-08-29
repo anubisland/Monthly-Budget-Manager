@@ -791,3 +791,46 @@ def test_both_languages_get_the_same_finish(tmp_path, rtl):
     assert '<sz val="10"/>' in styles and '<sz val="11"/>' in styles
     assert "0.0%" in styles and '0.0"%"' not in styles
     assert "yyyy-mm-dd" in styles
+
+
+def test_the_file_quotes_the_symbol_on_screen_not_the_code_behind_it(tmp_path):
+    """The currency is stored as a three-letter code and shown as a symbol.
+    Reading storage, the spreadsheet quoted "EGP" — a code the user never
+    chose and sees nowhere else in the app."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    app.set_currency("EGP")
+    api.dispatch(app, "/api/export", {"symbol": "\u062c.\u0645"})
+
+    with zipfile.ZipFile(app.last_export["path"]) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+    assert "\u062c.\u0645" in styles, "the symbol never reached the number format"
+    assert "EGP" not in styles, "the stored code is still in the file"
+
+
+def test_a_symbol_that_is_not_a_symbol_leaves_the_stored_code_alone(tmp_path):
+    """It arrives from a request, so it is not trusted. Falling back to the
+    stored code keeps a currency in the file rather than none at all."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    app.set_currency("EGP")
+    api.dispatch(app, "/api/export", {"symbol": {"not": "a string"}})
+
+    with zipfile.ZipFile(app.last_export["path"]) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+    assert "EGP" in styles, "the stored code should stand in for a bad symbol"
+
+
+@pytest.mark.parametrize("symbol", ['a"b', r"back\slash", "trailing" + "\\"])
+def test_a_symbol_cannot_break_out_of_the_number_format(tmp_path, symbol):
+    """Both characters end the quoted literal: one directly, one by escaping
+    the quote that closes it. Either leaves a format Excel refuses to open."""
+    built = report.build(_app(tmp_path).data, "2026-08", symbol)
+    path = xlsx.write(built, tmp_path / "hostile.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+    fmt = re.search(r'formatCode="([^"]*#,##0\.00)"', styles).group(1)
+    body = fmt[: -len("#,##0.00")]
+    assert body.startswith("&quot;") and body.endswith("&quot;")
+    assert "\\" not in body and "&quot;" not in body[6:-6]

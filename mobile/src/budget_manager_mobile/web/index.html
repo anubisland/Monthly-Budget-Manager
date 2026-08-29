@@ -1228,7 +1228,7 @@ async function exportXLSX() {
   // xlsx.py had every word written into it and no idea a language existed.
   if (!await postAndRefresh('/api/export',
       {month: state.month_key, labels: reportLabels(),
-       names: reportNames(), rtl: isRTL()})) return;
+       names: reportNames(), rtl: isRTL(), symbol: cs()})) return;
   reportFileResult();
 }
 
