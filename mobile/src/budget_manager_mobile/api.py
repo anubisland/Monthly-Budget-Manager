@@ -14,6 +14,7 @@ a route that did nothing.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable, Dict, Optional
 
 import decode
@@ -342,6 +343,31 @@ def _backup(app, d: Dict) -> None:
     app.last_export = {"path": str(path), "shared": shared, "reason": reason}
 
 
+#: Characters that cannot survive an Excel number format. The quote ends the
+#: quoted literal the currency sits in; a control character is written into
+#: xl/styles.xml raw, and the file then fails to open with a message naming
+#: nothing. ``validate.text`` collapses whitespace, which removes tab, newline
+#: and friends but leaves the rest of the C0 range untouched.
+UNWRITABLE = re.compile(r'[\x00-\x1f\x7f"\\]')
+
+
+def _currency(value: object) -> Optional[str]:
+    """A currency symbol, or None when none was offered.
+
+    Raises rather than sanitising. A symbol that needs characters removed is
+    not a symbol, and quietly deleting them produces a file that is wrong in a
+    way nobody can see — either no currency at all, or one that opens as
+    corrupt. Refusing is what :func:`_set_currency` already does with the same
+    value, and the two must not disagree.
+    """
+    if value is None:
+        return None
+    symbol = validate.text(value, limit=8)
+    if symbol is None or UNWRITABLE.search(symbol):
+        raise ApiError("that currency cannot be written to a spreadsheet")
+    return symbol
+
+
 def _presentation(built: Dict, d: Dict) -> None:
     """Apply what the page is showing to the report it is exporting.
 
@@ -369,8 +395,11 @@ def _presentation(built: Dict, d: Dict) -> None:
 
     # The symbol on screen, not the three-letter code behind it. Stored as
     # "EGP" and shown as "ج.م", the spreadsheet was quoting a code the user
-    # never chose and does not see anywhere else in the app.
-    symbol = validate.text(d.get("symbol"), limit=8)
+    # never chose and does not see anywhere else in the app. An older page
+    # sends nothing and keeps the stored code; a page that sends something
+    # unusable is broken, and must say so once rather than produce the
+    # pre-fix file for ever.
+    symbol = _currency(d.get("symbol"))
     if symbol:
         built["currency"] = symbol
 
@@ -430,7 +459,7 @@ def _set_language(app, d: Dict) -> None:
 
 
 def _set_currency(app, d: Dict) -> None:
-    currency = validate.text(d.get("currency"), limit=8)
+    currency = _currency(d.get("currency"))
     if currency is None:
         raise ApiError("a currency is required")
     app.set_currency(currency)

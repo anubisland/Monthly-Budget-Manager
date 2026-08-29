@@ -808,17 +808,36 @@ def test_the_file_quotes_the_symbol_on_screen_not_the_code_behind_it(tmp_path):
     assert "EGP" not in styles, "the stored code is still in the file"
 
 
-def test_a_symbol_that_is_not_a_symbol_leaves_the_stored_code_alone(tmp_path):
-    """It arrives from a request, so it is not trusted. Falling back to the
-    stored code keeps a currency in the file rather than none at all."""
+def test_an_unusable_symbol_is_refused_rather_than_quietly_dropped():
+    """The old fallback re-created the very bug this change fixes: a malformed
+    symbol produced the pre-fix file — the stored code, quoted — and reported
+    success. Nobody would notice, because that output is what everyone was
+    used to. A broken page should fail loudly once, not ship wrong files for
+    ever. _set_currency already refuses the same value."""
     from tests.mobile_app_modules import api
-    app = _app(tmp_path)
-    app.set_currency("EGP")
-    api.dispatch(app, "/api/export", {"symbol": {"not": "a string"}})
+    for bad in ({"not": "a string"}, "E", '"' + chr(92), "   "):
+        with pytest.raises(api.ApiError):
+            api._currency(bad)
 
-    with zipfile.ZipFile(app.last_export["path"]) as archive:
-        styles = archive.read("xl/styles.xml").decode("utf-8")
-    assert "EGP" in styles, "the stored code should stand in for a bad symbol"
+
+def test_a_page_that_sends_no_symbol_still_gets_a_currency():
+    """Absent is not malformed. An older page sends nothing, and its file must
+    keep the stored code rather than lose the money format."""
+    from tests.mobile_app_modules import api
+    assert api._currency(None) is None
+
+
+def test_a_control_character_cannot_reach_the_number_format(tmp_path):
+    """It survives validate.text — str.split() drops tab and newline but not
+    the rest of the C0 range — and is written into xl/styles.xml raw, so the
+    file fails to open with a message naming nothing, after the user was told
+    where it was saved."""
+    import xml.etree.ElementTree as ET
+    built = report.build(_app(tmp_path).data, "2026-08", "E")
+    path = xlsx.write(built, tmp_path / "ctrl.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        ET.fromstring(archive.read("xl/styles.xml"))
 
 
 @pytest.mark.parametrize("symbol", ['a"b', r"back\slash", "trailing" + "\\"])

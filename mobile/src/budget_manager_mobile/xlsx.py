@@ -11,6 +11,7 @@ desktop app instead.
 
 from __future__ import annotations
 
+import re
 from datetime import date as _date
 from pathlib import Path
 from typing import Dict, List
@@ -32,6 +33,11 @@ LABELS = {
     "done": "Done", "yes": "Yes", "no": "No",
     "month": "Month", "recent_months": "Recent months", "average_over": "Average over {n} month(s)",
 }
+
+
+#: Characters an Excel number format cannot carry. Mirrors api.UNWRITABLE,
+#: which refuses them where the user can still be told.
+_UNWRITABLE = re.compile(r'[\x00-\x1f\x7f"\\]')
 
 
 def _labels(report: Dict) -> Dict:
@@ -92,16 +98,16 @@ def _styles(workbook, currency: str) -> Dict:
     # The currency must be quoted. Unquoted letters in an Excel number format
     # are format codes, not text: D is day, M is month, S is second. The app
     # stores a three-letter code, so "USD#,##0.00" is read as a date format and
-    # every money cell renders as 09/04/1923 instead of a number — for USD, the
-    # default, and for most of the currencies in the list. A stray quote inside
-    # the value would end the literal and produce a file Excel refuses to open,
-    # so it is stripped first.
-    # The backslash goes with it. In a number format it escapes the next
-    # character, so a symbol ending in one turns the closing quote into a
-    # literal and leaves the string unterminated — the same file Excel refuses
-    # to open. This mattered less when the currency came from a fixed list;
-    # the page now sends the symbol it is showing, so it is request text.
-    safe = str(currency).replace('"', "").replace("\\", "")
+    # every money cell renders as 09/04/1923 instead of a number.
+    #
+    # The strip is defence in depth, not the validation: api.py refuses these
+    # at the boundary so the user hears about it, and a value that reaches
+    # here still carrying one came by some other road. A quote ends the
+    # literal; a control character is written into the XML raw and the file
+    # will not open at all. A backslash is dropped for a duller reason than
+    # the spec — no currency symbol contains one, and Excel is known to
+    # diverge from ECMA-376 on escape handling, so it is not worth the bet.
+    safe = _UNWRITABLE.sub("", str(currency))
     money = f'"{safe}"#,##0.00' if safe else '#,##0.00'
     # Data cells carry the same border as the header. Bordering only the
     # header left a boxed heading floating over unruled rows, which reads as a

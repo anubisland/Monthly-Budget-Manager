@@ -12,6 +12,7 @@ check the seam between the page and the code behind it, which is where that
 defect lived and where nothing was looking.
 """
 
+import ast
 import re
 from pathlib import Path
 
@@ -164,12 +165,36 @@ def test_the_export_sends_everything_the_writer_presents():
     """Three times now the same bug: a value stored one way and displayed
     another reached the file in its stored form — English category names, then
     the reading direction, then the currency code behind its symbol. Every key
-    the presentation step reads must be one the page actually sends."""
-    source = (MOBILE / "api.py").read_text("utf-8")
-    presentation = re.search(
-        r"def _presentation\(.*?\n(?=\ndef )", source, re.S).group(0)
-    read = set(re.findall(r'd\.get\("(\w+)"\)', presentation))
+    the presentation step reads must be one the page actually sends.
+
+    Read from the syntax tree rather than by matching text. A regex over
+    _presentation stops seeing anything the moment that function is split —
+    which is the refactor this project's own conventions push toward — and an
+    empty set of reads passes for ever while guarding nothing.
+    """
+    tree = ast.parse((MOBILE / "api.py").read_text("utf-8"))
+    presentation = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_presentation"
+    )
+    helpers = {
+        node.func.id for node in ast.walk(presentation)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    }
+    bodies = [presentation] + [
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name in helpers
+    ]
+    read = {
+        call.args[0].value
+        for body in bodies for call in ast.walk(body)
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute) and call.func.attr == "get"
+        and call.args and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[0].value, str)
+    }
     sent = set(re.findall(
         r"(\w+):", re.search(r"/api/export',\s*\{(.*?)\}\)\)", PAGE, re.S).group(1)))
+    #: _export reads the month itself, before presentation runs.
     missing = sorted(read - sent - {"month"})
     assert not missing, f"the writer reads these but the page never sends them: {missing}"
