@@ -791,3 +791,65 @@ def test_both_languages_get_the_same_finish(tmp_path, rtl):
     assert '<sz val="10"/>' in styles and '<sz val="11"/>' in styles
     assert "0.0%" in styles and '0.0"%"' not in styles
     assert "yyyy-mm-dd" in styles
+
+
+def test_the_file_quotes_the_symbol_on_screen_not_the_code_behind_it(tmp_path):
+    """The currency is stored as a three-letter code and shown as a symbol.
+    Reading storage, the spreadsheet quoted "EGP" — a code the user never
+    chose and sees nowhere else in the app."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    app.set_currency("EGP")
+    api.dispatch(app, "/api/export", {"symbol": "\u062c.\u0645"})
+
+    with zipfile.ZipFile(app.last_export["path"]) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+    assert "\u062c.\u0645" in styles, "the symbol never reached the number format"
+    assert "EGP" not in styles, "the stored code is still in the file"
+
+
+def test_an_unusable_symbol_is_refused_rather_than_quietly_dropped():
+    """The old fallback re-created the very bug this change fixes: a malformed
+    symbol produced the pre-fix file — the stored code, quoted — and reported
+    success. Nobody would notice, because that output is what everyone was
+    used to. A broken page should fail loudly once, not ship wrong files for
+    ever. _set_currency already refuses the same value."""
+    from tests.mobile_app_modules import api
+    for bad in ({"not": "a string"}, "E", '"' + chr(92), "   "):
+        with pytest.raises(api.ApiError):
+            api._currency(bad)
+
+
+def test_a_page_that_sends_no_symbol_still_gets_a_currency():
+    """Absent is not malformed. An older page sends nothing, and its file must
+    keep the stored code rather than lose the money format."""
+    from tests.mobile_app_modules import api
+    assert api._currency(None) is None
+
+
+def test_a_control_character_cannot_reach_the_number_format(tmp_path):
+    """It survives validate.text — str.split() drops tab and newline but not
+    the rest of the C0 range — and is written into xl/styles.xml raw, so the
+    file fails to open with a message naming nothing, after the user was told
+    where it was saved."""
+    import xml.etree.ElementTree as ET
+    built = report.build(_app(tmp_path).data, "2026-08", "E")
+    path = xlsx.write(built, tmp_path / "ctrl.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        ET.fromstring(archive.read("xl/styles.xml"))
+
+
+@pytest.mark.parametrize("symbol", ['a"b', r"back\slash", "trailing" + "\\"])
+def test_a_symbol_cannot_break_out_of_the_number_format(tmp_path, symbol):
+    """Both characters end the quoted literal: one directly, one by escaping
+    the quote that closes it. Either leaves a format Excel refuses to open."""
+    built = report.build(_app(tmp_path).data, "2026-08", symbol)
+    path = xlsx.write(built, tmp_path / "hostile.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+    fmt = re.search(r'formatCode="([^"]*#,##0\.00)"', styles).group(1)
+    body = fmt[: -len("#,##0.00")]
+    assert body.startswith("&quot;") and body.endswith("&quot;")
+    assert "\\" not in body and "&quot;" not in body[6:-6]

@@ -14,6 +14,7 @@ a route that did nothing.
 from __future__ import annotations
 
 import json
+import re
 from typing import Callable, Dict, Optional
 
 import decode
@@ -342,6 +343,69 @@ def _backup(app, d: Dict) -> None:
     app.last_export = {"path": str(path), "shared": shared, "reason": reason}
 
 
+#: Characters that cannot survive an Excel number format. The quote ends the
+#: quoted literal the currency sits in; a control character is written into
+#: xl/styles.xml raw, and the file then fails to open with a message naming
+#: nothing. ``validate.text`` collapses whitespace, which removes tab, newline
+#: and friends but leaves the rest of the C0 range untouched.
+UNWRITABLE = re.compile(r'[\x00-\x1f\x7f"\\]')
+
+
+def _currency(value: object) -> Optional[str]:
+    """A currency symbol, or None when none was offered.
+
+    Raises rather than sanitising. A symbol that needs characters removed is
+    not a symbol, and quietly deleting them produces a file that is wrong in a
+    way nobody can see — either no currency at all, or one that opens as
+    corrupt. Refusing is what :func:`_set_currency` already does with the same
+    value, and the two must not disagree.
+    """
+    if value is None:
+        return None
+    symbol = validate.text(value, limit=8)
+    if symbol is None or UNWRITABLE.search(symbol):
+        raise ApiError("that currency cannot be written to a spreadsheet")
+    return symbol
+
+
+def _presentation(built: Dict, d: Dict) -> None:
+    """Apply what the page is showing to the report it is exporting.
+
+    Everything here is stored one way and displayed another — words in English
+    behind a translation, a currency code behind its symbol, a direction the
+    data does not carry at all. The file used to read storage directly and so
+    came out as neither: the user's Arabic entries beside the app's English
+    ones, in an interface language it knew nothing about. The page sends what
+    it is showing rather than the writer translating it a second time, because
+    two sources for the same words drift.
+    """
+    labels = d.get("labels")
+    if isinstance(labels, dict):
+        built["labels"] = {k: v for k, v in labels.items() if isinstance(v, str)}
+
+    names = d.get("names")
+    if isinstance(names, dict):
+        # Capped like every other stored string. Uncapped, a name over 32767
+        # characters makes XlsxWriter return -2 and write nothing, so the cell
+        # comes out blank in a file the user was told was saved.
+        built["names"] = {
+            k: capped for k, v in names.items()
+            if (capped := validate.text(v)) is not None
+        }
+
+    # The symbol on screen, not the three-letter code behind it. Stored as
+    # "EGP" and shown as "ج.م", the spreadsheet was quoting a code the user
+    # never chose and does not see anywhere else in the app. An older page
+    # sends nothing and keeps the stored code; a page that sends something
+    # unusable is broken, and must say so once rather than produce the
+    # pre-fix file for ever.
+    symbol = _currency(d.get("symbol"))
+    if symbol:
+        built["currency"] = symbol
+
+    built["rtl"] = bool(d.get("rtl"))
+
+
 def _export(app, d: Dict) -> None:
     """Write the month on screen as a spreadsheet, then offer to share it.
 
@@ -356,25 +420,7 @@ def _export(app, d: Dict) -> None:
 
     path = app.export_path(f"budget-{month}.xlsx")
     built = report.build(app.data, month, app.currency)
-    # The page sends the words it is showing, so the file speaks whatever
-    # language the app is in. Translating them again here would be a second
-    # source drifting from the first.
-    labels = d.get("labels")
-    if isinstance(labels, dict):
-        built["labels"] = {k: v for k, v in labels.items() if isinstance(v, str)}
-    # Category and income names are stored in English and translated only for
-    # display, so without this table the file mixes the user's own Arabic
-    # entries with the app's English ones.
-    names = d.get("names")
-    if isinstance(names, dict):
-        # Capped like every other stored string. Uncapped, a name over 32767
-        # characters makes XlsxWriter return -2 and write nothing, so the cell
-        # comes out blank in a file the user was told was saved.
-        built["names"] = {
-            k: capped for k, v in names.items()
-            if (capped := validate.text(v)) is not None
-        }
-    built["rtl"] = bool(d.get("rtl"))
+    _presentation(built, d)
     try:
         xlsx.write(built, path)
     except xlsx.ExportError as err:
@@ -413,7 +459,7 @@ def _set_language(app, d: Dict) -> None:
 
 
 def _set_currency(app, d: Dict) -> None:
-    currency = validate.text(d.get("currency"), limit=8)
+    currency = _currency(d.get("currency"))
     if currency is None:
         raise ApiError("a currency is required")
     app.set_currency(currency)
