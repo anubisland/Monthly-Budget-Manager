@@ -362,6 +362,19 @@ def _export(app, d: Dict) -> None:
     labels = d.get("labels")
     if isinstance(labels, dict):
         built["labels"] = {k: v for k, v in labels.items() if isinstance(v, str)}
+    # Category and income names are stored in English and translated only for
+    # display, so without this table the file mixes the user's own Arabic
+    # entries with the app's English ones.
+    names = d.get("names")
+    if isinstance(names, dict):
+        # Capped like every other stored string. Uncapped, a name over 32767
+        # characters makes XlsxWriter return -2 and write nothing, so the cell
+        # comes out blank in a file the user was told was saved.
+        built["names"] = {
+            k: capped for k, v in names.items()
+            if (capped := validate.text(v)) is not None
+        }
+    built["rtl"] = bool(d.get("rtl"))
     try:
         xlsx.write(built, path)
     except xlsx.ExportError as err:

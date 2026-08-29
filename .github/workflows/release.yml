@@ -11,6 +11,11 @@ on:
         required: false
         default: 'Manual release trigger'
 
+# A superseded run of the same tag is output nobody reads.
+concurrency:
+  group: build-and-release-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -158,9 +163,15 @@ jobs:
           # Build/package
           briefcase build android -v
           briefcase package android -v
-          ls -R
           mkdir -p ../artifacts
-          find build -type f -name "*.apk" -print -exec cp -v {} ../artifacts/ \; || true
+          find build -type f -name "*.apk" -print -exec cp -v {} ../artifacts/ \;
+          # Without this the job is green, the release publishes, and the only
+          # sign that no APK was built is its absence from the assets — which
+          # is how a release once went out carrying a stale build.
+          if [ -z "$(ls -A ../artifacts/*.apk 2>/dev/null)" ]; then
+            echo "::error::the Android build produced no APK"
+            exit 1
+          fi
       - name: Build iOS (macOS)
         if: runner.os == 'macOS'
         working-directory: mobile

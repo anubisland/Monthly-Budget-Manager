@@ -7,6 +7,7 @@ the writer was called.
 
 import json
 import pathlib
+import re
 import zipfile
 from datetime import date
 
@@ -591,3 +592,202 @@ def test_a_label_that_is_not_a_string_is_ignored(tmp_path):
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
     for word in ("Income", "Expenses", "Net"):
         assert word in strings
+
+
+def test_an_arabic_sheet_reads_right_to_left(tmp_path):
+    """Right-to-left is a per-sheet flag in XlsxWriter, not a workbook one, so
+    every sheet has to be opened through the same helper or one of them comes
+    out alone and mirrored."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["rtl"] = True
+    path = xlsx.write(built, tmp_path / "rtl.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        sheets = [n for n in archive.namelist()
+                  if n.startswith("xl/worksheets/sheet")]
+        assert sheets, "no worksheets were written"
+        for name in sheets:
+            xml = archive.read(name).decode("utf-8")
+            assert 'rightToLeft="1"' in xml, f"{name} is still left-to-right"
+
+
+def test_a_left_to_right_report_is_left_alone(tmp_path):
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    path = xlsx.write(built, tmp_path / "ltr.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        for name in archive.namelist():
+            if name.startswith("xl/worksheets/sheet"):
+                assert 'rightToLeft="1"' not in archive.read(name).decode("utf-8")
+
+
+def test_stored_english_names_are_written_in_the_shown_language(tmp_path):
+    """Category and income names live in storage in English and are translated
+    only when drawn, so a report that reads storage directly mixes the user's
+    Arabic rows with the app's English ones."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["names"] = {"Rent": "\u0625\u064a\u062c\u0627\u0631"}
+    path = xlsx.write(built, tmp_path / "named.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "\u0625\u064a\u062c\u0627\u0631" in strings
+    assert "Rent" not in strings
+
+
+def test_a_name_the_table_does_not_know_is_kept_verbatim(tmp_path):
+    """The table translates what the app wrote, never what the user typed."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["names"] = {"Rent": 42, "Food": "  "}
+    path = xlsx.write(built, tmp_path / "verbatim.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "Rent" in strings, "a non-string translation must not blank the cell"
+
+
+def test_a_goal_reads_the_same_on_both_sheets(tmp_path):
+    """A deposit is filed as an expense named after its goal, so the name is
+    the join between the two sheets. Translating it on one and not the other
+    breaks that join for anyone reading the file."""
+    app = _app(tmp_path)
+    app.data.goals.append(Goal(name="Car", target=10000.0))
+    built = report.build(app.data, "2026-08", "EGP")
+    built["names"] = {"Car": "\u0633\u064a\u0627\u0631\u0629"}
+    path = xlsx.write(built, tmp_path / "goal.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "\u0633\u064a\u0627\u0631\u0629" in strings
+    assert "<t>Car</t>" not in strings, "the goal sheet kept the old name"
+
+
+def test_an_unbounded_name_is_capped_before_it_reaches_a_cell(tmp_path):
+    """XlsxWriter returns -2 and writes nothing for a string over 32767
+    characters, and nothing checks that return code, so an uncapped name
+    would leave a blank cell in a file reported as saved."""
+    from tests.mobile_app_modules import api
+    app = _app(tmp_path)
+    api.dispatch(app, "/api/export", {"names": {"Rent": "\u0625" * 50000}})
+
+    with zipfile.ZipFile(app.last_export["path"]) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "\u0625" * 120 in strings, "the capped name is missing entirely"
+    assert "\u0625" * 121 not in strings, "the name was written uncapped"
+
+
+def test_a_money_column_widens_for_a_longer_currency(tmp_path):
+    """The currency code sits inside the number format, so it is part of the
+    rendered text. A width that fits "$" turns a three-character code into a
+    column of ####, which reads as a broken file."""
+    widths = {}
+    for currency in ("$", "EGP"):
+        built = report.build(_app(tmp_path).data, "2026-08", currency)
+        path = xlsx.write(built, tmp_path / f"{len(currency)}.xlsx")
+        with zipfile.ZipFile(path) as archive:
+            xml = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+        widths[currency] = [
+            float(w) for w in re.findall(r'<col [^>]*width="([\d.]+)"', xml)
+        ]
+    #: Column 1 of the summary sheet is the money column; column 0 is its
+    #: label and must not move.
+    assert widths["EGP"][1] > widths["$"][1], "the money column ignored the currency"
+    assert widths["EGP"][0] == widths["$"][0], "a text column moved with it"
+
+
+def test_an_amount_is_set_smaller_than_the_words_beside_it(tmp_path):
+    """A money cell renders the currency and the digits together. At the size
+    of the words it becomes the longest thing on the row and crowds the
+    column it sits in."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    path = xlsx.write(built, tmp_path / "sizes.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+        sheet = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    fonts = [float(s) for s in re.findall(r'<sz val="([\d.]+)"/>', styles)]
+    formats = re.findall(r"<xf\b.*?(?:/>|</xf>)",
+                         re.search(r"<cellXfs[^>]*>(.*?)</cellXfs>", styles,
+                                   re.S).group(1), re.S)
+
+    def size_of(cell_style):
+        font = re.search(r'fontId="(\d+)"', formats[cell_style])
+        return fonts[int(font.group(1))]
+
+    used = {int(s) for s in re.findall(r'<c [^>]*s="(\d+)"', sheet)}
+    sizes = {size_of(s) for s in used}
+    assert len(sizes) > 1, "everything is set at one size"
+    assert min(sizes) < 11, "no cell is stepped down from the body size"
+
+
+def test_a_full_date_is_written_as_a_date_not_as_text(tmp_path):
+    """Written as text a date cannot be sorted or filtered, which is most of
+    what a reader opens a spreadsheet to do."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    path = xlsx.write(built, tmp_path / "dates.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        sheet = archive.read("xl/worksheets/sheet2.xml").decode("utf-8")
+    #: A shared-string cell carries t="s"; a date is a bare number.
+    dates = re.findall(r'<c r="A\d+"(?![^>]*t="s")[^>]*><v>([\d.]+)</v>', sheet)
+    assert dates, "every date column cell is still text"
+
+
+def test_a_month_without_a_day_is_not_invented_into_one(tmp_path):
+    """add_expense fills a missing date with the month alone. There is no such
+    thing as a date without a day, so it stays as it was written."""
+    app = _app(tmp_path)
+    app.data.month.add_expense("Odd", 5.0, "Food", "2026-08")
+    built = report.build(app.data, "2026-08", "EGP")
+    path = xlsx.write(built, tmp_path / "partial.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "<t>2026-08</t>" in strings, "the month-only date was rewritten"
+
+
+def test_a_percentage_is_a_real_percentage(tmp_path):
+    """Stored as 21.5 behind a "%" suffix the cell looks right and computes
+    wrong: any sum, chart or comparison built on it is out by a hundred."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    shown = built["summary"]["margin"]
+    path = xlsx.write(built, tmp_path / "pct.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+        sheet = archive.read("xl/worksheets/sheet1.xml").decode("utf-8")
+    assert '0.0%' in styles and '0.0"%"' not in styles
+    stored = [float(v) for v in re.findall(r"<v>([\d.eE+-]+)</v>", sheet)]
+    assert any(abs(v - shown / 100.0) < 1e-9 for v in stored), \
+        "the cell holds the display number, not the fraction"
+
+
+@pytest.mark.parametrize("rtl", [False, True])
+def test_both_languages_get_the_same_finish(tmp_path, rtl):
+    """The Arabic file was fixed first, so every presentation decision is
+    checked in both directions. Everything but the reading direction itself
+    must come out identical."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["rtl"] = rtl
+    path = xlsx.write(built, tmp_path / f"{int(rtl)}.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        styles = archive.read("xl/styles.xml").decode("utf-8")
+        sheets = {n: archive.read(n).decode("utf-8") for n in archive.namelist()
+                  if n.startswith("xl/worksheets/sheet")}
+    formats = re.findall(r"<xf\b.*?(?:/>|</xf>)",
+                         re.search(r"<cellXfs[^>]*>(.*?)</cellXfs>", styles,
+                                   re.S).group(1), re.S)
+
+    assert all(('rightToLeft="1"' in x) is rtl for x in sheets.values())
+    for name, xml in sheets.items():
+        assert 'state="frozen"' in xml, f"{name} does not hold its header"
+        assert 'showGridLines="0"' in xml, f"{name} still shows the grid"
+        assert "<pageSetup" in xml, f"{name} has no print setup"
+        assert "<mergeCell " in xml, f"{name} has no centred heading"
+        for style in re.findall(r'<c [^>]*s="(\d+)"', xml):
+            assert 'horizontal="center"' in formats[int(style)], \
+                f"an uncentred cell on {name}"
+    assert '<sz val="10"/>' in styles and '<sz val="11"/>' in styles
+    assert "0.0%" in styles and '0.0"%"' not in styles
+    assert "yyyy-mm-dd" in styles
