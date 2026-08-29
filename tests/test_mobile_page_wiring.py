@@ -19,7 +19,8 @@ import pytest
 
 from tests.mobile_app_modules import load_app_module
 
-PAGE = (Path(load_app_module().__file__).parent / "web" / "index.html").read_text("utf-8")
+MOBILE = Path(load_app_module().__file__).parent
+PAGE = (MOBILE / "web" / "index.html").read_text("utf-8")
 
 #: Functions the browser provides, so a reference to one is not a missing
 #: definition.
@@ -113,3 +114,47 @@ def test_every_function_the_page_calls_is_defined():
     arrows = set(re.findall(r"(?:let|const|var)\s+(\w+)\s*=\s*(?:\([^)]*\)|\w+)\s*=>", PAGE))
     missing = sorted(called - _defined() - BUILT_IN - on_something - arrows)
     assert not missing, f"called but never defined: {missing}"
+
+
+def test_every_uppercase_constant_the_page_uses_is_declared():
+    """A constant read but never declared is a typo the page fails on silently.
+
+    Only count a name where it is actually *read* — indexed, called, or a
+    member expression whose dot is followed by an identifier. Matching every
+    capitalised word instead flagged the DOCTYPE, prose in comments, and the
+    tail of camelCase names like exportXLSX. A check that cries wolf gets
+    switched off, taking the real warning with it.
+    """
+    read = re.compile(
+        r"(?<![A-Za-z0-9_$])([A-Z][A-Z_0-9]{3,})(?:\s*[\[(]|\.[A-Za-z_])"
+    )
+    used = set(read.findall(PAGE))
+    declared = set(re.findall(r"(?:const|let|var)\s+([A-Z][A-Z_0-9]{3,})\s*=", PAGE))
+    #: Browser globals, not ours to declare.
+    globals_ = {"JSON"}
+    missing = sorted(used - declared - globals_)
+    assert not missing, f"used but never declared: {missing}"
+
+
+def test_the_file_runs_the_same_direction_as_the_screen():
+    """The exported sheet's direction and the page's own must come from one
+    rule. Written out twice they drift, and the file then disagrees with the
+    interface it was exported from."""
+    assert "function isRTL()" in PAGE
+    assert "dir = isRTL()" in PAGE, "the page direction bypasses the rule"
+    assert "rtl: isRTL()" in PAGE, "the export bypasses the rule"
+    assert "rtl: state.lang" not in PAGE, "a second copy of the rule came back"
+
+
+def test_the_page_sends_every_label_the_spreadsheet_uses():
+    """A label added to xlsx.py but not to reportLabels() falls back to its
+    English default, so it appears in English inside an Arabic file — and only
+    someone reading that file would ever see it."""
+    source = (MOBILE / "xlsx.py").read_text("utf-8")
+    defaults = set(re.findall(
+        r'"(\w+)":\s*"', re.search(r"LABELS = \{(.*?)\n\}", source, re.S).group(1)))
+    sent = set(re.findall(
+        r"(\w+):\s*t\(",
+        re.search(r"function reportLabels\(\)\s*\{(.*?)\n\}", PAGE, re.S).group(1)))
+    missing = sorted(defaults - sent)
+    assert not missing, f"the file uses these but the page never sends them: {missing}"

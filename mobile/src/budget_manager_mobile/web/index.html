@@ -824,7 +824,7 @@ const TRANS = {
     reset_hint: 'Erases every month, every entry and every goal. Take a backup first if you might want any of it.',
     report_title: 'Budget report', margin: 'Margin', share: 'Share',
     funded: 'Funded', progress: 'Progress', yes: 'Yes', no: 'No',
-    average_over: 'Average over {n} month(s)',
+    average_over: 'Average over {n} month(s)', item: 'Item',
     restore_btn: '📂 Restore from a backup', l_restore: 'Paste the backup here',
     restore_hint: 'Open the backup file you shared to this device, copy everything in it, and paste it here. Nothing changes until you have seen what it would replace.',
     restore_paste_first: 'Paste a backup first', preview_restore_btn: 'Show me what would change',
@@ -845,7 +845,7 @@ const TRANS = {
     active_goal: 'Active Goal', budget_progress: 'Budget', recent: 'Recent',
     no_entries: 'No entries yet', no_budget: 'No budget limits set',
     add_income: '+ Income', add_expense: '+ Expense',
-    income_tab: '💰 Income', expense_tab: '💳 Expense',
+    income_tab: '💰 Income', expense_tab: '💳 Expense', expense_row: 'Expense',
     description: 'Description', amount: 'Amount', category: 'Category', date: 'Date',
     today: 'Today', yesterday: 'Yesterday', custom: 'Custom',
     add_income_btn: 'Add Income', add_expense_btn: 'Add Expense',
@@ -899,7 +899,7 @@ const TRANS = {
     reset_hint: 'يمحو كل الأشهر وكل الحركات وكل الأهداف. خذ نسخة احتياطية أوّلًا إن كنت قد تحتاج شيئًا منها.',
     report_title: 'تقرير الميزانية', margin: 'هامش الربح', share: 'النسبة',
     funded: 'المُموّل', progress: 'التقدّم', yes: 'نعم', no: 'لا',
-    average_over: 'المتوسط على {n} شهرًا',
+    average_over: 'المتوسط على {n} شهرًا', item: 'البند',
     restore_btn: '📂 استعادة من نسخة', l_restore: 'الصق النسخة هنا',
     restore_hint: 'افتح ملفّ النسخة الذي أرسلتَه لهذا الجهاز، وانسخ محتواه كله، والصقه هنا. لا يتغيّر شيء حتى ترى ماذا سيُستبدل.',
     restore_paste_first: 'الصق النسخة أوّلًا', preview_restore_btn: 'أرِني ماذا سيتغيّر',
@@ -920,7 +920,7 @@ const TRANS = {
     active_goal: 'الهدف النشط', budget_progress: 'الميزانية', recent: 'آخر الحركات',
     no_entries: 'لا توجد حركات بعد', no_budget: 'لا توجد حدود ميزانية',
     add_income: '+ دخل', add_expense: '+ مصروف',
-    income_tab: '💰 دخل', expense_tab: '💳 مصروف',
+    income_tab: '💰 دخل', expense_tab: '💳 مصروف', expense_row: 'مصروف',
     description: 'الوصف', amount: 'المبلغ', category: 'التصنيف', date: 'التاريخ',
     today: 'اليوم', yesterday: 'أمس', custom: 'تخصيص',
     add_income_btn: 'إضافة دخل', add_expense_btn: 'إضافة مصروف',
@@ -948,8 +948,15 @@ function t(key) {
   return (TRANS[lang] && TRANS[lang][key]) || (TRANS.en[key] || key);
 }
 
+// Which way the interface runs, and with it the exported file. One rule in
+// one place: written twice, the screen and the spreadsheet drift apart the
+// moment a third language is added.
+function isRTL() {
+  return state.lang === 'ar';
+}
+
 function applyI18n() {
-  document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
+  document.documentElement.dir = isRTL() ? 'rtl' : 'ltr';
   document.documentElement.lang = state.lang;
   let navs = document.querySelectorAll('.nav-btn');
   if (navs[0]) navs[0].innerHTML = '<span class="icon">🏠</span>' + t('home');
@@ -1189,7 +1196,7 @@ function reportLabels() {
     amount: t('amount'), income: t('income'), expenses: t('expenses'),
     net: t('net'), budget: t('total_budget'), margin: t('margin'),
     by_category: t('by_category'), category: t('category'), share: t('share'),
-    date: t('date'), name: t('description'),
+    date: t('date'), name: t('description'), item: t('item'),
     goal: t('goals'), target: t('target'), funded: t('funded'),
     remaining: t('remaining'), progress: t('progress'),
     this_month: t('added_this_month'), done: t('goal_done'),
@@ -1199,12 +1206,29 @@ function reportLabels() {
   };
 }
 
+// Category and income names as the screen shows them. They are stored in
+// English and translated at draw time, so the file needs the same table or it
+// mixes the user's Arabic entries with the app's English ones.
+function reportNames() {
+  let names = {};
+  CATS.forEach(c => { names[c] = tc(c); });
+  for (let key in (INC_TRANS[state.lang] || {})) {
+    names[key] = INC_TRANS[state.lang][key];
+  }
+  // handleAdd() stores this English literal whenever the name field is left
+  // blank — the usual case in an app built to avoid typing — so without it
+  // here every untitled row reads "Expense" in an otherwise Arabic sheet.
+  names['Expense'] = t('expense_row');
+  return names;
+}
+
 async function exportXLSX() {
   // Sent with the request so the spreadsheet reads in the same language as
   // the screen. It came out in English under an Arabic interface because
   // xlsx.py had every word written into it and no idea a language existed.
   if (!await postAndRefresh('/api/export',
-      {month: state.month_key, labels: reportLabels()})) return;
+      {month: state.month_key, labels: reportLabels(),
+       names: reportNames(), rtl: isRTL()})) return;
   reportFileResult();
 }
 
