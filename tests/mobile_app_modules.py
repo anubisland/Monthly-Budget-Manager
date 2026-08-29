@@ -22,7 +22,7 @@ from pathlib import Path
 #: Loaded in dependency order: each imports only the ones before it.
 _MOBILE_MODULES = (
     "store", "validate", "errors", "decode",
-    "budget_data", "goals", "recurring", "automation", "pace", "trend",
+    "budget_data", "goals", "pace", "trend",
     "report", "share", "xlsx", "api",
 )
 
@@ -68,8 +68,6 @@ validate = _MODULES["validate"]
 budget_data = _MODULES["budget_data"]
 goals = _MODULES["goals"]
 api = _MODULES["api"]
-automation = _MODULES["automation"]
-recurring = _MODULES["recurring"]
 decode = _MODULES["decode"]
 pace = _MODULES["pace"]
 trend = _MODULES["trend"]

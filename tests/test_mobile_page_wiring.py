@@ -54,8 +54,6 @@ def test_every_handler_in_generated_markup_exists_too():
     ("backup", "btn-backup", "backup"),
     ("export", "btn-export", "exportXLSX"),
     ("reset", "btn-reset", "resetAll"),
-    ("add rule", "btn-add-rule", "addRule"),
-    ("add recurring", "btn-add-recurring", "addRecurring"),
 ])
 def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
     """Named one by one so a failure says which feature is dead, rather than
@@ -69,8 +67,8 @@ def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
 
 @pytest.mark.parametrize("route", [
     "/api/preview-restore", "/api/restore", "/api/backup-file", "/api/export",
-    "/api/add-rule", "/api/add-recurring", "/api/apply-recurring",
     "/api/fund-goal", "/api/step-month", "/api/set-month",
+    "/api/add-income", "/api/add-expense", "/api/add-goal", "/api/set-budget",
 ])
 def test_the_page_calls_every_route_it_should(route):
     """A route with no caller is a feature the server offers and the app never
@@ -87,3 +85,31 @@ def test_every_route_the_page_calls_is_one_the_server_serves():
     served = set(api.ROUTES) | {"/api/data", "/api/backup"}
     unknown = sorted(called - served)
     assert not unknown, f"the page calls routes that do not exist: {unknown}"
+
+
+def test_every_function_the_page_calls_is_defined():
+    """The failure mode that produced this file, and then repeated three times
+    while removing a feature.
+
+    Editing this page by cutting between two text anchors takes everything
+    between them. When the second anchor moves — because an earlier edit
+    changed the file — the cut silently swallows unrelated functions. That is
+    how the restore panel, the trend chart and the pace marker each stopped
+    existing while the code calling them stayed put.
+
+    A reference with no definition is the signature of that mistake, whatever
+    caused it.
+    """
+    called = set(re.findall(r"\b(\w+)\(\)\s*;", PAGE))
+    called |= set(re.findall(r"\$\{(\w+)\(", PAGE))
+    called |= set(re.findall(r'onclick="(\w+)\(', PAGE))
+
+    #: Methods reached on an object are not functions this page defines, and
+    #: neither are arrow functions held in a local variable — `let bar = v =>`
+    #: is called by name but is not a declaration. Counting those would make
+    #: the check cry wolf, and a test that cries wolf gets switched off,
+    #: taking the real warning with it.
+    on_something = set(re.findall(r"\.(\w+)\(", PAGE))
+    arrows = set(re.findall(r"(?:let|const|var)\s+(\w+)\s*=\s*(?:\([^)]*\)|\w+)\s*=>", PAGE))
+    missing = sorted(called - _defined() - BUILT_IN - on_something - arrows)
+    assert not missing, f"called but never defined: {missing}"

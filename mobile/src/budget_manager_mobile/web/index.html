@@ -292,10 +292,6 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
   <main id="main">
     <!-- DASHBOARD -->
     <section id="page-home" class="page active">
-      <div class="card rec-card" id="rec-pending" style="display:none">
-        <div class="card-title" id="ct-recurring"></div>
-        <div id="rec-list"></div>
-      </div>
       <div class="safe-card" id="safe-card" style="background:var(--pri);color:#fff">
         <div class="label" id="safe-label" style="color:rgba(255,255,255,.7)"></div>
         <div id="budget-overview"></div>
@@ -436,50 +432,6 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <button class="setting-btn" id="theme-btn" onclick="toggleTheme()">🌙 Dark Mode</button>
       </div>
       <div class="setting-group">
-        <h3 id="st-rules">Auto-category rules</h3>
-        <div class="hint" id="hint-rules"></div>
-        <div id="rules-list"></div>
-        <div class="rule-form">
-          <label class="mini-label" id="l-rule-when"></label>
-          <input class="form-input" id="rule-pattern">
-          <label class="mini-label" id="l-rule-then"></label>
-          <select class="form-input" id="rule-category"></select>
-          <div class="hint" id="hint-rule-example"></div>
-        </div>
-        <button class="setting-btn" id="btn-add-rule" onclick="addRule()" style="margin-top:6px">+ Add rule</button>
-      </div>
-      <div class="setting-group">
-        <h3 id="st-recurring"></h3>
-        <div class="hint" id="hint-recurring"></div>
-        <div id="recurring-list"></div>
-        <div class="rule-form">
-          <label class="mini-label" id="l-rec-desc"></label>
-          <input class="form-input" id="rec-desc">
-          <div class="pair">
-            <div>
-              <label class="mini-label" id="l-rec-amount"></label>
-              <input class="form-input" id="rec-amount" type="number" min="0" inputmode="decimal" placeholder="0">
-            </div>
-            <div>
-              <label class="mini-label" id="l-rec-category"></label>
-              <select class="form-input" id="rec-category"></select>
-            </div>
-          </div>
-          <div class="pair">
-            <div>
-              <label class="mini-label" id="l-rec-frequency"></label>
-              <select class="form-input" id="rec-frequency" onchange="renderAutomationSettings()"></select>
-            </div>
-            <div>
-              <label class="mini-label" id="l-rec-day"></label>
-              <select class="form-input" id="rec-day"></select>
-            </div>
-          </div>
-          <div class="hint" id="hint-rec-example"></div>
-        </div>
-        <button class="setting-btn" id="btn-add-recurring" onclick="addRecurring()" style="margin-top:6px">+ Add recurring</button>
-      </div>
-      <div class="setting-group">
         <h3 id="st-data"></h3>
         <div class="setting-row">
           <button class="setting-btn" id="btn-backup" onclick="backup()">💾 Backup</button>
@@ -495,6 +447,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <div id="restore-diff"></div>
         </div>
         <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)"></button>
+        <div class="hint" id="hint-reset"></div>
       </div>
       <div class="setting-group">
         <h3 id="st-budget"></h3>
@@ -868,6 +821,10 @@ const TRANS = {
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
+    reset_hint: 'Erases every month, every entry and every goal. Take a backup first if you might want any of it.',
+    report_title: 'Budget report', margin: 'Margin', share: 'Share',
+    funded: 'Funded', progress: 'Progress', yes: 'Yes', no: 'No',
+    average_over: 'Average over {n} month(s)',
     restore_btn: '📂 Restore from a backup', l_restore: 'Paste the backup here',
     restore_hint: 'Open the backup file you shared to this device, copy everything in it, and paste it here. Nothing changes until you have seen what it would replace.',
     restore_paste_first: 'Paste a backup first', preview_restore_btn: 'Show me what would change',
@@ -939,6 +896,10 @@ const TRANS = {
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
+    reset_hint: 'يمحو كل الأشهر وكل الحركات وكل الأهداف. خذ نسخة احتياطية أوّلًا إن كنت قد تحتاج شيئًا منها.',
+    report_title: 'تقرير الميزانية', margin: 'هامش الربح', share: 'النسبة',
+    funded: 'المُموّل', progress: 'التقدّم', yes: 'نعم', no: 'لا',
+    average_over: 'المتوسط على {n} شهرًا',
     restore_btn: '📂 استعادة من نسخة', l_restore: 'الصق النسخة هنا',
     restore_hint: 'افتح ملفّ النسخة الذي أرسلتَه لهذا الجهاز، وانسخ محتواه كله، والصقه هنا. لا يتغيّر شيء حتى ترى ماذا سيُستبدل.',
     restore_paste_first: 'الصق النسخة أوّلًا', preview_restore_btn: 'أرِني ماذا سيتغيّر',
@@ -1220,8 +1181,30 @@ function reportFileResult() {
   let why = result.reason ? ' — ' + result.reason : '';
   toast(t('export_saved').replace('{path}', name) + why, 8000);
 }
+// The spreadsheet's vocabulary, taken from the same table the screen uses.
+function reportLabels() {
+  return {
+    report: t('report_title'), summary: t('budget'), entries: t('history'),
+    goals: t('goals'), trend: t('trend_title'),
+    amount: t('amount'), income: t('income'), expenses: t('expenses'),
+    net: t('net'), budget: t('total_budget'), margin: t('margin'),
+    by_category: t('by_category'), category: t('category'), share: t('share'),
+    date: t('date'), name: t('description'),
+    goal: t('goals'), target: t('target'), funded: t('funded'),
+    remaining: t('remaining'), progress: t('progress'),
+    this_month: t('added_this_month'), done: t('goal_done'),
+    yes: t('yes'), no: t('no'),
+    month: t('month'), recent_months: t('trend_title'),
+    average_over: t('average_over'),
+  };
+}
+
 async function exportXLSX() {
-  if (!await postAndRefresh('/api/export', {month: state.month_key})) return;
+  // Sent with the request so the spreadsheet reads in the same language as
+  // the screen. It came out in English under an Arabic interface because
+  // xlsx.py had every word written into it and no idea a language existed.
+  if (!await postAndRefresh('/api/export',
+      {month: state.month_key, labels: reportLabels()})) return;
   reportFileResult();
 }
 
@@ -1260,299 +1243,13 @@ function saveBudget() {
   postAndRefresh('/api/set-budget', {total_budget: v});
   toast(t('saved_toast'));
 }
-// ── Managing rules and recurring templates ──
-// Every field that can be a choice is a choice: categories, frequency and day
-// are dropdowns filled from what the app already knows, so the only typing is
-// a name and an amount.
-
-const FREQUENCIES = ['monthly', 'weekly', 'biweekly', 'quarterly', 'yearly'];
-
-function fillSelect(id, values, labeller) {
-  let el = document.getElementById(id);
-  if (!el) return;
-  let previous = el.value;
-  el.innerHTML = values.map(v =>
-    `<option value="${v}">${labeller ? labeller(v) : v}</option>`).join('');
-  if (values.indexOf(previous) >= 0) el.value = previous;
-}
-
-function renderAutomationSettings() {
-  disarmReset();
-  document.getElementById('st-rules').textContent = t('rules_title');
-  document.getElementById('hint-rules').textContent = t('rules_hint');
-  document.getElementById('hint-recurring').textContent = t('recurring_hint');
-  // From the server, which reads it from the app bundle. The page used to
-  // carry the number as text, so it never moved.
-  // One writer for this element. There were two, and the older one wrote a
-  // hardcoded v1.0 after this ran, so the real version never showed.
-  let about = document.getElementById('about-text');
-  if (about) {
-    about.innerHTML = t('about_text') +
-      (state.version ? '<br>v' + state.version : '');
-  }
-  let labels = {
-    'btn-restore': 'restore_btn', 'l-restore': 'l_restore',
-    'hint-restore': 'restore_hint', 'btn-preview-restore': 'preview_restore_btn',
-    'l-rule-when': 'l_rule_when', 'l-rule-then': 'l_rule_then',
-    'hint-rule-example': 'rule_example', 'hint-rec-example': 'rec_example',
-    'l-rec-desc': 'l_rec_desc', 'l-rec-amount': 'l_rec_amount',
-    'l-rec-category': 'l_rec_category', 'l-rec-frequency': 'l_rec_frequency',
-    'l-rec-day': 'l_rec_day',
-  };
-  for (let id in labels) {
-    let el = document.getElementById(id);
-    if (el) el.textContent = t(labels[id]);
-  }
-  document.getElementById('st-recurring').textContent = t('recurring_title');
-  document.getElementById('btn-add-rule').textContent = '+ ' + t('add_rule');
-  document.getElementById('btn-add-recurring').textContent = '+ ' + t('add_recurring');
-  document.getElementById('rule-pattern').placeholder = t('rule_hint');
-
-  fillSelect('rule-category', CATS, tc);
-  fillSelect('rec-category', CATS, tc);
-  fillSelect('rec-frequency', FREQUENCIES, f => t('freq_' + f));
-  // Day means a weekday for weekly templates and a date otherwise, which is
-  // what the engine expects, so the options follow the chosen frequency.
-  let weekly = document.getElementById('rec-frequency').value === 'weekly';
-  let days = weekly ? [0, 1, 2, 3, 4, 5, 6]
-                    : Array.from({length: 31}, (_, i) => i + 1);
-  fillSelect('rec-day', days, d => weekly ? t('weekday_' + d) : String(d));
-
-  let rules = state.rules || [];
-  document.getElementById('rules-list').innerHTML = rules.length ? rules.map((r, i) => `
-    <div class="mini-row">
-      <span class="grow">"${r.pattern}" → ${tc(r.category)}</span>
-      <button class="mini-del" onclick="deleteRule(${i})">✕</button>
-    </div>`).join('') : `<div class="mini-empty">${t('no_rules')}</div>`;
-
-  let templates = state.recurring || [];
-  document.getElementById('recurring-list').innerHTML = templates.length ? templates.map((r, i) => `
-    <div class="mini-row">
-      <span class="grow">${r.description} · ${cs()}${r.amount.toLocaleString()} · ${t('freq_' + r.frequency)}</span>
-      <button class="mini-del" onclick="deleteRecurring(${i})">✕</button>
-    </div>`).join('') : `<div class="mini-empty">${t('no_recurring')}</div>`;
-}
-
-async function addRule() {
-  let pattern = document.getElementById('rule-pattern').value.trim();
-  if (!pattern) { toast(t('rule_hint')); return; }
-  if (await postAndRefresh('/api/add-rule', {
-    pattern: pattern, category: document.getElementById('rule-category').value,
-  })) {
-    document.getElementById('rule-pattern').value = '';
-    toast(t('added_toast'));
-  }
-}
-
-async function deleteRule(index) {
-  await postAndRefresh('/api/delete-rule', {index: index});
-}
-
-async function addRecurring() {
-  let description = document.getElementById('rec-desc').value.trim();
-  let amount = parseFloat(document.getElementById('rec-amount').value);
-  if (!description || !(amount > 0)) { toast(t('enter_amount')); return; }
-  if (await postAndRefresh('/api/add-recurring', {
-    description: description,
-    category: document.getElementById('rec-category').value,
-    amount: amount,
-    frequency: document.getElementById('rec-frequency').value,
-    day: parseInt(document.getElementById('rec-day').value, 10),
-  })) {
-    document.getElementById('rec-desc').value = '';
-    document.getElementById('rec-amount').value = '';
-    toast(t('added_toast'));
-  }
-}
-
-async function deleteRecurring(index) {
-  await postAndRefresh('/api/delete-recurring', {index: index});
-}
-
-// ── Six-month trend ──
-// Two months answer "was this month worse than last?", which one holiday can
-// decide. Six answer "am I improving?", which is the question worth asking.
-
-// Written in full, once, below the chart: the axis has numbers so the reader
-// still needs to be told which months they are.
-function spanLabel(points) {
-  if (!points.length) return '';
-  let first = points[0].month.split('-');
-  let last = points[points.length - 1].month.split('-');
-  let start = monthName(parseInt(first[1], 10)) + (first[0] !== last[0] ? ' ' + first[0] : '');
-  return start + ' – ' + monthName(parseInt(last[1], 10)) + ' ' + last[0];
-}
-
-function renderTrend() {
-  let el = document.getElementById('trend-body');
-  if (!el) return;
-  document.getElementById('ct-trend').textContent = t('trend_title');
-
-  let points = state.trend || [];
-  let avg = state.trend_avg || {months: 0};
-  if (!avg.months) {
-    el.innerHTML = `<div class="cmp-empty">${t('trend_empty')}</div>`;
-    return;
-  }
-
-  // One scale for both series and every month, so the bars are comparable
-  // across the whole chart. Scaling each column to itself would make every
-  // month look identical.
-  let max = Math.max(1, ...points.map(p => Math.max(p.income, p.expenses)));
-  let columns = points.map(p => {
-    // The axis label is the month number, not its name. A number needs no
-    // translation, cannot be truncated into a broken word, and carries no
-    // joined-script shaping to get wrong — which is exactly the failure that
-    // slicing a name to three characters produced in Arabic. The full names
-    // appear once in the subtitle below, where there is room for them.
-    let label = String(parseInt(p.month.split('-')[1], 10));
-    if (p.empty) {
-      // Drawn as a gap, not as a zero: nothing recorded is not the same claim
-      // as nothing spent, and a zero column asserts the second.
-      return `<div class="tr-col"><div class="tr-bars"><span class="tr-gap">—</span></div>
-              <div class="tr-lbl">${label}</div></div>`;
-    }
-    let h = v => Math.max(2, v / max * 100);
-    return `<div class="tr-col">
-        <div class="tr-bars">
-          <div class="tr-bar tr-in" style="height:${h(p.income)}%"></div>
-          <div class="tr-bar tr-ex" style="height:${h(p.expenses)}%"></div>
-        </div>
-        <div class="tr-lbl">${label}</div>
-      </div>`;
-  }).join('');
-
-  el.innerHTML = `
-    <div class="tr-wrap">${columns}</div>
-    <div class="tr-legend">
-      <span><i class="tr-key tr-in"></i>${t('income')}</span>
-      <span><i class="tr-key tr-ex"></i>${t('expenses')}</span>
-    </div>
-    <div class="cmp-sub" style="margin-top:6px;text-align:center">${spanLabel(points)}</div>
-    <div class="cmp-sub" style="text-align:center">
-      ${t('trend_avg')} · ${t('income')} ${cs()}${avg.income.toLocaleString()}
-      · ${t('expenses')} ${cs()}${avg.expenses.toLocaleString()}
-      (${avg.months})
-    </div>`;
-}
-
-// Labels that name the currency belong here, not in applyI18n(). That
-// function is called only when the language changes, so a label built from
-// both the language and the currency was left showing the old symbol after a
-// currency change — "Target ($)" under a budget in ج.م. render() runs after
-// every refresh whatever caused it, so no path can forget it.
-function renderCurrencyLabels() {
-  let target = document.getElementById('l-target');
-  if (target) target.textContent = t('target') + ' (' + cs() + ')';
-  setPlaceholders();
-}
-
-// Example text inside inputs is content like any other, and three of these
-// were written straight into the HTML in English — so an Arabic user saw
-// "Vacation" and "Rent" prompting them. Set here rather than in the markup so
-// they follow the language like everything else.
-function setPlaceholders() {
-  let hints = {
-    'g-name': 'ph_goal',
-    'rec-desc': 'ph_recurring',
-    'rule-pattern': 'ph_rule',
-    'input-name-exp': 'ph_entry',
-  };
-  for (let id in hints) {
-    let el = document.getElementById(id);
-    if (el) el.placeholder = t(hints[id]);
-  }
-}
-
-// ── Spending pace ──
-// The marker is the whole idea: a tick on the budget bar at the point the
-// month has reached. Fill past the tick means spending faster than the month
-// is passing, read at a glance with no arithmetic and no second number.
-
-//: Pace states with nothing to say. A state absent from this list falls
-//: through to the on-track wording, so anything new must be listed here or
-//: it silently claims the month is fine.
-const QUIET_PACE_STATES = ['no_budget', 'not_started'];
-
-function paceMarker() {
-  let p = state.pace;
-  // Both states mean there is nothing to mark: no budget to measure against,
-  // or a month that has not begun. Listing them explicitly rather than
-  // falling through keeps a new state from silently inheriting the on-track
-  // rendering, which is what happened when 'not_started' was added.
-  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0 || !p.elapsed) return '';
-  // inset-inline-start, not left: under dir="rtl" the bar fills from the
-  // right, and a marker pinned to the left would sit at the wrong end of it.
-  return `<div title="${t('pace_marker')}" style="position:absolute;top:-3px;bottom:-3px;
-    inset-inline-start:${Math.min(p.elapsed, 100)}%;width:2px;background:rgba(0,0,0,.35);
-    border-radius:1px"></div>`;
-}
-
-function paceLine() {
-  let p = state.pace;
-  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0) return '';
-
-  let text, colour;
-  if (p.state === 'over') {
-    text = t('pace_over');
-    colour = 'rgba(255,200,200,.95)';
-  } else if (p.state === 'ahead') {
-    // The projection is the actionable part: "spending fast" is a feeling,
-    // "landing at 4,100 against 3,000" is a number to act on.
-    text = p.projected
-      ? t('pace_ahead_to').replace('{n}', cs() + Math.round(p.projected).toLocaleString())
-      : t('pace_ahead');
-    colour = 'rgba(255,224,178,.95)';
-  } else {
-    text = t('pace_on_track');
-    colour = 'rgba(255,255,255,.75)';
-  }
-  let days = p.days_left > 0 ? ' · ' + t('days_left').replace('{n}', p.days_left) : '';
-  return `<div style="margin-top:6px;font-size:11px;color:${colour}">${text}${days}</div>`;
-}
-
 // ── Recurring items ──
 // These are offered, never applied on sight. The engine that expands a
 // template into expenses is a pure function with no memory, so anything that
 // applied automatically would add the rent again on every month open.
 
-function renderPendingRecurring() {
-  let card = document.getElementById('rec-pending');
-  let list = state.pending_recurring || [];
-  // Set before the early return. English text written into the HTML is a
-  // debt: it works until some path skips the line that replaces it, and this
-  // one skipped it whenever there was nothing pending — leaving an English
-  // heading in an Arabic interface the moment the card first appeared.
-  document.getElementById('ct-recurring').textContent = t('recurring_due');
-  if (!list.length) { card.style.display = 'none'; return; }
 
-  card.style.display = '';
-  document.getElementById('rec-list').innerHTML = list.map(item => {
-    // A weekly template covers several dates in one month, so the total is
-    // what accepting actually costs — not the per-occurrence amount.
-    let meta = tc(item.category) + ' · ' + cs() + item.total.toLocaleString()
-      + (item.count > 1 ? ' (' + item.count + '×)' : '');
-    return `
-      <div class="rec-item">
-        <div class="rec-body">
-          <div class="rec-name">${item.description}</div>
-          <div class="rec-meta">${meta}</div>
-        </div>
-        <button class="rec-skip" onclick="skipRecurring(${item.id})">${t('not_this_month')}</button>
-        <button class="rec-add" onclick="applyRecurring(${item.id})">${t('add_it')}</button>
-      </div>`;
-  }).join('');
-}
 
-async function applyRecurring(id) {
-  if (await postAndRefresh('/api/apply-recurring', {id: id})) toast(t('added_toast'));
-}
-
-async function skipRecurring(id) {
-  // Recorded, not ignored: the template stops asking this month and asks
-  // again next month.
-  await postAndRefresh('/api/skip-recurring', {id: id});
-}
 
 // ── Month comparison ──
 
@@ -1702,12 +1399,166 @@ async function goToThisMonth() {
   await postAndRefresh('/api/set-month', {month: state.today.slice(0, 7)});
 }
 
+// Labels that live in Settings. These sat inside the automation renderer,
+// which was deleted with the feature — taking the restore panel and the
+// version line with it. Kept here, called from render(), because they
+// belong to no one feature.
+// Example text inside inputs. Content like any other, so it follows the
+// language rather than sitting in the markup in English.
+function setPlaceholders() {
+  let hints = {
+    'g-name': 'ph_goal',
+    'input-name-exp': 'ph_entry',
+  };
+  for (let id in hints) {
+    let el = document.getElementById(id);
+    if (el) el.placeholder = t(hints[id]);
+  }
+}
+
+// Labels that name the currency belong here, not in applyI18n(). That
+// function is called only when the language changes, so a label built from
+// both the language and the currency was left showing the old symbol after a
+// currency change — "Target ($)" under a budget in ج.م. render() runs after
+// every refresh whatever caused it, so no path can forget it.
+//: Pace states with nothing to say. A state absent from this list falls
+//: through to the on-track wording, so anything new must be listed here or
+//: it silently claims the month is fine.
+const QUIET_PACE_STATES = ['no_budget', 'not_started'];
+
+function paceMarker() {
+  let p = state.pace;
+  // Both states mean there is nothing to mark: no budget to measure against,
+  // or a month that has not begun. Listing them explicitly rather than
+  // falling through keeps a new state from silently inheriting the on-track
+  // rendering, which is what happened when 'not_started' was added.
+  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0 || !p.elapsed) return '';
+  // inset-inline-start, not left: under dir="rtl" the bar fills from the
+  // right, and a marker pinned to the left would sit at the wrong end of it.
+  return `<div title="${t('pace_marker')}" style="position:absolute;top:-3px;bottom:-3px;
+    inset-inline-start:${Math.min(p.elapsed, 100)}%;width:2px;background:rgba(0,0,0,.35);
+    border-radius:1px"></div>`;
+}
+
+function paceLine() {
+  let p = state.pace;
+  if (!p || QUIET_PACE_STATES.indexOf(p.state) >= 0) return '';
+
+  let text, colour;
+  if (p.state === 'over') {
+    text = t('pace_over');
+    colour = 'rgba(255,200,200,.95)';
+  } else if (p.state === 'ahead') {
+    // The projection is the actionable part: "spending fast" is a feeling,
+    // "landing at 4,100 against 3,000" is a number to act on.
+    text = p.projected
+      ? t('pace_ahead_to').replace('{n}', cs() + Math.round(p.projected).toLocaleString())
+      : t('pace_ahead');
+    colour = 'rgba(255,224,178,.95)';
+  } else {
+    text = t('pace_on_track');
+    colour = 'rgba(255,255,255,.75)';
+  }
+  let days = p.days_left > 0 ? ' · ' + t('days_left').replace('{n}', p.days_left) : '';
+  return `<div style="margin-top:6px;font-size:11px;color:${colour}">${text}${days}</div>`;
+}
+
+function renderCurrencyLabels() {
+  let target = document.getElementById('l-target');
+  if (target) target.textContent = t('target') + ' (' + cs() + ')';
+  setPlaceholders();
+}
+
+// Written in full, once, below the chart: the axis has numbers so the reader
+// still needs to be told which months they are.
+function spanLabel(points) {
+  if (!points.length) return '';
+  let first = points[0].month.split('-');
+  let last = points[points.length - 1].month.split('-');
+  let start = monthName(parseInt(first[1], 10)) + (first[0] !== last[0] ? ' ' + first[0] : '');
+  return start + ' – ' + monthName(parseInt(last[1], 10)) + ' ' + last[0];
+}
+
+function renderTrend() {
+  let el = document.getElementById('trend-body');
+  if (!el) return;
+  document.getElementById('ct-trend').textContent = t('trend_title');
+
+  let points = state.trend || [];
+  let avg = state.trend_avg || {months: 0};
+  if (!avg.months) {
+    el.innerHTML = `<div class="cmp-empty">${t('trend_empty')}</div>`;
+    return;
+  }
+
+  // One scale for both series and every month, so the bars are comparable
+  // across the whole chart. Scaling each column to itself would make every
+  // month look identical.
+  let max = Math.max(1, ...points.map(p => Math.max(p.income, p.expenses)));
+  let columns = points.map(p => {
+    // The axis label is the month number, not its name. A number needs no
+    // translation, cannot be truncated into a broken word, and carries no
+    // joined-script shaping to get wrong — which is exactly the failure that
+    // slicing a name to three characters produced in Arabic. The full names
+    // appear once in the subtitle below, where there is room for them.
+    let label = String(parseInt(p.month.split('-')[1], 10));
+    if (p.empty) {
+      // Drawn as a gap, not as a zero: nothing recorded is not the same claim
+      // as nothing spent, and a zero column asserts the second.
+      return `<div class="tr-col"><div class="tr-bars"><span class="tr-gap">—</span></div>
+              <div class="tr-lbl">${label}</div></div>`;
+    }
+    let h = v => Math.max(2, v / max * 100);
+    return `<div class="tr-col">
+        <div class="tr-bars">
+          <div class="tr-bar tr-in" style="height:${h(p.income)}%"></div>
+          <div class="tr-bar tr-ex" style="height:${h(p.expenses)}%"></div>
+        </div>
+        <div class="tr-lbl">${label}</div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div class="tr-wrap">${columns}</div>
+    <div class="tr-legend">
+      <span><i class="tr-key tr-in"></i>${t('income')}</span>
+      <span><i class="tr-key tr-ex"></i>${t('expenses')}</span>
+    </div>
+    <div class="cmp-sub" style="margin-top:6px;text-align:center">${spanLabel(points)}</div>
+    <div class="cmp-sub" style="text-align:center">
+      ${t('trend_avg')} · ${t('income')} ${cs()}${avg.income.toLocaleString()}
+      · ${t('expenses')} ${cs()}${avg.expenses.toLocaleString()}
+      (${avg.months})
+    </div>`;
+}
+
+function renderSettingsLabels() {
+  let labels = {
+    'btn-restore': 'restore_btn', 'l-restore': 'l_restore',
+    'hint-restore': 'restore_hint', 'btn-preview-restore': 'preview_restore_btn',
+    'hint-reset': 'reset_hint',
+  };
+  for (let id in labels) {
+    let el = document.getElementById(id);
+    if (el) el.textContent = t(labels[id]);
+  }
+
+  // One writer for this element. There were two once, and the older one
+  // wrote a hardcoded v1.0 after this ran.
+  let about = document.getElementById('about-text');
+  if (about) {
+    about.innerHTML = t('about_text') +
+      (state.version ? '<br>v' + state.version : '');
+  }
+  setPlaceholders();
+}
+
 function render() {
+  disarmReset();
+  renderSettingsLabels();
   renderCurrencyLabels();
   renderMonthBar();
   renderNotice();
-  renderPendingRecurring();
-  renderAutomationSettings();
   renderComparison();
   renderTrend();
 
