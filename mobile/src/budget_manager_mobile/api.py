@@ -16,7 +16,6 @@ from __future__ import annotations
 import json
 from typing import Callable, Dict, Optional
 
-import automation
 import decode
 import goals
 import report
@@ -62,10 +61,12 @@ def _add_expense(app, d: Dict) -> None:
 
 
 def _category_for(app, d: Dict, name: str) -> str:
-    """The category the user chose, or the one their rules imply.
+    """The category the user chose, or Uncategorized.
 
-    Rules only fill a gap; an explicit choice always wins. Otherwise correcting
-    a mis-categorised row would be undone the moment it was saved.
+    There was a rules engine here that inferred one from a word in the name.
+    It was removed: choosing a category is already a single tap on a coloured
+    chip in the add screen, so automating it bought nothing and cost a screen
+    of settings to explain.
     """
     chosen = validate.text(d.get("category"), limit=40)
     if chosen:
@@ -354,8 +355,15 @@ def _export(app, d: Dict) -> None:
         month = app.data.current
 
     path = app.export_path(f"budget-{month}.xlsx")
+    built = report.build(app.data, month, app.currency)
+    # The page sends the words it is showing, so the file speaks whatever
+    # language the app is in. Translating them again here would be a second
+    # source drifting from the first.
+    labels = d.get("labels")
+    if isinstance(labels, dict):
+        built["labels"] = {k: v for k, v in labels.items() if isinstance(v, str)}
     try:
-        xlsx.write(report.build(app.data, month, app.currency), path)
+        xlsx.write(built, path)
     except xlsx.ExportError as err:
         raise ApiError(str(err), 500)
 
@@ -419,12 +427,6 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/add-goal": _add_goal,
     "/api/delete-goal": _delete_goal,
     "/api/fund-goal": _fund_goal,
-    "/api/add-rule": automation.add_rule,
-    "/api/delete-rule": automation.delete_rule,
-    "/api/add-recurring": automation.add_recurring,
-    "/api/delete-recurring": automation.delete_recurring,
-    "/api/apply-recurring": automation.apply_recurring,
-    "/api/skip-recurring": automation.skip_recurring,
     "/api/export": _export,
     "/api/backup-file": _backup,
     "/api/preview-restore": _preview_restore,

@@ -15,6 +15,35 @@ from pathlib import Path
 from typing import Dict, List
 
 
+#: Every word the spreadsheet shows. English here is the fallback; the page
+#: sends its own translations with the request, so the words in the file are
+#: the same ones on screen. Translating them again in Python would create a
+#: second source that drifts from the first — the sheet came out in English
+#: under an Arabic interface because it had no idea a language existed.
+LABELS = {
+    "report": "Budget report",
+    "summary": "Summary", "entries": "Entries", "goals": "Goals", "trend": "Trend",
+    "amount": "Amount", "income": "Income", "expenses": "Expenses",
+    "net": "Net", "budget": "Budget", "margin": "Margin",
+    "by_category": "By category", "category": "Category", "share": "Share",
+    "date": "Date", "name": "Name",
+    "goal": "Goal", "target": "Target", "funded": "Funded",
+    "remaining": "Remaining", "progress": "Progress", "this_month": "This month",
+    "done": "Done", "yes": "Yes", "no": "No",
+    "month": "Month", "recent_months": "Recent months", "average_over": "Average over {n} month(s)",
+}
+
+
+def _labels(report: Dict) -> Dict:
+    """The report's own labels over the English defaults."""
+    merged = dict(LABELS)
+    supplied = report.get("labels")
+    if isinstance(supplied, dict):
+        for key, value in supplied.items():
+            if key in merged and isinstance(value, str) and value.strip():
+                merged[key] = value.strip()
+    return merged
+
 class ExportError(Exception):
     """The file could not be written, with a reason to show the user."""
 
@@ -48,10 +77,11 @@ def write(report: Dict, path: Path) -> Path:
 
     try:
         styles = _styles(workbook, report.get("currency", ""))
-        _summary_sheet(workbook, styles, report)
-        _entries_sheet(workbook, styles, report)
-        _goals_sheet(workbook, styles, report)
-        _trend_sheet(workbook, styles, report)
+        L = _labels(report)
+        _summary_sheet(workbook, styles, report, L)
+        _entries_sheet(workbook, styles, report, L)
+        _goals_sheet(workbook, styles, report, L)
+        _trend_sheet(workbook, styles, report, L)
         workbook.close()
     except failures as err:
         raise ExportError(f"could not write the file: {err}")
@@ -91,66 +121,67 @@ def _table(sheet, styles, row: int, headers: List[str], rows: List[List], widths
     return row + len(rows) + 2
 
 
-def _summary_sheet(workbook, styles, report: Dict) -> None:
-    sheet = workbook.add_worksheet("Summary")
-    sheet.write(0, 0, f"Budget report — {report['month']}", styles["title"])
+def _summary_sheet(workbook, styles, report: Dict, L: Dict) -> None:
+    sheet = workbook.add_worksheet(L["summary"])
+    sheet.write(0, 0, f"{L['report']} — {report['month']}", styles["title"])
 
     summary = report["summary"]
-    row = _table(sheet, styles, 2, ["", "Amount"], [
-        [("Income", "text"), (summary["income"], "money")],
-        [("Expenses", "text"), (summary["expenses"], "money")],
-        [("Net", "text"), (summary["net"], "money")],
-        [("Budget", "text"), (summary["budget"], "money")],
-        [("Margin", "text"), (summary["margin"], "percent")],
+    row = _table(sheet, styles, 2, ["", L["amount"]], [
+        [(L["income"], "text"), (summary["income"], "money")],
+        [(L["expenses"], "text"), (summary["expenses"], "money")],
+        [(L["net"], "text"), (summary["net"], "money")],
+        [(L["budget"], "text"), (summary["budget"], "money")],
+        [(L["margin"], "text"), (summary["margin"], "percent")],
     ], widths=[22, 16, 12])
 
-    sheet.write(row, 0, "By category", styles["title"])
-    _table(sheet, styles, row + 1, ["Category", "Amount", "Share"], [
+    sheet.write(row, 0, L["by_category"], styles["title"])
+    _table(sheet, styles, row + 1, [L["category"], L["amount"], L["share"]], [
         [(item["category"], "text"), (item["amount"], "money"), (item["share"], "percent")]
         for item in report["categories"]
     ])
 
 
-def _entries_sheet(workbook, styles, report: Dict) -> None:
+def _entries_sheet(workbook, styles, report: Dict, L: Dict) -> None:
     """Income and expenses on one sheet, each as its own table.
 
     One sheet rather than two: the question a reader has is "what happened
     this month", and answering it should not need tab switching.
     """
-    sheet = workbook.add_worksheet("Entries")
-    sheet.write(0, 0, "Income", styles["title"])
-    row = _table(sheet, styles, 1, ["Date", "Name", "Amount"], [
+    sheet = workbook.add_worksheet(L["entries"])
+    sheet.write(0, 0, L["income"], styles["title"])
+    row = _table(sheet, styles, 1, [L["date"], L["name"], L["amount"]], [
         [(item["date"], "text"), (item["name"], "text"), (item["amount"], "money")]
         for item in report["incomes"]
     ], widths=[12, 30, 14, 18])
 
-    sheet.write(row, 0, "Expenses", styles["title"])
-    _table(sheet, styles, row + 1, ["Date", "Name", "Amount", "Category"], [
+    sheet.write(row, 0, L["expenses"], styles["title"])
+    _table(sheet, styles, row + 1, [L["date"], L["name"], L["amount"], L["category"]], [
         [(item["date"], "text"), (item["name"], "text"),
          (item["amount"], "money"), (item["category"], "text")]
         for item in report["expenses"]
     ])
 
 
-def _goals_sheet(workbook, styles, report: Dict) -> None:
-    sheet = workbook.add_worksheet("Goals")
-    sheet.write(0, 0, "Goals", styles["title"])
+def _goals_sheet(workbook, styles, report: Dict, L: Dict) -> None:
+    sheet = workbook.add_worksheet(L["goals"])
+    sheet.write(0, 0, L["goals"], styles["title"])
     _table(sheet, styles, 1,
-           ["Goal", "Target", "Funded", "Remaining", "Progress", "This month", "Done"], [
+           [L["goal"], L["target"], L["funded"], L["remaining"],
+            L["progress"], L["this_month"], L["done"]], [
                [(g["name"], "text"), (g["target"], "money"), (g["funded"], "money"),
                 (g["remaining"], "money"), (g["percent"], "percent"),
-                (g["this_month"], "money"), ("yes" if g["done"] else "no", "text")]
+                (g["this_month"], "money"), (L["yes"] if g["done"] else L["no"], "text")]
                for g in report["goals"]
            ], widths=[24, 14, 14, 14, 12, 14, 8])
 
 
-def _trend_sheet(workbook, styles, report: Dict) -> None:
-    sheet = workbook.add_worksheet("Trend")
-    sheet.write(0, 0, "Recent months", styles["title"])
+def _trend_sheet(workbook, styles, report: Dict, L: Dict) -> None:
+    sheet = workbook.add_worksheet(L["trend"])
+    sheet.write(0, 0, L["recent_months"], styles["title"])
     # An empty month is written as a blank row rather than zeros: the
     # spreadsheet carries the same distinction the chart does, since a zero
     # would be averaged and charted as a real result.
-    _table(sheet, styles, 1, ["Month", "Income", "Expenses", "Net"], [
+    _table(sheet, styles, 1, [L["month"], L["income"], L["expenses"], L["net"]], [
         [(point["month"], "text")] + (
             [("", "text"), ("", "text"), ("", "text")] if point["empty"] else
             [(point["income"], "money"), (point["expenses"], "money"), (point["net"], "money")]
@@ -160,7 +191,7 @@ def _trend_sheet(workbook, styles, report: Dict) -> None:
 
     average = report["trend_average"]
     row = len(report["trend"]) + 4
-    sheet.write(row, 0, f"Average over {average['months']} month(s)", styles["head"])
+    sheet.write(row, 0, L["average_over"].replace("{n}", str(average["months"])), styles["head"])
     sheet.write(row, 1, average["income"], styles["money"])
     sheet.write(row, 2, average["expenses"], styles["money"])
     sheet.write(row, 3, average["net"], styles["money"])

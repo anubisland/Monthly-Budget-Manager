@@ -545,3 +545,49 @@ def test_the_integer_helper_degrades_instead_of_raising():
     the pending flag rather than lose the share to it."""
     from tests.mobile_app_modules import share
     assert share._int(1) is None
+
+
+def test_the_spreadsheet_speaks_the_language_the_app_is_in(tmp_path):
+    """It came out in English under an Arabic interface: xlsx.py had every
+    word written into it and no idea a language existed. The page now sends
+    the words it is showing, so there is one source for them rather than two
+    that drift."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["labels"] = {
+        "report": "\u062a\u0642\u0631\u064a\u0631 \u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629",
+        "summary": "\u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629",
+        "income": "\u0627\u0644\u062f\u062e\u0644",
+        "expenses": "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a",
+    }
+    path = xlsx.write(built, tmp_path / "ar.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+        workbook = archive.read("xl/workbook.xml").decode("utf-8")
+    assert "\u0627\u0644\u062f\u062e\u0644" in strings
+    assert "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a" in strings
+    assert 'name="\u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629"' in workbook, "sheet tabs too"
+
+
+def test_missing_labels_fall_back_to_english_rather_than_blank(tmp_path):
+    """A gap in the table must not produce an empty column heading."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["labels"] = {"income": "\u0627\u0644\u062f\u062e\u0644"}
+    path = xlsx.write(built, tmp_path / "partial.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    assert "\u0627\u0644\u062f\u062e\u0644" in strings
+    assert "Expenses" in strings, "the untranslated ones keep their English"
+
+
+def test_a_label_that_is_not_a_string_is_ignored(tmp_path):
+    """The labels arrive from a request, so they are not trusted."""
+    built = report.build(_app(tmp_path).data, "2026-08", "EGP")
+    built["labels"] = {"income": 42, "expenses": None, "net": "  "}
+    path = xlsx.write(built, tmp_path / "junk.xlsx")
+
+    with zipfile.ZipFile(path) as archive:
+        strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
+    for word in ("Income", "Expenses", "Net"):
+        assert word in strings

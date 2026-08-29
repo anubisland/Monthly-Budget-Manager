@@ -13,7 +13,6 @@ import api
 import chrome
 import goals as goals_module
 import pace
-import recurring
 import store
 import toga
 import trend
@@ -222,9 +221,6 @@ class App(toga.App):
             'dropped': self.data.dropped,
             'last_export': self.last_export,
             'restore_preview': self.restore_preview,
-            'rules': [{'pattern': r.pattern, 'category': r.category} for r in self.data.rules],
-            'recurring': self._recurring_state(),
-            'pending_recurring': self._pending_state(),
             'pace': self._pace_state(bm),
             'trend': trend.series(self.data.months, self.data.current),
             'trend_avg': trend.averages(trend.series(self.data.months, self.data.current)),
@@ -250,34 +246,6 @@ class App(toga.App):
                 'this_month': status['this_month'],
                 'carried_over': status['carried_over'],
                 'target_month': g.target_month,
-            })
-        return result
-
-    def _recurring_state(self):
-        return [
-            {'id': t.id, 'description': t.description, 'category': t.category,
-             'amount': t.amount, 'frequency': t.frequency, 'day': t.day,
-             'start_date': t.start_date}
-            for t in self.data.recurring
-        ]
-
-    def _pending_state(self):
-        """Templates the month on screen has not accepted or skipped yet.
-
-        The total is computed here so the UI can show what accepting will cost
-        without knowing how a frequency expands into dates.
-        """
-        result = []
-        for template in recurring.pending(
-            self.data.recurring, self.data.current,
-            self.data.settled_in(self.data.current),
-        ):
-            occurrences = recurring.expenses_for(template, self.data.current)
-            result.append({
-                'id': template.id, 'description': template.description,
-                'category': template.category, 'amount': template.amount,
-                'count': len(occurrences),
-                'total': round(sum(e.amount for e in occurrences), 2),
             })
         return result
 
