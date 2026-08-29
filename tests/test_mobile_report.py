@@ -564,7 +564,8 @@ def test_the_spreadsheet_speaks_the_language_the_app_is_in(tmp_path):
     with zipfile.ZipFile(path) as archive:
         strings = archive.read("xl/sharedStrings.xml").decode("utf-8")
         workbook = archive.read("xl/workbook.xml").decode("utf-8")
-    assert "\u0627\u0644\u062f\u062e\u0644" in strings and "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a" in strings
+    assert "\u0627\u0644\u062f\u062e\u0644" in strings
+    assert "\u0627\u0644\u0645\u0635\u0631\u0648\u0641\u0627\u062a" in strings
     assert 'name="\u0627\u0644\u0645\u064a\u0632\u0627\u0646\u064a\u0629"' in workbook, "sheet tabs too"
 
 
