@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import calendar
 from datetime import date
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 
 #: Days that must have elapsed before a projection is offered. Four days of a
 #: 30-day month is 13% of it — still noisy, but the shape of a month's spending

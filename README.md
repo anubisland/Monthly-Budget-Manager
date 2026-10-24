@@ -9,42 +9,56 @@ A cross-platform personal finance tool for tracking monthly income and expenses 
 
 Available as:
 - **CLI** — pure stdlib, zero external deps, scriptable and automation-friendly
-- **Desktop GUI** — Tkinter app with charts and Excel/CSV export
-- **Mobile** — Android/iOS via BeeWare Briefcase + Toga
-- **React Native** — Android/iOS/Windows/macOS via the `react-native/` workspace
+- **Desktop GUI** — customtkinter app with charts, envelope budgets and recurring templates
+- **Mobile** — Android/iOS via BeeWare Briefcase + Toga, with month history, goals and forecasts
+- **Web** — static page in `web/`, published to GitHub Pages
 
 ---
 
 ## Features
 
-- Add income and expenses interactively or import from CSV
+- Add income and expenses interactively, or import from CSV (CLI and web)
 - Category breakdowns: amount, % of income, % of expenses
 - Profit margin calculation
-- JSON output for pipelines and automation
-- GUI with live charts (bar: income vs expenses; pie: expense categories)
-- Export to Excel (`.xlsx`) with formatted tables and embedded charts
-- Calendar date picker and category picker in GUI
-- Keyboard shortcuts: `Ctrl+O` open, `Ctrl+S` save, `F5` refresh report
-- Preferences: remembers last selected month between sessions
-- Mobile app (Android/iOS) via BeeWare Briefcase
-- React Native desktop and mobile apps
+- JSON output for pipelines and automation (`--json`, `--save-json`)
+- Charts: income vs expenses, and expenses by category
+- Envelope budgets per category and recurring templates (desktop)
+- Month comparison (desktop); month-over-month summary and trend (mobile)
+- Savings goals and an on-track / forecast indicator (mobile)
+- Calendar date picker and category picker (desktop)
+- Exports: OFX, QIF and PDF (desktop), formatted XLSX and a JSON backup (mobile),
+  CSV and JSON download (web), JSON output (CLI)
+- Dark/light theme, English/Arabic with right-to-left layout
+- Preferences remembered between sessions
+
+> The desktop GUI and the web page are separate implementations over the same
+domain model, so a feature listed for one platform is not automatically in the
+others. [`docs/IMPROVEMENT-PLAN.md`](docs/IMPROVEMENT-PLAN.md) tracks the gaps.
 
 ---
 
-## Requirements
+## Install
 
-| Component | Requirement |
-|-----------|-------------|
-| CLI (`budget_manager.py`) | Python 3.10+, no external deps |
-| GUI (`budget_manager_gui.py`) | Python 3.10+, `openpyxl` |
-| Mobile | Python 3.10+, `briefcase` |
-| React Native | Node 20+ |
-
-Install Python dependencies:
+Python 3.10+ is the only hard requirement. The CLI is pure standard library, and
+the GUI and PDF export are optional extras:
 
 ```bash
-pip install -r requirements.txt
+pip install .              # CLI only, no external dependencies
+pip install ".[gui]"       # + desktop GUI (customtkinter)
+pip install ".[export]"    # + PDF export (fpdf2)
+pip install ".[dev]"       # + pytest, coverage and ruff
 ```
+
+This installs two commands:
+
+```bash
+budget-manager --help          # CLI
+budget-manager-gui             # desktop app
+```
+
+From a clone, the scripts still run directly (`python budget_manager.py`,
+`python budget_manager_gui.py`). `pip install -r requirements.txt` installs
+every optional dependency at once — that is what CI uses.
 
 ---
 
@@ -105,27 +119,23 @@ expense,Groceries,Food,400,2025-08
 
 ```
 Monthly-Budget-Manager/
-├── budget_manager.py        # Core library + CLI (pure stdlib)
-├── budget_manager_gui.py    # Tkinter GUI (requires openpyxl)
-├── requirements.txt         # Runtime Python dependencies
+├── monthly_budget/          # The package: domain model, i18n, theme, SQLite, exporters
+├── budget_manager.py        # CLI entry point (re-export shim)
+├── budget_manager_gui.py    # Desktop entry point (re-export shim)
+├── mobile/                  # BeeWare Briefcase app (Toga + embedded HTML UI)
+│   ├── pyproject.toml       # builds against ../monthly_budget, not a copy
+│   └── src/budget_manager_mobile/   # app code only
+├── web/                     # Static web app (published to GitHub Pages)
+├── docs/                    # Assessment and improvement plan
 ├── examples/
 │   └── sample.csv           # Example CSV file
-├── tests/
-│   └── test_budget_manager.py  # pytest unit tests (≥80% coverage)
-├── mobile/                  # BeeWare Briefcase mobile app
-│   ├── pyproject.toml
-│   └── src/budget_manager_mobile/
-├── react-native/            # React Native monorepo (Android/iOS/Windows/macOS)
-│   ├── apps/
-│   │   ├── mobile/          # React Native mobile app
-│   │   └── desktop/         # React Native Windows/macOS app
-│   └── packages/
-│       ├── shared/          # Shared business logic (TypeScript)
-│       └── adapters/        # Platform adapters
+├── tests/                   # pytest suite
 └── .github/workflows/
-    ├── python-ci.yml        # Python lint + test (runs on every PR/push)
-    ├── release.yml          # Desktop + mobile build and GitHub Release
-    └── react-native-build.yml  # React Native build (Android/iOS/Win/macOS)
+    ├── python-ci.yml        # ruff + pytest on Python 3.10, 3.11, 3.12
+    ├── release-gates.yml    # nine pre-release gates
+    ├── release.yml          # desktop builds + Android APK → GitHub Release
+    ├── daily-release.yml    # scheduled (date-versioned) release
+    └── web-build.yml        # web tests + GitHub Pages deploy
 ```
 
 ---
@@ -133,17 +143,26 @@ Monthly-Budget-Manager/
 ## Running Tests
 
 ```bash
-# Install dev dependencies
-pip install pytest pytest-cov ruff
+# Install the package in editable form, plus the dev tools
+pip install -e ".[dev]"
 
-# Run tests with coverage report
-pytest tests/ --cov=budget_manager --cov-report=term-missing -v
+# Run the suite
+pytest tests/ -v
+
+# Same run plus coverage (source and floor come from pyproject.toml)
+pytest tests/ --cov
 
 # Lint
-ruff check budget_manager.py
+ruff check monthly_budget/ mobile/src/budget_manager_mobile/ tests/ \
+  budget_manager.py budget_manager_gui.py
 ```
 
-The CI workflow enforces ≥80% line coverage on Python 3.10, 3.11, and 3.12.
+Coverage is measured across `monthly_budget/` and the mobile app, and its floor
+lives in `pyproject.toml` so CI and a local run agree. It sat at 32% while the
+mobile app carried its own duplicate of the package; with the duplicate gone the
+measured figure is 45% and the floor is set there. `monthly_budget/gui.py` and
+`monthly_budget/exporter.py` are still untested and are most of what is missing.
+The same config runs on Python 3.10, 3.11, and 3.12.
 
 ---
 
@@ -169,19 +188,25 @@ briefcase run iOS
 **Compatibility notes:**
 - Pins Toga 0.4.7 and Travertino 0.3.0 for stable mobile API
 - Re-run `briefcase create` after changing `mobile/pyproject.toml`
+- The app imports `monthly_budget` from the repository root: `sources` copies it
+  into the bundle at build time, so there is one implementation, not two. Run
+  `pip install -e .` before `briefcase run` from a checkout.
 
 ---
 
-## React Native
+## Web
 
-The `react-native/` workspace is an npm monorepo. See [`react-native/README.md`](react-native/README.md) for full setup instructions.
+The static app in `web/` has no build step: open `web/index.html`, or serve the
+directory. Its tests run with Jest:
 
 ```bash
-cd react-native
-npm install --workspaces --include-workspace-root
-npm run build -w @monthly-budget/shared
-npm run build -w @monthly-budget/adapters
+cd web
+npm ci
+npm test        # runs with coverage; the floor is in jest.config.js
 ```
+
+It is published to GitHub Pages by `web-build.yml` on every push to `main`
+that touches `web/**`.
 
 ---
 
@@ -194,9 +219,11 @@ All pipelines run on GitHub Actions.
 
 | Workflow | Runner | Trigger | What it does |
 |---|---|---|---|
-| `python-ci.yml` | `ubuntu-latest` | Push / PR → `main` | `ruff` lint + `pytest` with ≥80% coverage matrix (Python 3.10, 3.11, 3.12) |
-| `release.yml` | `windows-latest`, `ubuntu-latest`, `macos-latest` | Push / tag `v*.*.*` or manual dispatch | PyInstaller desktop builds (Windows `.zip`, Linux `.tar.gz`, macOS `.zip`) + Briefcase Android APK → GitHub Release |
-| `react-native-build.yml` | `ubuntu-latest`, `macos-latest` | Push / PR → `main` | React Native builds |
+| `python-ci.yml` | `ubuntu-latest` | Push / PR → `main` | `ruff` over the real source + `pytest` with the coverage floor from `pyproject.toml`, on Python 3.10, 3.11 and 3.12 |
+| `release-gates.yml` | `ubuntu-latest` | PR / tag `v*` | Nine gates: unit tests, integration, import smoke, accessibility scan, dependency and static security scan, secret scan, privacy checklist, performance smoke, changelog and version |
+| `release.yml` | `windows-latest`, `ubuntu-latest`, `macos-latest` | Tag `v*.*.*` or manual dispatch | PyInstaller desktop builds (Windows `.zip`, Linux `.tar.gz`, macOS `.zip`) + Briefcase Android APK → GitHub Release |
+| `daily-release.yml` | `ubuntu-latest` | Daily 06:30 UTC / manual | Date-versioned release with build artifacts |
+| `web-build.yml` | `ubuntu-latest` | Push / PR touching `web/**` | Jest with coverage thresholds + GitHub Pages deploy |
 
 ### Artifacts
 
@@ -211,11 +238,14 @@ All pipelines run on GitHub Actions.
 ## Contributing
 
 1. Fork the repo and create a feature branch
-2. Make your changes in `budget_manager.py` (core) or `budget_manager_gui.py` (GUI)
-3. Add or update tests in `tests/test_budget_manager.py`
-4. Ensure all tests pass and coverage stays at ≥80%:
+2. Make your changes in `monthly_budget/` — `budget_manager.py` and
+   `budget_manager_gui.py` are entry-point shims, not the implementation
+3. Add or update tests in `tests/`
+4. Run the same gates CI runs:
    ```bash
-   pytest tests/ --cov=budget_manager --cov-fail-under=80
+   pytest tests/ --cov -v    # source and coverage floor come from pyproject.toml
+   ruff check monthly_budget/ mobile/src/budget_manager_mobile/ tests/ \
+     budget_manager.py budget_manager_gui.py
    ```
 5. Open a pull request — the CI workflow will run automatically
 

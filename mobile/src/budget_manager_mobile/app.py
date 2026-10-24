@@ -7,7 +7,16 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
+# Briefcase copies every source into the bundle as its own directory, so the app
+# modules (api, store, ...) end up beside app.py and the shared ``monthly_budget``
+# package ends up one level above — while from a checkout they are in
+# ``mobile/src/budget_manager_mobile`` and the repository root respectively.
+# Adding both directories is what makes the same imports work in all three
+# places (device, desktop run, test run) instead of relying on the cwd. Written
+# as bare ``sys.path.insert`` calls, not a loop, because that is the one form
+# linters accept before imports.
 sys.path.insert(0, str(Path(__file__).parent.resolve()))
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
 
 import api
 import chrome
@@ -102,7 +111,9 @@ class App(toga.App):
         # opening in English meant changing two settings before the first entry.
         # Both remain switchable in Settings, and a saved choice always wins —
         # _load_settings runs after this and overwrites it.
-        self.dark = False; self.lang = "ar"; self.currency = "EGP"
+        self.dark = False
+        self.lang = "ar"
+        self.currency = "EGP"
         #: Outcome of the last export, for the UI to report. See api._export.
         self.last_export = None
         #: A backup that has been read and shown but not yet applied, and the
@@ -181,10 +192,12 @@ class App(toga.App):
         self.currency = currency
 
     def _start_server(self):
-        handler = BudgetAPIHandler; handler.app = self
+        handler = BudgetAPIHandler
+        handler.app = self
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.bind(('127.0.0.1', 0))
-        self._port = s.getsockname()[1]; s.close()
+        self._port = s.getsockname()[1]
+        s.close()
         print(f"[budget] Server starting on port {self._port}")
         # Held so the server can be shut down deliberately rather than only by
         # the process exiting.
@@ -206,7 +219,10 @@ class App(toga.App):
             'known_months': self.data.known_months(),
             'previous': self._previous_summary(),
             'incomes': [{'name': i.name, 'amount': i.amount, 'date': i.date or ''} for i in bm.incomes],
-            'expenses': [{'name': e.name, 'amount': e.amount, 'category': e.category, 'date': e.date or ''} for e in bm.expenses],
+            'expenses': [
+                {'name': e.name, 'amount': e.amount, 'category': e.category, 'date': e.date or ''}
+                for e in bm.expenses
+            ],
             'total_income': bm.total_income(),
             'total_expenses': bm.total_expenses(),
             'net': bm.net(),

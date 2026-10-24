@@ -4,8 +4,7 @@
   "private": true,
   "description": "Monthly Budget Manager - Web App",
   "scripts": {
-    "test": "jest",
-    "test:coverage": "jest --coverage",
+    "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
   "devDependencies": {

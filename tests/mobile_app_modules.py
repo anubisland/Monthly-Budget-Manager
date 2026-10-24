@@ -4,15 +4,15 @@ Two things make a plain ``import`` unsafe here:
 
 * ``budget_manager_mobile/__init__.py`` imports toga, which the test run does
   not have;
-* the repository contains **two** divergent packages named ``monthly_budget``
-  — one at the root, one vendored under ``mobile/`` — so whichever is imported
-  first wins for the whole session. The mobile copy has ``total_budget``; the
-  root copy renamed it ``total_budgeted``. Importing the wrong one produces an
-  AttributeError far from its cause.
+* the app's own modules import each other as top-level modules (``import
+  store``), because Briefcase flattens the package into the app directory.
 
-So the mobile modules are loaded by path, with ``monthly_budget`` temporarily
-forced to the vendored copy and then restored. Class references captured during
-the load keep pointing at the right thing afterwards.
+So each module is loaded by path. They are loaded against ``monthly_budget`` —
+the one package at the repository root. Until recently a second, diverged copy
+was vendored under ``mobile/`` and had to be forced into ``sys.modules`` for the
+duration of the load, because whichever package was imported first won for the
+whole session. That copy is gone; the app depends on the real one, so there is
+nothing left to shadow.
 """
 
 import importlib.util
@@ -26,8 +26,7 @@ _MOBILE_MODULES = (
     "report", "share", "xlsx", "api",
 )
 
-_MOBILE_SRC = Path(__file__).resolve().parents[1] / "mobile" / "src"
-_PKG = _MOBILE_SRC / "budget_manager_mobile"
+_PKG = Path(__file__).resolve().parents[1] / "mobile" / "src" / "budget_manager_mobile"
 
 
 def _load_by_path(name: str, path: Path):
@@ -39,26 +38,19 @@ def _load_by_path(name: str, path: Path):
 
 
 def _load_mobile_modules():
-    """Load store/budget_data/goals against the vendored monthly_budget."""
-    shadowed = {k: v for k, v in sys.modules.items() if k.startswith("monthly_budget")}
-    for key in shadowed:
-        del sys.modules[key]
+    # Imported first so the app's modules get this package, not a copy: the
+    # point of the shared package is that tests exercise what ships.
+    import monthly_budget  # noqa: F401
 
     added = str(_PKG)
     sys.path.insert(0, added)
     try:
-        _load_by_path("monthly_budget", _PKG / "monthly_budget" / "__init__.py")
-        _load_by_path("monthly_budget.core", _PKG / "monthly_budget" / "core.py")
-        loaded = {
+        return {
             name: _load_by_path(name, _PKG / f"{name}.py")
             for name in _MOBILE_MODULES
         }
     finally:
         sys.path.remove(added)
-        for key in [k for k in sys.modules if k.startswith("monthly_budget")]:
-            del sys.modules[key]
-        sys.modules.update(shadowed)
-    return loaded
 
 
 _MODULES = _load_mobile_modules()
@@ -80,7 +72,7 @@ Goal = budget_data.Goal
 
 
 def load_app_module():
-    """Load ``app.py`` itself, with toga stubbed and monthly_budget isolated.
+    """Load ``app.py`` itself, with toga stubbed.
 
     Kept separate from the module-level loads above because importing app.py
     has side effects — it needs the toga stub in place first — and most tests
@@ -90,21 +82,11 @@ def load_app_module():
 
     install()
 
-    shadowed = {k: v for k, v in sys.modules.items() if k.startswith("monthly_budget")}
-    for key in shadowed:
-        del sys.modules[key]
-
     added = str(_PKG)
     sys.path.insert(0, added)
     try:
-        _load_by_path("monthly_budget", _PKG / "monthly_budget" / "__init__.py")
-        for sub in ("core", "i18n"):
-            _load_by_path(f"monthly_budget.{sub}", _PKG / "monthly_budget" / f"{sub}.py")
         for name in _MOBILE_MODULES:
             sys.modules[name] = _MODULES[name]
         return _load_by_path("budget_app", _PKG / "app.py")
     finally:
         sys.path.remove(added)
-        for key in [k for k in sys.modules if k.startswith("monthly_budget")]:
-            del sys.modules[key]
-        sys.modules.update(shadowed)
