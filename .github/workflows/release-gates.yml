@@ -27,13 +27,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov ruff
+
+      - name: Lint (ruff)
+        run: ruff check monthly_budget/ mobile/src/budget_manager_mobile/ tests/ budget_manager.py budget_manager_gui.py
+
+      # Coverage source and floor come from pyproject.toml, so this gate and
+      # the Python CI job cannot disagree about what is measured.
       - name: Run unit tests with coverage
-        run: |
-          pytest tests/ \
-            --cov=budget_manager \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            -v
+        run: pytest tests/ --cov -v
 
   # ── Gate 2: Integration Tests ───────────────────────────────────────
   integration-tests:
@@ -262,21 +263,35 @@ jobs:
       - name: Verify version on tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
+          set -euo pipefail
           TAG_VERSION="${GITHUB_REF_NAME#v}"
           echo "Tag version: $TAG_VERSION"
 
-          CODE_VERSION=$(grep -oP "__version__\s*=\s*['\"](\K[^'\"]+)" budget_manager.py 2>/dev/null || echo "none")
-          if [ "$CODE_VERSION" != "none" ]; then
-            echo "Code version: $CODE_VERSION"
-            if [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
-              echo "::error::Tag version ($TAG_VERSION) does not match code version ($CODE_VERSION)"
-              exit 1
-            fi
-          else
-            echo "::notice::No __version__ found in budget_manager.py"
+          # The single source of truth. This used to grep budget_manager.py,
+          # which re-exports the package but never defines __version__, so the
+          # comparison was skipped and any tag passed.
+          CODE_VERSION=$(grep -oP "^__version__\s*=\s*['\"]\K[^'\"]+" monthly_budget/__init__.py)
+          if [ -z "$CODE_VERSION" ]; then
+            echo "::error::No __version__ in monthly_budget/__init__.py"
+            exit 1
+          fi
+          echo "Code version: $CODE_VERSION"
+
+          # daily-release.yml tags with a date (v2026.10.21), and a date has the
+          # same shape as a semver triple. It is told apart by its widths — the
+          # date scheme is always YYYY.MM.DD — so a date tag is only required to
+          # carry a changelog entry, while every other tag must match the code.
+          if [[ "$TAG_VERSION" =~ ^[0-9]{4}\.[0-9]{2}\.[0-9]{2}$ ]]; then
+            echo "::notice::Date-scheme tag; skipping the semver comparison"
+          elif [ "$TAG_VERSION" != "$CODE_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match code version ($CODE_VERSION)"
+            exit 1
           fi
 
-          if [ -f CHANGELOG.md ] && ! grep -q "\[$TAG_VERSION\]" CHANGELOG.md; then
+          # Date-scheme changelog headings keep the leading v (`## [v2026.10.21]`),
+          # semver headings do not (`## [2.0.0]`). Accept either shape.
+          if ! grep -qF "[$TAG_VERSION]" CHANGELOG.md \
+             && ! grep -qF "[v$TAG_VERSION]" CHANGELOG.md; then
             echo "::error::CHANGELOG.md missing entry for $TAG_VERSION"
             exit 1
           fi

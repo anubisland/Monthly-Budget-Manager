@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import calendar as _cal
 import csv
 import json
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
-import calendar as _cal
 from datetime import date as _date
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -183,7 +183,20 @@ class BudgetMonth:
     month: Optional[str] = None
     incomes: List[Income] = field(default_factory=list)
     expenses: List[Expense] = field(default_factory=list)
+    #: Per-category envelopes (the desktop app's shape).
     budget_limits: Dict[str, float] = field(default_factory=dict)
+    #: One cap for the whole month, with no per-category split (mobile's shape).
+    #:
+    #: Both live in this one model because there used to be two copies of this
+    #: class: the desktop's with ``budget_limits``, and a vendored copy inside
+    #: ``mobile/`` that had replaced it with ``total_budget``. A fix in either
+    #: copy could not reach the other, so the two "same" APIs already behaved
+    #: differently. They are two features, not two designs: a month may carry a
+    #: total, envelopes, or both, and none of the arithmetic below cares which.
+    #:
+    #: Note that the SQLite store persists envelopes only — this field is part
+    #: of the JSON document the mobile app writes. Only the mobile app sets it.
+    total_budget: float = 0.0
 
     def add_income(self, name: str, amount: float, date: Optional[str] = None) -> None:
         self.incomes.append(
@@ -282,6 +295,7 @@ class BudgetMonth:
             "incomes": [x.to_dict() for x in self.incomes],
             "expenses": [x.to_dict() for x in self.expenses],
             "budget_limits": dict(self.budget_limits),
+            "total_budget": self.total_budget,
             "totals": {
                 "income": round(self.total_income(), 2),
                 "expenses": round(self.total_expenses(), 2),
@@ -300,11 +314,13 @@ class BudgetMonth:
         self.incomes = [Income(**inc) for inc in data.get("incomes", [])]
         self.expenses = [Expense(**exp) for exp in data.get("expenses", [])]
         self.budget_limits = dict(data.get("budget_limits", {}))
+        self.total_budget = _clamp_non_negative(data.get("total_budget", 0.0))
 
     def clear(self) -> None:
         self.incomes.clear()
         self.expenses.clear()
         self.budget_limits.clear()
+        self.total_budget = 0.0
         self.month = None
 
 
@@ -498,7 +514,11 @@ def parse_args(argv: Optional[List[str]] = None) -> "argparse.Namespace":
     _ = I18n.get_instance().t
 
     p = argparse.ArgumentParser(description=_("cli.usage"))
-    p.add_argument("--input", type=str, help="Path to CSV file to import (type,name,category,amount). If omitted, runs interactive mode.")
+    p.add_argument(
+        "--input",
+        type=str,
+        help="Path to CSV file to import (type,name,category,amount). If omitted, runs interactive mode.",
+    )
     p.add_argument("--month", type=str, help="Month label for the report, e.g., 2025-08.")
     p.add_argument("--json", action="store_true", help="Output JSON instead of a human-readable table.")
     p.add_argument("--save-json", type=str, help="Optional path to save the JSON report.")
@@ -507,8 +527,8 @@ def parse_args(argv: Optional[List[str]] = None) -> "argparse.Namespace":
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    from .i18n import I18n
     from . import __version__
+    from .i18n import I18n
 
     args = parse_args(argv)
 

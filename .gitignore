@@ -10,10 +10,11 @@ venv/
 .env.*
 *.env
 
-# Build artifacts (PyInstaller, etc.)
+# Build artifacts (PyInstaller, packaging, etc.)
 build/
 dist/
 *.spec
+*.egg-info/
 
 # Logs
 *.log

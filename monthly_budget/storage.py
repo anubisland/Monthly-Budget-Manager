@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .core import BudgetMonth, Income, Expense, RecurringTransaction, TransactionRule
+from .core import BudgetMonth, Expense, Income, RecurringTransaction, TransactionRule
 
 
 class Storage:
@@ -219,7 +219,8 @@ class Storage:
             )
         else:
             cur = conn.execute(
-                "INSERT INTO recurring_transactions (category, description, amount, frequency, day, start_date, end_date, active) "
+                "INSERT INTO recurring_transactions "
+                "(category, description, amount, frequency, day, start_date, end_date, active) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (rt.category, rt.description, rt.amount, rt.frequency, rt.day,
                  rt.start_date, rt.end_date, int(rt.active)),

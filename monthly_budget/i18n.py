@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-import os
 import locale
+import os
 from pathlib import Path
 from typing import Optional
-
 
 _RTL_LANGUAGES = {"ar"}
 _SUPPORTED_LANGUAGES = {"en", "ar"}

@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [2.0.0] - 2026-10-24
+
+### Added
+
+- The project is pip-installable: `pip install .` provides `budget-manager` and
+  `budget-manager-gui`, with `gui` and `export` extras. The CLI still needs
+  nothing outside the standard library.
+
+### Changed
+
+- One domain model. The copy of `monthly_budget` that the mobile app carried is
+  gone — `mobile/pyproject.toml` now pulls the package at the repository root
+  into the Android bundle, so a fix reaches both apps instead of one.
+- `BudgetMonth` carries both budget shapes the two apps had drifted into: the
+  desktop's per-category `budget_limits` and the mobile app's single
+  `total_budget`. Both round-trip through `to_dict`/`from_dict`.
+- One version number. `monthly_budget/__init__.py` is the source, `pyproject.toml`
+  reads it dynamically, and the mobile Briefcase project is held to it by a test.
+- Coverage is measured across `monthly_budget/` and the mobile app rather than the
+  re-export shim, so it now reports the real figure; the floor is that measured
+  baseline and ratchets up as tests are added.
+- `ruff` lints the real source instead of the shim; the 58 findings it surfaced
+  are fixed.
+- Jest runs with coverage, so its thresholds actually apply; they are set to the
+  measured baseline.
+- The release version gate reads the package, and skips the semver comparison for
+  the date-scheme tags produced by `daily-release.yml`.
+
+### Fixed
+
+- The README no longer documents a `react-native/` workspace, desktop Excel/CSV
+  export, or keyboard shortcuts that do not exist.
+- Coverage no longer counts the same 3,613 lines twice, so the reported figure
+  went from 32% to 45% without a single test changing; the floor moved with it.
+- Removed `openpyxl`, which nothing imported.
+
 ## [v2026.10.23] - 2026-10-24
 
 ## [v2026.10.21] - 2026-10-22

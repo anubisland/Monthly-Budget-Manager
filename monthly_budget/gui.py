@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import math as _math
-import datetime as _dt
 import calendar as _cal
+import datetime as _dt
+import math as _math
 import tkinter as tk
 from typing import Optional
 
@@ -10,8 +10,9 @@ import customtkinter as ctk
 
 from .core import BudgetMonth
 from .i18n import I18n
-from .theme import colors as theme_colors, set_dark_mode
 from .storage import Storage
+from .theme import colors as theme_colors
+from .theme import set_dark_mode
 
 ctk.set_appearance_mode("system")
 ctk.set_default_color_theme("blue")
@@ -1888,7 +1889,8 @@ class BudgetApp(ctk.CTk):
     def _export_report(self, fmt: str) -> None:
         _ = self._
         from tkinter import filedialog
-        from .exporter import export_ofx, export_qif, export_pdf
+
+        from .exporter import export_ofx, export_pdf, export_qif
 
         ext_map = {"ofx": ".ofx", "qif": ".qif", "pdf": ".pdf"}
         filetypes = {

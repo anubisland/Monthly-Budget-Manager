@@ -1,9 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "monthly-budget-manager"
-version = "1.0.0"
+# Version lives in monthly_budget/__init__.py and nowhere else. `pip show`,
+# `budget-manager --version` and the release gate all read that one value.
+dynamic = ["version"]
 description = "A cross-platform personal finance tool for tracking monthly income and expenses"
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["mobile/LICENSE"]
+authors = [{ name = "melwazeer", email = "melwazeer@elwazir.org" }]
+# The CLI is pure standard library. Everything else is an opt-in extra.
+dependencies = []
+
+[project.optional-dependencies]
+gui = ["customtkinter==6.0.0"]
+export = ["fpdf2>=2.8.7"]
+dev = ["pytest", "pytest-cov", "ruff"]
+
+[project.scripts]
+budget-manager = "monthly_budget.core:main"
+budget-manager-gui = "monthly_budget.gui:main"
+
+[project.urls]
+Repository = "https://github.com/anubisland/Monthly-Budget-Manager"
+
+[tool.setuptools]
+# The two root scripts stay importable for anyone running them directly.
+py-modules = ["budget_manager", "budget_manager_gui"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["monthly_budget", "monthly_budget.*"]
+# `locale/` is data, matched by the package-data pattern below; declaring it a
+# package makes setuptools warn that it would otherwise be ignored.
+namespaces = false
+
+[tool.setuptools.dynamic]
+version = { attr = "monthly_budget.__version__" }
+
+[tool.setuptools.package-data]
+# Without these the installed CLI silently falls back to English, because
+# I18n._load() swallows a missing locale file.
+"monthly_budget.locale" = ["*.json"]
 
 [tool.ruff]
 target-version = "py310"
@@ -13,14 +55,27 @@ line-length = 120
 select = ["E", "F", "W", "I"]
 
 [tool.ruff.lint.per-file-ignores]
-"budget_manager_gui.py" = ["E501"]
+# The GUI is a wall of literal label copy rather than logic; wrapping those
+# strings buys nothing and makes the layout code harder to follow.
+"monthly_budget/gui.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Coverage is opt-in (`pytest --cov`) rather than always-on, so running a single
+# test file does not fail the project-wide floor. The floor and the measured
+# paths below are the same ones CI uses: it used to measure `budget_manager.py`
+# — an 8-statement re-export shim — which reported 88% while the real code sat
+# at 32%.
+addopts = "--cov-report=term-missing"
 
 [tool.coverage.run]
-source = ["budget_manager"]
+source = ["monthly_budget", "mobile/src/budget_manager_mobile"]
 
 [tool.coverage.report]
-fail_under = 80
+# The honest baseline, not an aspiration. Raise it as tests are added; never
+# lower it. It read 32% while the mobile app carried its own copy of the
+# package; deleting that copy removed 3,613 duplicate lines from the
+# denominator and the real figure is 45.45%. The largest hole is still
+# monthly_budget/gui.py, which is untested.
+fail_under = 44
 show_missing = true

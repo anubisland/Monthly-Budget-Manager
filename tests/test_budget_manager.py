@@ -254,6 +254,32 @@ class TestBudgetMonthToDict:
         assert "budget_limits" in d
         assert d["budget_limits"]["Food"] == 500
 
+    def test_total_budget_and_limits_coexist(self):
+        """The desktop's envelopes and the mobile app's single cap, one model.
+
+        They used to live in two copies of ``BudgetMonth`` and each copy could
+        only hold its own, so a month loaded with one shape lost the other.
+        """
+        bm = _budget_with_data()
+        bm.set_budget_limit("Food", 500)
+        bm.total_budget = 3000
+
+        assert bm.total_budgeted() == 500, "envelopes remain the envelope total"
+
+        back = BudgetMonth()
+        back.from_dict(bm.to_dict())
+        assert back.total_budget == 3000
+        assert back.budget_limits == {"Food": 500}
+
+    def test_total_budget_clamped_and_cleared(self):
+        bm = BudgetMonth()
+        bm.from_dict({"total_budget": -250})
+        assert bm.total_budget == 0
+
+        bm.total_budget = 1200
+        bm.clear()
+        assert bm.total_budget == 0
+
 
 # ===========================================================================
 # Envelope budgeting

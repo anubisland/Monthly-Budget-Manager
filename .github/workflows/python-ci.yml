@@ -29,16 +29,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov ruff
 
+      # Lint the real source, not just the re-export shims. Coverage and its
+      # floor live in pyproject.toml so a local run measures the same thing.
       - name: Lint (ruff)
-        run: ruff check budget_manager.py budget_manager_gui.py tests/
+        run: ruff check monthly_budget/ mobile/src/budget_manager_mobile/ tests/ budget_manager.py budget_manager_gui.py
 
       - name: Run tests with coverage
-        run: |
-          pytest tests/ \
-            --cov=budget_manager \
-            --cov-report=term-missing \
-            --cov-fail-under=80 \
-            -v
+        run: pytest tests/ --cov -v
 
       - name: Upload coverage report
         if: matrix.python-version == '3.12'
