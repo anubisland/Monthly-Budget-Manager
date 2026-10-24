@@ -62,18 +62,39 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      # A repository without a Pages site makes configure-pages fail with
+      # "Get Pages site failed", turning every push to main red even though the
+      # build itself is fine. Ask GitHub first, and skip the deploy when there
+      # is nowhere to deploy to.
+      - name: Check whether GitHub Pages is configured
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/$REPO/pages" > /dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Pages deploy skipped::GitHub Pages is not configured for $REPO. Enable it under Settings > Pages (Source: GitHub Actions) to publish this build."
+          fi
+
       - uses: actions/download-artifact@v4
+        if: steps.pages.outputs.enabled == 'true'
         with:
           name: web-bundle
           path: ./_site
 
       - uses: actions/configure-pages@v4
+        if: steps.pages.outputs.enabled == 'true'
 
       - name: Upload pages artifact
+        if: steps.pages.outputs.enabled == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: ./_site
 
       - name: Deploy to GitHub Pages
         id: deploy
+        if: steps.pages.outputs.enabled == 'true'
         uses: actions/deploy-pages@v4

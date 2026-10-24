@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A push to `main` no longer fails when the repository has no GitHub Pages site:
+  the web workflow asks GitHub whether Pages is configured and skips the deploy
+  with a notice, instead of failing inside `configure-pages`.
+
 ## [2.0.0] - 2026-10-24
 
 ### Added
