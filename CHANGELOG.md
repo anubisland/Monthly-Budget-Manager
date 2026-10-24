@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   went from 32% to 45% without a single test changing; the floor moved with it.
 - Removed `openpyxl`, which nothing imported.
 
+## [v2026.10.23] - 2026-10-24
+
 ## [v2026.10.21] - 2026-10-22
 
 - No shippable change — re-published with updated date stamp.
