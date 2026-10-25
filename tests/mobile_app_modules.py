@@ -23,7 +23,7 @@ from pathlib import Path
 _MOBILE_MODULES = (
     "store", "validate", "errors", "decode",
     "budget_data", "goals", "pace", "trend",
-    "report", "share", "xlsx", "api",
+    "report", "share", "xlsx", "statement", "api",
 )
 
 _PKG = Path(__file__).resolve().parents[1] / "mobile" / "src" / "budget_manager_mobile"
@@ -66,6 +66,7 @@ trend = _MODULES["trend"]
 report = _MODULES["report"]
 xlsx = _MODULES["xlsx"]
 share = _MODULES["share"]
+statement = _MODULES["statement"]
 
 BudgetData = budget_data.BudgetData
 Goal = budget_data.Goal
