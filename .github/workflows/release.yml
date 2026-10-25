@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*.*.*"
+    # Cutting a release from a branch rather than a tag used to need the manual
+    # "Run workflow" button, which needs `actions: write` — a permission a
+    # connected app does not always have on the organisation. Pushing a branch
+    # named `apk/...` runs the same build and publishes a prerelease carrying
+    # the APK, which is what a build from an untagged branch is anyway.
+    branches:
+      - "apk/**"
   workflow_dispatch:
     inputs:
       reason:
