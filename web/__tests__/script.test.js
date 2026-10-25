@@ -140,6 +140,36 @@ function buildFixtureDOM() {
     document.body.appendChild(btn);
   }
 
+  // Auto-category rules panel — same IDs as index.html.
+  if (!document.getElementById('rulesPanel')) {
+    const panel = document.createElement('div');
+    panel.id = 'rulesPanel';
+    panel.className = 'hidden';
+    document.body.appendChild(panel);
+  }
+  if (!document.getElementById('rulePattern')) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'rulePattern';
+    document.body.appendChild(input);
+  }
+  if (!document.getElementById('ruleCategory')) {
+    const select = document.createElement('select');
+    select.id = 'ruleCategory';
+    [{ value: 'Food' }, { value: 'Rent' }].forEach(({ value }) => {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = value;
+      select.appendChild(opt);
+    });
+    document.body.appendChild(select);
+  }
+  if (!document.getElementById('rulesList')) {
+    const list = document.createElement('div');
+    list.id = 'rulesList';
+    document.body.appendChild(list);
+  }
+
   ['income', 'expenses', 'report'].forEach(name => {
     if (!document.getElementById('tab-' + name)) {
       const el = document.createElement('div');
@@ -431,6 +461,165 @@ describe('loadData() / saveData()', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Auto-category rules
+// ---------------------------------------------------------------------------
+describe('auto-category rules', () => {
+  let mem;
+
+  function statusText() {
+    return document.getElementById('statusBar').textContent;
+  }
+
+  function seed(doc) {
+    mem['anubisland-budget'] = JSON.stringify(doc);
+  }
+
+  beforeEach(() => {
+    mem = {};
+    localStorageMock._reset();
+    localStorageMock.getItem.mockClear();
+    localStorageMock.setItem.mockClear();
+    localStorageMock.getItem.mockImplementation(key => (key in mem ? mem[key] : null));
+    localStorageMock.setItem.mockImplementation((key, value) => { mem[key] = String(value); });
+    document.getElementById('rulePattern').value = '';
+    document.getElementById('ruleCategory').value = '';
+    document.getElementById('statusBar').textContent = '';
+    document.getElementById('rulesList').innerHTML = '';
+  });
+
+  describe('applyAutoCategory()', () => {
+    const rules = [
+      { pattern: 'carrefour', category: 'Food' },
+      { pattern: 'uber', category: 'Transport' },
+    ];
+
+    test('matches a word anywhere in the description, ignoring case', () => {
+      expect(app.applyAutoCategory('CARREFOUR MARKET 12', rules)).toBe('Food');
+      expect(app.applyAutoCategory('Uber Trip 04', rules)).toBe('Transport');
+    });
+
+    test('falls back when nothing matches', () => {
+      expect(app.applyAutoCategory('Amazon Prime', rules)).toBe('Uncategorized');
+      expect(app.applyAutoCategory('Amazon Prime', rules, 'Misc')).toBe('Misc');
+    });
+
+    test('the first matching rule wins, so order is the specificity', () => {
+      const ordered = [
+        { pattern: 'carrefour market', category: 'Misc' },
+        { pattern: 'carrefour', category: 'Food' },
+      ];
+      expect(app.applyAutoCategory('Carrefour Market', ordered)).toBe('Misc');
+      expect(app.applyAutoCategory('Carrefour Express', ordered)).toBe('Food');
+    });
+
+    test('survives no rules at all', () => {
+      expect(app.applyAutoCategory('Anything', [])).toBe('Uncategorized');
+      expect(app.applyAutoCategory('Anything', undefined)).toBe('Uncategorized');
+      expect(app.applyAutoCategory(undefined, [{ pattern: 'a' }])).toBe('Uncategorized');
+    });
+  });
+
+  test('rules survive a load and malformed ones are dropped', () => {
+    seed({
+      month: '2026-08',
+      incomes: [],
+      expenses: [],
+      rules: [
+        { pattern: '  carrefour  ', category: ' Food ' },
+        { pattern: '', category: 'Food' },
+        { pattern: 'orphan' },
+        'not a rule',
+        { pattern: 'uber', category: 'Transport' },
+      ],
+    });
+
+    expect(app.loadData().rules).toEqual([
+      { pattern: 'carrefour', category: 'Food' },
+      { pattern: 'uber', category: 'Transport' },
+    ]);
+  });
+
+  test('adding a rule saves it, lists it and clears the form', () => {
+    document.getElementById('rulePattern').value = 'carrefour';
+    document.getElementById('ruleCategory').value = 'Food';
+
+    app.addRule();
+
+    expect(app.loadData().rules).toEqual([{ pattern: 'carrefour', category: 'Food' }]);
+    expect(document.getElementById('rulePattern').value).toBe('');
+    expect(document.getElementById('ruleCategory').value).toBe('');
+    expect(document.getElementById('rulesList').textContent).toContain('carrefour');
+    expect(statusText()).toBe('rules.added');
+  });
+
+  test('a rule needs both a word and a category', () => {
+    app.addRule();
+    expect(statusText()).toBe('rules.needsWord');
+
+    document.getElementById('rulePattern').value = 'carrefour';
+    document.getElementById('ruleCategory').value = '';
+    app.addRule();
+    expect(statusText()).toBe('rules.needsCategory');
+
+    expect(mem['anubisland-budget']).toBeUndefined();
+  });
+
+  test('removing a rule drops it from the list and the document', () => {
+    seed({
+      month: '2026-08', incomes: [], expenses: [],
+      rules: [{ pattern: 'carrefour', category: 'Food' }, { pattern: 'uber', category: 'Transport' }],
+    });
+
+    app.removeRule(0);
+
+    expect(app.loadData().rules).toEqual([{ pattern: 'uber', category: 'Transport' }]);
+    expect(document.getElementById('rulesList').textContent).not.toContain('carrefour');
+    expect(statusText()).toBe('rules.removed');
+  });
+
+  test('the panel lists the rules and says so when there are none', () => {
+    app.renderRulesPanel();
+    expect(document.getElementById('rulesList').textContent).toBe('rules.empty');
+
+    seed({
+      month: '2026-08', incomes: [], expenses: [],
+      rules: [{ pattern: 'uber', category: 'Transport' }],
+    });
+    app.renderRulesPanel();
+    expect(document.getElementById('rulesList').textContent).toContain('uber');
+  });
+
+  test('the rule categories are copied from the expense form at startup', () => {
+    document.getElementById('expenseCategory').innerHTML =
+      '<option value="">Select category</option>' +
+      '<option value="Food">Food</option>' +
+      '<option value="Rent">Rent</option>';
+    const target = document.getElementById('ruleCategory');
+    target.innerHTML = '<option value="">Select category</option>';
+
+    // The init path script.js registers for DOMContentLoaded.
+    document.dispatchEvent(new window.Event('DOMContentLoaded'));
+
+    expect([...target.options].map(o => o.value)).toEqual(['', 'Food', 'Rent']);
+  });
+
+  test('a new budget keeps the rules', () => {
+    seed({
+      month: '2026-08',
+      incomes: [{ name: 'Salary', amount: 5000, date: '2026-08-01' }],
+      expenses: [],
+      rules: [{ pattern: 'uber', category: 'Transport' }],
+    });
+
+    window.newBudget();
+
+    const saved = JSON.parse(mem['anubisland-budget']);
+    expect(saved.incomes).toEqual([]);
+    expect(saved.rules).toEqual([{ pattern: 'uber', category: 'Transport' }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Bank statement import — paste, look, confirm
 // ---------------------------------------------------------------------------
 describe('bank statement import', () => {
@@ -520,6 +709,43 @@ describe('bank statement import', () => {
     expect(statusText()).toBe('st.done');
     expect(app._statementPreview()).toBeNull();
     expect(panel().classList.contains('hidden')).toBe(true);
+  });
+
+  test('imported expenses are filed by the rules; income is left alone', () => {
+    mem['anubisland-budget'] = JSON.stringify({
+      month: '2026-08',
+      incomes: [],
+      expenses: [],
+      rules: [{ pattern: 'carrefour', category: 'Food' }],
+    });
+    putStatement(
+      'Date,Description,Amount\n' +
+      '2026-08-05,Carrefour Market,-90\n' +
+      '2026-08-06,Salary,5000\n'
+    );
+
+    app.previewStatement();
+    expect(document.getElementById('statementPreviewBody').textContent).toContain('cat.food');
+
+    app.importStatement();
+    const data = stored();
+    expect(data.expenses[0].category).toBe('Food');
+    expect(data.incomes[0].name).toBe('Salary');
+    expect(data.rules).toEqual([{ pattern: 'carrefour', category: 'Food' }]);
+  });
+
+  test('a rule added after the preview is applied to the import', () => {
+    putStatement('Date,Description,Amount\n2026-08-05,Carrefour Market,-90');
+    app.previewStatement();
+
+    document.getElementById('rulePattern').value = 'carrefour';
+    document.getElementById('ruleCategory').value = 'Food';
+    app.addRule();
+
+    expect(document.getElementById('statementPreviewBody').textContent).toContain('cat.food');
+
+    app.importStatement();
+    expect(stored().expenses[0].category).toBe('Food');
   });
 
   test('a row already in the month is flagged and skipped unless asked for', () => {

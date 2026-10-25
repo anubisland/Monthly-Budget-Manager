@@ -13,7 +13,25 @@
   // ---------------------------------------------------------------------------
 
   function _emptyData() {
-    return { month: '', incomes: [], expenses: [] };
+    return { month: '', incomes: [], expenses: [], rules: [] };
+  }
+
+  /**
+   * A rule is one word and the category it implies. Anything that is not a
+   * pair of non-empty strings is dropped rather than kept as a row the user
+   * cannot see the point of.
+   */
+  function _sanitiseRules(raw) {
+    if (!Array.isArray(raw)) return [];
+    var rules = [];
+    raw.forEach(function (rule) {
+      if (!rule || typeof rule !== 'object') return;
+      var pattern = String(rule.pattern === undefined || rule.pattern === null ? '' : rule.pattern).trim();
+      var category = String(rule.category === undefined || rule.category === null ? '' : rule.category).trim();
+      if (!pattern || !category) return;
+      rules.push({ pattern: pattern, category: category });
+    });
+    return rules;
   }
 
   function loadData() {
@@ -25,6 +43,10 @@
         month: parsed.month || '',
         incomes: Array.isArray(parsed.incomes) ? parsed.incomes : [],
         expenses: Array.isArray(parsed.expenses) ? parsed.expenses : [],
+        // Kept in the same document as the entries, the way the mobile app
+        // keeps them: a save that forgot them would silently undo the user's
+        // rules on the next unrelated edit.
+        rules: _sanitiseRules(parsed.rules),
       };
     } catch (_) {
       return _emptyData();
@@ -63,6 +85,25 @@
     var inc = totalIncome(data);
     if (inc === 0) return 0;
     return (net(data) / inc) * 100;
+  }
+
+  /**
+   * The first rule whose word appears in `name`, or `fallback`.
+   *
+   * The same reading as the mobile app's apply_auto_category: case-insensitive
+   * substring, first match wins, so a specific word can be placed above a
+   * general one by adding it first.
+   */
+  function applyAutoCategory(name, rules, fallback) {
+    var lowered = String(name === undefined || name === null ? '' : name).toLowerCase();
+    var list = Array.isArray(rules) ? rules : [];
+    for (var i = 0; i < list.length; i++) {
+      var rule = list[i];
+      if (!rule || !rule.pattern) continue;
+      var pattern = String(rule.pattern).trim().toLowerCase();
+      if (pattern && lowered.indexOf(pattern) >= 0) return rule.category;
+    }
+    return fallback === undefined ? 'Uncategorized' : fallback;
   }
 
   function expensesByCategory(data) {
@@ -480,10 +521,16 @@
 
   function newBudget() {
     if (!confirm(window.i18n.t('alert.confirmNew'))) return;
-    saveData(_emptyData());
+    // The rules are settings, not entries: clearing a month is no reason to
+    // make the user type their words in again.
+    var kept = loadData().rules;
+    var fresh = _emptyData();
+    fresh.rules = kept;
+    saveData(fresh);
     var monthEl = document.getElementById('monthInput');
     if (monthEl) monthEl.value = '';
     renderAll();
+    renderRulesPanel();
     setStatus('status.new');
   }
 
@@ -601,6 +648,112 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Auto-category rules — one word, one category, first match wins
+  // ---------------------------------------------------------------------------
+
+  function toggleRulesPanel() {
+    var panel = document.getElementById('rulesPanel');
+    if (!panel) return;
+    var opening = panel.classList.contains('hidden');
+    _setHidden(panel, !opening);
+    if (opening) renderRulesPanel();
+  }
+
+  /** Copy the category list from the expense form, so there is one list. */
+  function _fillRuleCategories() {
+    var source = document.getElementById('expenseCategory');
+    var target = document.getElementById('ruleCategory');
+    // The placeholder the markup ships counts as one option, so "more than
+    // one" is what says this has already been filled.
+    if (!source || !target || target.options.length > 1) return;
+
+    Array.prototype.forEach.call(source.options, function (opt) {
+      if (!opt.value) return;
+      var copy = document.createElement('option');
+      copy.value = opt.value;
+      var key = opt.getAttribute('data-i18n-option');
+      if (key) copy.setAttribute('data-i18n-option', key);
+      copy.textContent = opt.textContent;
+      target.appendChild(copy);
+    });
+  }
+
+  function addRule() {
+    var wordEl = document.getElementById('rulePattern');
+    var categoryEl = document.getElementById('ruleCategory');
+    var word = wordEl ? (wordEl.value || '').trim() : '';
+    var category = categoryEl ? categoryEl.value : '';
+
+    if (!word) {
+      setStatus('rules.needsWord');
+      return;
+    }
+    if (!category) {
+      setStatus('rules.needsCategory');
+      return;
+    }
+
+    var data = loadData();
+    data.rules.push({ pattern: word, category: category });
+    saveData(data);
+
+    if (wordEl) wordEl.value = '';
+    if (categoryEl) categoryEl.value = '';
+    renderRulesPanel();
+    // A preview already on screen was drawn with the old rules; redraw it so
+    // the categories it shows are the ones the import will use.
+    if (statementPreview) renderStatementPreview();
+    setStatus('rules.added', { word: word });
+  }
+
+  function removeRule(index) {
+    var data = loadData();
+    if (index < 0 || index >= data.rules.length) return;
+    data.rules.splice(index, 1);
+    saveData(data);
+    renderRulesPanel();
+    if (statementPreview) renderStatementPreview();
+    setStatus('rules.removed');
+  }
+
+  function renderRulesPanel() {
+    var list = document.getElementById('rulesList');
+    if (!list) return;
+
+    _clearChildren(list);
+    var rules = loadData().rules;
+
+    if (rules.length === 0) {
+      var empty = document.createElement('p');
+      empty.className = 'text-xs text-gray-400 py-2';
+      empty.textContent = window.i18n.t('rules.empty');
+      list.appendChild(empty);
+      return;
+    }
+
+    rules.forEach(function (rule, index) {
+      var row = document.createElement('div');
+      row.className = 'flex items-center justify-between gap-2 border-b border-gray-100 py-1';
+
+      var text = document.createElement('span');
+      text.className = 'text-sm text-gray-700';
+      text.textContent = rule.pattern + ' \u2192 ' + fmtCatLabel(rule.category);
+      row.appendChild(text);
+
+      var remove = document.createElement('button');
+      remove.className = 'text-red-500 hover:text-red-700 text-xs px-2 py-1';
+      remove.textContent = window.i18n.t('rules.remove');
+      remove.setAttribute('aria-label', window.i18n.t('rules.remove'));
+      remove.addEventListener('click', (function (i) {
+        return function () { removeRule(i); };
+      })(index));
+      row.appendChild(remove);
+
+      list.appendChild(row);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Bank statement import — paste, look, confirm (see statement.js)
   // ---------------------------------------------------------------------------
 
@@ -693,6 +846,7 @@
 
     _clearChildren(body);
     var shown = statementPreview.entries.slice(0, STATEMENT_PREVIEW_ROWS);
+    var rules = loadData().rules;
 
     shown.forEach(function (entry) {
       var incoming = entry.kind === 'income';
@@ -700,6 +854,10 @@
       tr.className = 'border-b border-gray-100 hover:bg-gray-50';
       tr.appendChild(_makeTd(fmtDateDisplay(entry.date, window.i18n.getCurrentLang()), 'text-gray-500 text-xs'));
       tr.appendChild(_makeTd(entry.name, 'text-gray-800'));
+      // Shown because it is the one thing an import decides on the user's
+      // behalf: which envelope the money lands in.
+      var category = incoming ? '' : fmtCatLabel(applyAutoCategory(entry.name, rules, 'Uncategorized'));
+      tr.appendChild(_makeTd(category, 'text-gray-600 text-xs'));
       tr.appendChild(_makeTd(
         (incoming ? '+' : '\u2212') + fmtAmount(entry.amount),
         'text-end font-medium ' + (incoming ? 'text-green-700' : 'text-red-700')
@@ -759,7 +917,9 @@
       } else {
         data.expenses.push({
           name: entry.name,
-          category: 'Uncategorized',
+          // The same rules the preview showed, read again so a rule added
+          // between the two steps is not silently ignored.
+          category: applyAutoCategory(entry.name, data.rules, 'Uncategorized'),
           amount: entry.amount,
           date: entry.date,
         });
@@ -783,6 +943,7 @@
   document.addEventListener('langchange', function () {
     renderAll();
     if (statementPreview) renderStatementPreview();
+    renderRulesPanel();
   });
 
   // ---------------------------------------------------------------------------
@@ -790,6 +951,12 @@
   // ---------------------------------------------------------------------------
 
   document.addEventListener('DOMContentLoaded', function () {
+    _fillRuleCategories();
+    // Filling the list added options after i18n had rendered the existing
+    // ones, so translate them now rather than leaving English in an Arabic UI.
+    if (window.i18n && window.i18n.render) window.i18n.render();
+    renderRulesPanel();
+
     var monthEl = document.getElementById('monthInput');
     if (monthEl) {
       var data = loadData();
@@ -815,6 +982,9 @@
   window.switchTab = switchTab;
   window.toggleLanguage = toggleLanguage;
   window.importCsv = importCsv;
+  window.toggleRulesPanel = toggleRulesPanel;
+  window.addRule = addRule;
+  window.removeRule = removeRule;
   window.toggleStatementPanel = toggleStatementPanel;
   window.clearStatementPanel = clearStatementPanel;
   window.previewStatement = previewStatement;
@@ -831,10 +1001,14 @@
     expensePctByCategory: expensePctByCategory,
     validateDate: validateDate,
     validateAmount: validateAmount,
+    applyAutoCategory: applyAutoCategory,
     loadData: loadData,
     saveData: saveData,
     fmtAmount: fmtAmount,
     renderAll: renderAll,
+    renderRulesPanel: renderRulesPanel,
+    addRule: addRule,
+    removeRule: removeRule,
     currentMonth: currentMonth,
     previewStatement: previewStatement,
     importStatement: importStatement,

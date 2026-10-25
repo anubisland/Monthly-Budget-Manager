@@ -10,17 +10,23 @@ const i18n = window.i18n;
 
 const KEYS = [
   'toolbar.importStatement',
+  'toolbar.rules',
   'st.title', 'st.hint', 'st.label', 'st.close', 'st.previewBtn',
   'st.pasteFirst', 'st.previewFirst', 'st.monthChanged', 'st.heading',
-  'st.col.date', 'st.col.name', 'st.col.amount', 'st.col.note', 'st.dup',
+  'st.col.date', 'st.col.name', 'st.col.category', 'st.col.amount', 'st.col.note', 'st.dup',
   'st.month', 'st.counts', 'st.more', 'st.includeDups', 'st.confirm',
   'st.cancel', 'st.done', 'st.unreadable',
   'st.reason.empty', 'st.reason.tooManyRows', 'st.reason.noDescription',
   'st.reason.noAmount', 'st.reason.unknown',
+  'rules.title', 'rules.hint', 'rules.close', 'rules.word',
+  'rules.wordPlaceholder', 'rules.category', 'rules.add', 'rules.empty',
+  'rules.remove', 'rules.needsWord', 'rules.needsCategory', 'rules.added',
+  'rules.removed',
 ];
 
 const PARAMS = {
   read: 3, add: 2, dup: 1, skip: 0, month: '2026-08', n: 4, s: 1, why: 'x',
+  word: 'carrefour',
 };
 
 function inLang(lang, read) {
