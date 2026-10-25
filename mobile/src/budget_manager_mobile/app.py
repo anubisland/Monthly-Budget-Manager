@@ -121,6 +121,11 @@ class App(toga.App):
         #: two steps by construction rather than by a confirmation dialog.
         self.pending_restore = None
         self.restore_preview = None
+        #: A statement that has been read and shown but not yet added, and the
+        #: outcome of the last import. Same shape as restoring: read, show,
+        #: then act — the parser produces candidates, the confirm writes them.
+        self.statement_preview = None
+        self.last_import = None
         self._i18n = I18n.get_instance()
         self._setup_storage()
         self._load_settings()
@@ -237,6 +242,8 @@ class App(toga.App):
             'dropped': self.data.dropped,
             'last_export': self.last_export,
             'restore_preview': self.restore_preview,
+            'statement_preview': self.statement_preview,
+            'last_import': self.last_import,
             'pace': self._pace_state(bm),
             'trend': trend.series(self.data.months, self.data.current),
             'trend_avg': trend.averages(trend.series(self.data.months, self.data.current)),

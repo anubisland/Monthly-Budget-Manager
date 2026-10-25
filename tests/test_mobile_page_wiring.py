@@ -56,6 +56,7 @@ def test_every_handler_in_generated_markup_exists_too():
     ("backup", "btn-backup", "backup"),
     ("export", "btn-export", "exportXLSX"),
     ("reset", "btn-reset", "resetAll"),
+    ("statement import", "btn-statement", "toggleStatement"),
 ])
 def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
     """Named one by one so a failure says which feature is dead, rather than
@@ -69,6 +70,7 @@ def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
 
 @pytest.mark.parametrize("route", [
     "/api/preview-restore", "/api/restore", "/api/backup-file", "/api/export",
+    "/api/preview-statement", "/api/import-statement",
     "/api/fund-goal", "/api/step-month", "/api/set-month",
     "/api/add-income", "/api/add-expense", "/api/add-goal", "/api/set-budget",
 ])

@@ -446,6 +446,19 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <button class="setting-btn" id="btn-preview-restore" onclick="previewRestore()"></button>
           <div id="restore-diff"></div>
         </div>
+        <button class="setting-btn" id="btn-statement" onclick="toggleStatement()" style="margin-top:6px"></button>
+        <div id="statement-panel" style="display:none;margin-top:8px">
+          <label class="mini-label" id="l-statement"></label>
+          <textarea class="form-input" id="statement-text" rows="6"
+            style="width:100%;padding:9px 10px;font-size:12px;font-family:monospace"></textarea>
+          <div class="hint" id="hint-statement"></div>
+          <button class="setting-btn" id="btn-preview-statement" onclick="previewStatement()"></button>
+          <label class="hint" style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="st-include-dups">
+            <span id="l-st-include-dups"></span>
+          </label>
+          <div id="statement-preview"></div>
+        </div>
         <button class="setting-btn danger" id="btn-reset" onclick="resetAll()" style="margin-top:6px;color:var(--exp)"></button>
         <div class="hint" id="hint-reset"></div>
       </div>
@@ -831,6 +844,17 @@ const TRANS = {
     rst_heading: 'Now, against the backup', rst_now: 'now', rst_after: 'after',
     rst_goals: 'Goals: {a} now, {b} after.', rst_losing: '{n} month(s) would be removed.',
     rst_apply: 'Replace my data with this backup', rst_done: 'Restored',
+    statement_btn: '🧾 Import a bank statement',
+    l_statement: 'Paste the statement here',
+    statement_hint: 'Copy the rows out of your bank app or its CSV export — header line included — and paste them here. Nothing is added until you have seen what came out.',
+    st_paste_first: 'Paste a statement first',
+    preview_statement_btn: 'Show me what came out',
+    st_heading: 'What the paste produced',
+    st_counts: 'Read {read} line(s): {add} to add, {dup} already in the month, {skip} unreadable.',
+    st_dup: 'already there', st_more: '{n} more not shown',
+    st_include_dups: 'Add the rows that already exist too',
+    st_apply: 'Add these rows to the month',
+    st_done: 'Added {n}, skipped {s}.',
     open_source: 'Free & Open Source',
     l_rule_when: 'When the name contains', l_rule_then: 'file it under',
     rule_example: 'Example: type "vodafone" and choose Internet. Then "Vodafone bill" is filed as Internet on its own.',
@@ -906,6 +930,17 @@ const TRANS = {
     rst_heading: 'الآن، مقابل النسخة', rst_now: 'الآن', rst_after: 'بعدها',
     rst_goals: 'الأهداف: {a} الآن، {b} بعدها.', rst_losing: 'ستُحذف {n} شهرًا.',
     rst_apply: 'استبدل بياناتي بهذه النسخة', rst_done: 'تمّت الاستعادة',
+    statement_btn: '🧾 استيراد كشف حساب',
+    l_statement: 'الصق كشف الحساب هنا',
+    statement_hint: 'انسخ الصروف من تطبيق بنكك أو من ملفّ CSV — مع سطر العناوين — والصقها هنا. لا يُضاف شيء حتى ترى ما خرج من اللصق.',
+    st_paste_first: 'الصق كشف الحساب أوّلًا',
+    preview_statement_btn: 'أرِني ما خرج',
+    st_heading: 'ما أنتجه اللصق',
+    st_counts: 'قُرئ {read} سطرًا: {add} للإضافة، {dup} موجود بالفعل في الشهر، {skip} غير مقروء.',
+    st_dup: 'موجود بالفعل', st_more: '{n} أخرى غير معروضة',
+    st_include_dups: 'أضف الصروف الموجودة بالفعل كذلك',
+    st_apply: 'أضف هذه الصروف إلى الشهر',
+    st_done: 'أُضيف {n}، وتُخطّي {s}.',
     open_source: 'مجّاني ومفتوح المصدر',
     l_rule_when: 'إذا احتوى الاسم على', l_rule_then: 'صنّفه كـ',
     rule_example: 'مثال: اكتب «فودافون» واختر إنترنت. بعدها «فاتورة فودافون» تُصنّف إنترنت وحدها.',
@@ -1168,6 +1203,72 @@ async function applyRestore() {
   clearRestore();
   document.getElementById('restore-panel').style.display = 'none';
   toast(t('rst_done'));
+}
+
+// Importing a bank statement, the same three steps as restoring: paste it,
+// see the rows it produced, then add them. The parser only reads — it decides
+// nothing about the user's month and writes nothing — so this panel is where a
+// paste of two hundred transactions becomes a deliberate action.
+function toggleStatement() {
+  let panel = document.getElementById('statement-panel');
+  panel.style.display = panel.style.display === 'none' ? '' : 'none';
+  if (panel.style.display === 'none') clearStatement();
+}
+
+function clearStatement() {
+  document.getElementById('statement-text').value = '';
+  document.getElementById('statement-preview').innerHTML = '';
+}
+
+async function previewStatement() {
+  let text = document.getElementById('statement-text').value.trim();
+  if (!text) { toast(t('st_paste_first')); return; }
+  if (!await postAndRefresh('/api/preview-statement', {text: text})) return;
+  renderStatementPreview();
+}
+
+function renderStatementPreview() {
+  let el = document.getElementById('statement-preview');
+  let d = state.statement_preview;
+  if (!d) { el.innerHTML = ''; return; }
+
+  // Capped: a busy month is hundreds of rows, and the point of the preview is
+  // to show the shape of what came out, not to scroll all of it.
+  let shown = d.entries.slice(0, 40);
+  let rows = shown.map(e => {
+    let incoming = e.kind === 'income';
+    let sign = incoming ? '+' : '\u2212';
+    return `<div class="rst-row">
+        <span class="rst-m">${e.date}</span>
+        <span class="rst-side">${e.name}</span>
+        <span class="rst-side" style="color:${incoming ? 'var(--inc)' : 'var(--exp)'}">
+          ${sign}${cs()}${Number(e.amount).toLocaleString()}</span>
+        ${e.duplicate ? `<span class="rst-side rst-gone">${t('st_dup')}</span>` : ''}
+      </div>`;
+  }).join('');
+
+  let toAdd = d.entries.length - d.duplicates;
+  el.innerHTML = `
+    <div class="cmp-sub" style="margin-top:8px">${t('st_heading')}</div>
+    ${rows}
+    ${d.entries.length > shown.length
+      ? `<div class="hint">${t('st_more').replace('{n}', d.entries.length - shown.length)}</div>` : ''}
+    <div class="hint">${t('st_counts')
+      .replace('{read}', d.read)
+      .replace('{add}', toAdd)
+      .replace('{dup}', d.duplicates)
+      .replace('{skip}', d.skipped)}</div>
+    ${d.entries.length ? `<button class="setting-btn" style="background:var(--pri);color:#fff;border:none"
+      onclick="importStatement()">${t('st_apply')}</button>` : ''}`;
+}
+
+async function importStatement() {
+  let include = document.getElementById('st-include-dups').checked;
+  if (!await postAndRefresh('/api/import-statement', {include_duplicates: include})) return;
+  let result = state.last_import || {added: 0, skipped: 0};
+  clearStatement();
+  document.getElementById('statement-panel').style.display = 'none';
+  toast(t('st_done').replace('{n}', result.added).replace('{s}', result.skipped), 5000);
 }
 
 // Shared by backup and export. A share sheet that opened needs no message;
@@ -1560,6 +1661,9 @@ function renderSettingsLabels() {
   let labels = {
     'btn-restore': 'restore_btn', 'l-restore': 'l_restore',
     'hint-restore': 'restore_hint', 'btn-preview-restore': 'preview_restore_btn',
+    'btn-statement': 'statement_btn', 'l-statement': 'l_statement',
+    'hint-statement': 'statement_hint', 'btn-preview-statement': 'preview_statement_btn',
+    'l-st-include-dups': 'st_include_dups',
     'hint-reset': 'reset_hint',
   };
   for (let id in labels) {

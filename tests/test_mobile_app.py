@@ -262,3 +262,62 @@ def test_only_one_place_writes_the_about_text():
     page = (pathlib.Path(app_module.__file__).parent / "web" / "index.html").read_text("utf-8")
     assert page.count("about-text") == 2, "the element, and exactly one writer"
     assert "v1.0'" not in page, "no version may be written into the page"
+
+
+# ── importing a bank statement, over the socket the WebView uses ─────────────
+
+def test_the_statement_panel_is_in_the_page_the_app_serves(live):
+    """The panel is only real if it reaches the device: the route table and the
+    tests around it say nothing about what the WebView actually loads."""
+    with urllib.request.urlopen(_url(live, "/")) as response:
+        body = response.read().decode("utf-8")
+    assert 'id="btn-statement"' in body
+    assert 'id="statement-text"' in body
+    assert 'id="st-include-dups"' in body
+    assert "previewStatement()" in body
+    assert "importStatement()" in body
+
+
+def test_a_statement_is_previewed_then_imported_over_http(live):
+    """Preview and import have to agree through the state document, which is
+    the only thing the page re-renders from."""
+    text = "Date,Description,Amount\n01/08/2026,Coffee,-35.50\n02/08/2026,Salary,8000\n"
+
+    status, state = post(live, "/api/preview-statement", {"text": text})
+    assert status == 200
+    assert state["statement_preview"]["read"] == 2
+    assert [e["name"] for e in state["statement_preview"]["entries"]] == ["Coffee", "Salary"]
+    assert state["expenses"] == [], "a preview must not add anything"
+
+    status, state = post(live, "/api/import-statement", {})
+    assert status == 200
+    assert state["statement_preview"] is None
+    assert state["last_import"] == {"month": live.data.current, "added": 2, "skipped": 0}
+    assert [e["name"] for e in state["expenses"]] == ["Coffee"]
+    assert [i["name"] for i in state["incomes"]] == ["Salary"]
+
+
+def test_the_imported_rows_survive_a_restart(tmp_path):
+    """The import is only worth anything if it is written, not just held."""
+    instance = app_module.App("Test", "test.app", data_dir=tmp_path)
+    instance.startup()
+    try:
+        status, state = post(
+            instance, "/api/preview-statement",
+            {"text": "Date,Description,Amount\n01/08/2026,Coffee,-35.50\n"},
+        )
+        assert status == 200 and state["statement_preview"]["read"] == 1
+        post(instance, "/api/import-statement", {})
+        month = instance.data.current
+        assert [e.name for e in instance.data.month.expenses] == ["Coffee"]
+    finally:
+        instance._server.shutdown()
+        instance._server.server_close()
+
+    reopened = app_module.App("Test", "test.app", data_dir=tmp_path)
+    reopened.startup()
+    try:
+        assert [e.name for e in reopened.data.months[month].expenses] == ["Coffee"]
+    finally:
+        reopened._server.shutdown()
+        reopened._server.server_close()
