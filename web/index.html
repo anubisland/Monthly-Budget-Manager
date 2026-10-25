@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monthly Budget Manager</title>
+    <link rel="icon" type="image/png" href="icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -129,6 +130,10 @@
            bright white — the same header the mobile app carries since v2.0.1,
            so the two faces of the product open looking like one app. */
         .app-header { background: #2563eb; }
+
+        /* The app name in Cairo in both languages — the brand face of the
+           header — and its icon beside it. */
+        .app-title { font-family: 'Cairo', var(--font-en); }
     </style>
 
     <!-- Apply stored language BEFORE body renders to avoid flash of wrong direction -->
@@ -141,9 +146,12 @@
         <!-- Header -->
         <div class="app-header rounded-xl shadow-md p-5 mb-4 text-white">
             <div class="flex justify-between items-center flex-wrap gap-3">
-                <div>
-                    <h1 class="text-2xl font-bold text-white" data-i18n="app.title">Monthly Budget Manager</h1>
-                    <p class="text-sm text-blue-100 mt-1" data-i18n="app.tagline">Track your monthly income and expenses</p>
+                <div class="flex items-center gap-3">
+                    <img src="icon.png" alt="" width="44" height="44" style="border-radius:10px">
+                    <div>
+                        <h1 class="text-2xl font-bold text-white app-title" data-i18n="app.title">Monthly Budget Manager</h1>
+                        <p class="text-sm text-blue-100 mt-1" data-i18n="app.tagline">Track your monthly income and expenses</p>
+                    </div>
                 </div>
                 <!-- Language Toggle -->
                 <button

@@ -27,6 +27,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the web workflow asks GitHub whether Pages is configured and skips the deploy
   with a notice, instead of failing inside `configure-pages`.
 
+## [2.0.3] - 2026-10-25
+
+### Added
+
+- The app icon sits beside the app name in the header of both faces, and
+  the name is written in Cairo (the web loads it from Google Fonts; the
+  mobile app does too, falling back to the system face while offline).
+  The web page also carries it as its favicon.
+
+### Fixed
+
+- `Web Build and Deploy`: the Pages-deploy job ran its steps in the `web`
+  working directory it never checks out, so bash could not start and every
+  push to `main` went red — and after Pages was enabled, the site still
+  never published. The check step now runs at the repository root, and the
+  web bundle includes the icon.
+
 ## [2.0.2] - 2026-10-25
 
 ### Added
