@@ -61,6 +61,11 @@
       'report.chart.noExpenses': 'No expenses to chart',
       'report.noData': 'Add income or expenses to see your report',
 
+      // The month at a glance, above the tabs.
+      'home.spent': 'You spent {p}% of this month\u2019s income',
+      'home.over': 'Spending is more than the income recorded',
+      'home.empty': 'Nothing recorded yet \u2014 add your first entry',
+
       'cat.food': 'Food',
       'cat.rent': 'Rent',
       'cat.fuel': 'Fuel',
@@ -206,6 +211,11 @@
       'report.chart.expenseCategories': 'فئات المصروفات',
       'report.chart.noExpenses': 'لا توجد مصروفات للرسم البياني',
       'report.noData': 'أضف دخلاً أو مصروفات لرؤية تقريرك',
+
+      // الشبكة العلوية: الشهر في نظرة واحدة.
+      'home.spent': 'أنفقت {p}% من دخل هذا الشهر',
+      'home.over': 'المصروفات أكثر من الدخل المسجّل',
+      'home.empty': 'لا توجد حركات بعد — أضف أول حركة',
 
       'cat.food': 'طعام',
       'cat.rent': 'إيجار',

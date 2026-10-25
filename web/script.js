@@ -317,11 +317,68 @@
     drawPieChart(expensesByCategory(data));
   }
 
+  /**
+   * The month at a glance, in the block above the tabs.
+   *
+   * Read from the same totals as the Report tab rather than from its own
+   * arithmetic, so the hero and the report can never disagree about a month.
+   */
+  function renderHome(data) {
+    var inc = totalIncome(data);
+    var exp = totalExpenses(data);
+    var n = net(data);
+
+    var heroNet = document.getElementById('heroNet');
+    if (heroNet) heroNet.textContent = fmtAmount(n);
+
+    var statInc = document.getElementById('statIncome');
+    var statExp = document.getElementById('statExpenses');
+    var statNet = document.getElementById('statNet');
+    if (statInc) statInc.textContent = fmtAmount(inc);
+    if (statExp) statExp.textContent = fmtAmount(exp);
+    if (statNet) statNet.textContent = profitMargin(data).toFixed(1) + '%';
+
+    var footInc = document.getElementById('heroFootIncome');
+    var footExp = document.getElementById('heroFootExpenses');
+    if (footInc) footInc.textContent = fmtAmount(inc);
+    if (footExp) footExp.textContent = fmtAmount(exp);
+
+    var fill = document.getElementById('heroBarFill');
+    if (fill) {
+      // Income is the track and expenses fill it. Over-spending is pinned at
+      // the end: a bar longer than its track shows nothing the number does not.
+      var pct = inc > 0 ? (exp / inc) * 100 : (exp > 0 ? 100 : 0);
+      fill.style.width = Math.min(100, Math.max(0, pct)) + '%';
+    }
+
+    var sub = document.getElementById('heroSub');
+    if (sub) {
+      if (inc <= 0 && exp <= 0) {
+        sub.textContent = window.i18n.t('home.empty');
+      } else if (inc <= 0 || exp > inc) {
+        sub.textContent = window.i18n.t('home.over');
+      } else {
+        sub.textContent = window.i18n.t('home.spent', { p: Math.round((exp / inc) * 100) });
+      }
+    }
+  }
+
+  /**
+   * The two buttons under the totals: open the matching form and put the
+   * cursor in it, because the button promised to add something.
+   */
+  function quickAdd(tab) {
+    switchTab(tab);
+    var field = document.getElementById(tab === 'income' ? 'incomeName' : 'expenseName');
+    if (field) field.focus();
+  }
+
   function renderAll() {
     var data = loadData();
     renderIncomeTab(data);
     renderExpenseTab(data);
     renderReportTab(data);
+    renderHome(data);
     var monthEl = document.getElementById('monthInput');
     if (monthEl && data.month && !monthEl.value) monthEl.value = data.month;
   }
@@ -980,6 +1037,7 @@
   window.clearAll = clearAll;
   window.newBudget = newBudget;
   window.switchTab = switchTab;
+  window.quickAdd = quickAdd;
   window.toggleLanguage = toggleLanguage;
   window.importCsv = importCsv;
   window.toggleRulesPanel = toggleRulesPanel;
@@ -1006,6 +1064,7 @@
     saveData: saveData,
     fmtAmount: fmtAmount,
     renderAll: renderAll,
+    renderHome: renderHome,
     renderRulesPanel: renderRulesPanel,
     addRule: addRule,
     removeRule: removeRule,

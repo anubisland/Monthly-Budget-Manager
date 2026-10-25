@@ -41,6 +41,9 @@ class BudgetData:
         #: could never recur.
         self.recurring: List[RecurringTransaction] = []
         self.rules: List[TransactionRule] = []
+        #: Entries the add screen can repeat in one tap. Global like the rules,
+        #: because "the coffee I buy every morning" is a habit, not a month.
+        self.favorites: List[Dict] = []
         #: month key -> template ids already accepted or skipped there. Both
         #: outcomes land here, so a declined template stops asking this month
         #: and asks again next month without needing a second record.
@@ -57,6 +60,13 @@ class BudgetData:
         """
         if self.current not in self.months:
             self.months[self.current] = BudgetMonth(month=self.current)
+            # A plan is monthly, but it is not re-typed monthly: a new month
+            # starts with the previous month's envelopes. Only the month
+            # directly before is used, so clearing the plan stays cleared
+            # instead of being resurrected from some older month.
+            prior = self.months.get(store.shift_month(self.current, -1))
+            if prior is not None and prior.budget_limits:
+                self.months[self.current].budget_limits = dict(prior.budget_limits)
         return self.months[self.current]
 
     def this_month(self) -> str:
@@ -131,6 +141,8 @@ class BudgetData:
         dropped += lost
         self.settled, lost = decode.settled(doc.get("settled"))
         dropped += lost
+        self.favorites, lost = decode.favorites(doc.get("favorites"))
+        dropped += lost
 
         # Every decode above must have run before this point. The block used to
         # sit higher, reading a `dropped` that counted only months and goals —
@@ -172,6 +184,7 @@ class BudgetData:
             "goals": [asdict(g) for g in self.goals],
             "recurring": [asdict(t) for t in self.recurring],
             "rules": [asdict(r) for r in self.rules],
+            "favorites": list(self.favorites),
             "settled": {k: sorted(v) for k, v in self.settled.items() if v},
         }
 
@@ -181,6 +194,7 @@ class BudgetData:
         self.goals = []
         self.recurring = []
         self.rules = []
+        self.favorites = []
         self.settled = {}
         self.current = self.this_month()
 
@@ -195,5 +209,15 @@ class BudgetData:
 
 
 def _is_blank(bm: BudgetMonth) -> bool:
-    """A month with nothing in it is not worth storing or navigating to."""
-    return not bm.incomes and not bm.expenses and not getattr(bm, "total_budget", 0)
+    """A month with nothing in it is not worth storing or navigating to.
+
+    Envelopes count as content: a month whose only entry is a spending plan is
+    a month the user set up, and dropping it on save would wipe the plan the
+    next time the app started.
+    """
+    return (
+        not bm.incomes
+        and not bm.expenses
+        and not getattr(bm, "total_budget", 0)
+        and not getattr(bm, "budget_limits", None)
+    )

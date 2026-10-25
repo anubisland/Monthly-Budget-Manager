@@ -6,180 +6,594 @@
     <title>Monthly Budget Manager</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        /* The same palette, radii and card surfaces as the mobile app, so the
+           two screens read as one product rather than two designs. */
         :root {
+            --bg: #f0f2f5;
+            --card: #ffffff;
+            --tx: #1a1a2e;
+            --ts: #6b7280;
+            --line: #eef0f4;
+            --pri: #1a73e8;
+            --pri-soft: #eaf2fe;
+            --inc: #00bfa6;
+            --exp: #ea4335;
+            --warn: #ff6b35;
+            --hero: linear-gradient(135deg, #1a73e8 0%, #4f46e5 100%);
+            --shadow: 0 2px 12px rgba(16, 24, 40, 0.08);
+            --radius: 16px;
+            --radius-sm: 12px;
             --font-en: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             --font-ar: 'Cairo', sans-serif;
         }
 
+        * { box-sizing: border-box; }
+
         body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--tx);
             font-family: var(--font-en);
+            -webkit-font-smoothing: antialiased;
         }
 
-        html.lang-ar body {
-            font-family: var(--font-ar);
-            font-size: 0.95em;
-            line-height: 1.8;
-            letter-spacing: 0;
+        html.lang-ar body { font-family: var(--font-ar); }
+
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            padding: 16px 16px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        /* Language toggle pill */
+        /* ── Header ─────────────────────────────────────────────── */
+        .hdr {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 4px 2px;
+        }
+        .hdr h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.4px;
+            color: var(--pri);
+        }
+        .hdr p {
+            margin: 2px 0 0;
+            font-size: 12px;
+            color: var(--ts);
+        }
+
         #langToggle {
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            width: 72px;
-            height: 32px;
-            min-width: 44px;
-            min-height: 44px;
-            padding: 6px;
-            box-sizing: content-box;
-            border: 1.5px solid #d1d5db;
+            min-width: 52px;
+            height: 34px;
+            padding: 0 10px;
+            border: 1px solid #dfe3ea;
             border-radius: 9999px;
-            background: #fff;
+            background: var(--card);
+            box-shadow: var(--shadow);
             cursor: pointer;
-            transition: border-color 0.15s, box-shadow 0.15s;
+            transition: border-color .15s, box-shadow .15s;
         }
-
-        #langToggle:hover { border-color: #3b82f6; }
-
-        #langToggle:focus {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.4);
-            border-color: #3b82f6;
-        }
-
+        #langToggle:hover { border-color: var(--pri); }
+        #langToggle:focus { outline: none; box-shadow: 0 0 0 3px rgba(26,115,232,.28); }
         .lang-toggle-inner {
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 4px;
-            width: 100%;
+            font-size: 12px;
         }
-
-        .lang-label-en, .lang-label-ar {
-            font-size: 0.8125rem;
-            transition: color 0.15s, font-weight 0.15s;
-        }
-
         .lang-label-ar { font-family: var(--font-ar); }
-        .lang-divider { color: #9ca3af; font-size: 0.75rem; }
+        .lang-divider { color: #c3c9d4; }
 
-        /* Tab active state */
-        .tab-btn.active {
-            border-bottom: 2px solid #2563eb;
-            color: #2563eb;
+        /* ── Cards ──────────────────────────────────────────────── */
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 16px;
+            box-shadow: var(--shadow);
+        }
+        .card-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--ts);
+            margin: 0 0 10px;
+        }
+        .hint {
+            font-size: 11px;
+            line-height: 1.6;
+            color: var(--ts);
+            margin: 0;
+        }
+
+        /* ── Month bar ──────────────────────────────────────────── */
+        .month-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card);
+            border-radius: var(--radius-sm);
+            padding: 8px 12px;
+            box-shadow: var(--shadow);
+        }
+        .month-bar label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--ts);
+            white-space: nowrap;
+        }
+        .month-bar input[type="month"] {
+            flex: 1;
+            min-width: 0;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--tx);
+            text-align: center;
+            padding: 6px 0;
+        }
+        .month-bar input[type="month"]:focus { outline: none; }
+
+        /* ── Hero ───────────────────────────────────────────────── */
+        .hero {
+            background: var(--hero);
+            border-radius: 18px;
+            padding: 22px 20px 18px;
+            color: #fff;
+            text-align: center;
+            box-shadow: 0 10px 24px rgba(26, 115, 232, 0.28);
+        }
+        .hero .label {
+            font-size: 12px;
+            opacity: .85;
             font-weight: 600;
         }
-
-        /* RTL-aware Tailwind physical class overrides */
-        [dir="rtl"] .space-x-4 > * + * {
-            margin-inline-start: 1rem;
-            margin-inline-end: 0;
+        .hero-amount {
+            font-size: 40px;
+            font-weight: 800;
+            letter-spacing: -1.2px;
+            line-height: 1.15;
+            margin: 2px 0 12px;
+            direction: ltr;
+        }
+        .hero-track {
+            height: 10px;
+            border-radius: 9999px;
+            background: rgba(255,255,255,.28);
+            overflow: hidden;
+        }
+        .hero-fill {
+            height: 100%;
+            width: 0;
+            border-radius: 9999px;
+            background: #fff;
+            transition: width .35s ease;
+        }
+        .hero-foot {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 11px;
+            opacity: .92;
+        }
+        .hero-sub {
+            font-size: 12px;
+            opacity: .9;
+            margin-top: 10px;
         }
 
-        [dir="rtl"] .space-x-2 > * + * {
-            margin-inline-start: 0.5rem;
-            margin-inline-end: 0;
+        /* ── Stat row ───────────────────────────────────────────── */
+        .stats { display: flex; gap: 8px; }
+        .stat {
+            flex: 1;
+            min-width: 0;
+            background: var(--card);
+            border-radius: var(--radius-sm);
+            padding: 12px 8px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+        .stat .num {
+            font-size: 17px;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            direction: ltr;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .stat .lbl { font-size: 10px; color: var(--ts); margin-top: 3px; font-weight: 600; }
+        .num.inc { color: var(--inc); }
+        .num.exp { color: var(--exp); }
+        .num.pri { color: var(--pri); }
+
+        /* ── Quick add ──────────────────────────────────────────── */
+        .qr { display: flex; gap: 8px; }
+        .qr button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+            transition: transform .12s ease, filter .12s ease;
+        }
+        .qr button:active { transform: scale(.97); }
+        .qr button:hover { filter: brightness(1.06); }
+        .qr .inc-btn { background: var(--inc); }
+        .qr .exp-btn { background: var(--exp); }
+
+        /* ── Toolbar ────────────────────────────────────────────── */
+        .tools { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn {
+            border: none;
+            border-radius: var(--radius-sm);
+            padding: 9px 13px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            background: var(--pri-soft);
+            color: var(--pri);
+            cursor: pointer;
+            transition: background .15s, color .15s;
+        }
+        .btn:hover { background: #dcebfd; }
+        .btn.ghost { background: #f2f4f7; color: #4b5563; }
+        .btn.ghost:hover { background: #e8ebf0; }
+        .btn.primary { background: var(--pri); color: #fff; }
+        .btn.primary:hover { background: #1665cc; }
+        .btn.success { background: var(--inc); color: #fff; }
+        .btn.success:hover { background: #00a892; }
+
+        /* ── Segmented tabs ─────────────────────────────────────── */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 5px;
+            box-shadow: var(--shadow);
+        }
+        .tab-btn {
+            flex: 1;
+            border: none;
+            background: transparent;
+            border-radius: var(--radius-sm);
+            padding: 10px 6px;
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--ts);
+            cursor: pointer;
+            transition: background .15s, color .15s;
+        }
+        .tab-btn:hover { color: var(--pri); }
+        .tab-btn.active {
+            background: var(--pri);
+            color: #fff;
+            border-bottom: none;
+            box-shadow: 0 4px 12px rgba(26,115,232,.28);
+        }
+        .tab-content { animation: fadeIn .22s ease; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        [dir="rtl"] .mr-2 {
-            margin-inline-end: 0.5rem;
-            margin-inline-start: 0;
-            margin-right: 0;
+        /* ── Forms ──────────────────────────────────────────────── */
+        .field-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--ts);
+            margin-bottom: 5px;
+        }
+        .input {
+            width: 100%;
+            padding: 11px 12px;
+            border: 1px solid #e4e8ef;
+            border-radius: var(--radius-sm);
+            background: #f8f9fb;
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--tx);
+            transition: border-color .15s, box-shadow .15s, background .15s;
+        }
+        .input:focus {
+            outline: none;
+            background: #fff;
+            border-color: var(--pri);
+            box-shadow: 0 0 0 3px rgba(26,115,232,.16);
+        }
+        select.input { appearance: none; }
+
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+        @media (min-width: 560px) {
+            .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            .form-grid .span-all { grid-column: 1 / -1; }
         }
 
-        [dir="rtl"] .ml-2 {
-            margin-inline-start: 0.5rem;
-            margin-inline-end: 0;
-            margin-left: 0;
-        }
-
-        [dir="rtl"] .mr-3 {
-            margin-inline-end: 0.75rem;
-            margin-inline-start: 0;
-            margin-right: 0;
-        }
-
-        [dir="rtl"] .ml-3 {
-            margin-inline-start: 0.75rem;
-            margin-inline-end: 0;
-            margin-left: 0;
-        }
-
-        [dir="rtl"] .text-right { text-align: start; }
-        [dir="rtl"] .text-left { text-align: end; }
-
-        /* Positive net */
-        .net-positive { color: #16a34a; }
-        .net-negative { color: #dc2626; }
-
-        /* Status bar */
-        #statusBar { font-size: 0.875rem; color: #6b7280; }
-
-        /* Canvas chart container */
-        .chart-canvas { display: block; width: 100%; }
-
-        /* Scrollable table wrapper */
+        /* ── Tables ─────────────────────────────────────────────── */
         .table-wrapper { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        table th {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .03em;
+            color: var(--ts);
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--line);
+            white-space: nowrap;
+        }
+        table td {
+            font-size: 13px;
+            padding: 11px 6px;
+            border-bottom: 1px solid var(--line);
+            color: var(--tx);
+        }
+        table tbody tr:last-child td { border-bottom: none; }
+        table tbody tr:hover { background: #fafbfd; }
+        tbody button {
+            border: none;
+            background: transparent;
+            color: var(--exp);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 8px;
+        }
+        tbody button:hover { background: rgba(234,67,53,.1); }
+        .empty {
+            text-align: center;
+            color: #9aa2b1;
+            font-size: 12px;
+            padding: 26px 0;
+            margin: 0;
+        }
+
+        /* ── Panels (statement / rules) ─────────────────────────── */
+        .panel-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .panel-head h2 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 800;
+            color: var(--tx);
+        }
+        .panel-head .hint { margin-top: 4px; }
+        .panel-close {
+            border: none;
+            background: #f2f4f7;
+            color: var(--ts);
+            width: 28px;
+            height: 28px;
+            border-radius: 9999px;
+            cursor: pointer;
+            font-size: 13px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+        .panel-close:hover { background: #e8ebf0; color: var(--tx); }
+
+        .rules-list .rule {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 9px 0;
+            border-bottom: 1px solid var(--line);
+            font-size: 13px;
+        }
+        .rules-list .rule:last-child { border-bottom: none; }
+        .rules-list .rule-word { font-weight: 700; }
+        .rules-list .rule-arrow { color: #b6bdc9; }
+        .rules-list .rule-cat { flex: 1; color: var(--ts); }
+        .rules-list .rule-del {
+            border: none;
+            background: transparent;
+            color: var(--ts);
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 6px;
+            border-radius: 8px;
+        }
+        .rules-list .rule-del:hover { color: var(--exp); background: rgba(234,67,53,.1); }
+
+        textarea.input {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.6;
+            resize: vertical;
+        }
+
+        /* ── Report ─────────────────────────────────────────────── */
+        .report-stats {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        @media (min-width: 560px) {
+            .report-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+        .report-stat {
+            border-radius: var(--radius-sm);
+            padding: 12px 10px;
+            text-align: center;
+        }
+        .report-stat p { margin: 0; }
+        .report-stat .lbl { font-size: 10px; font-weight: 700; margin-bottom: 3px; }
+        .report-stat .val { font-size: 18px; font-weight: 800; direction: ltr; }
+        .rs-inc { background: rgba(0,191,166,.12); }
+        .rs-inc .lbl, .rs-inc .val { color: #00897b; }
+        .rs-exp { background: rgba(234,67,53,.1); }
+        .rs-exp .lbl, .rs-exp .val { color: #c5221f; }
+        .rs-net { background: rgba(26,115,232,.1); }
+        .rs-net .lbl, .rs-net .val { color: var(--pri); }
+        .rs-mar { background: rgba(124,58,237,.1); }
+        .rs-mar .lbl, .rs-mar .val { color: #6d28d9; }
+
+        .chart-box { margin-bottom: 16px; }
+        .chart-box p {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--ts);
+            margin: 0 0 8px;
+        }
+        .chart-canvas {
+            display: block;
+            width: 100%;
+            background: #fbfcfe;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-sm);
+        }
+
+        /* ── Status ─────────────────────────────────────────────── */
+        #statusBar {
+            margin: 0;
+            font-size: 12px;
+            color: var(--ts);
+            text-align: center;
+            background: var(--card);
+            border-radius: 9999px;
+            padding: 9px 14px;
+            box-shadow: var(--shadow);
+        }
+
+        .row-flex { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+        .check-line {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            color: var(--ts);
+            cursor: pointer;
+        }
+        .check-line input { accent-color: var(--pri); }
+        .hidden { display: none !important; }
+
+        [dir="rtl"] table th, [dir="rtl"] table td { text-align: right; }
+        [dir="rtl"] .hero-amount, [dir="rtl"] .stat .num, [dir="rtl"] .report-stat .val { direction: ltr; }
     </style>
 
     <!-- Apply stored language BEFORE body renders to avoid flash of wrong direction -->
     <script src="i18n.js"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body>
 
-    <div class="container mx-auto px-4 py-6 max-w-5xl">
+    <div class="wrap">
 
         <!-- Header -->
-        <div class="bg-white rounded-lg shadow-sm p-5 mb-4">
-            <div class="flex justify-between items-center flex-wrap gap-3">
-                <div>
-                    <h1 class="text-2xl font-bold text-gray-800" data-i18n="app.title">Monthly Budget Manager</h1>
-                    <p class="text-sm text-gray-500 mt-1" data-i18n="app.tagline">Track your monthly income and expenses</p>
-                </div>
-                <!-- Language Toggle -->
-                <button
-                    id="langToggle"
-                    role="switch"
-                    aria-checked="false"
-                    aria-label="Switch to Arabic / التحويل إلى العربية"
-                    onclick="toggleLanguage()"
-                    title="Switch language / تغيير اللغة"
-                >
-                    <span class="lang-toggle-inner">
-                        <span class="lang-label-en" style="font-weight: 700; color: #1d4ed8;">EN</span>
-                        <span class="lang-divider">|</span>
-                        <span class="lang-label-ar" style="font-weight: 400; color: #6b7280;">عر</span>
-                    </span>
-                </button>
+        <header class="hdr">
+            <div>
+                <h1 data-i18n="app.title">Monthly Budget Manager</h1>
+                <p data-i18n="app.tagline">Track your monthly income and expenses</p>
+            </div>
+            <button
+                id="langToggle"
+                role="switch"
+                aria-checked="false"
+                aria-label="Switch to Arabic / التحويل إلى العربية"
+                onclick="toggleLanguage()"
+                title="Switch language / تغيير اللغة"
+            >
+                <span class="lang-toggle-inner">
+                    <span class="lang-label-en" style="font-weight: 700; color: #1a73e8;">EN</span>
+                    <span class="lang-divider">|</span>
+                    <span class="lang-label-ar" style="font-weight: 400; color: #6b7280;">عر</span>
+                </span>
+            </button>
+        </header>
+
+        <!-- Month -->
+        <div class="month-bar">
+            <label for="monthInput" data-i18n="toolbar.month">Month (YYYY-MM)</label>
+            <input
+                type="month"
+                id="monthInput"
+                data-i18n-title="form.monthPlaceholder"
+                title="YYYY-MM"
+            >
+        </div>
+
+        <!-- The month at a glance: net in the hero, the three totals under it.
+             Filled by renderHome() in script.js — the same numbers the Report
+             tab spends a whole tab on, shown without asking for a tab. -->
+        <section class="hero">
+            <div class="label" data-i18n="report.net">Net (Profit)</div>
+            <div class="hero-amount" id="heroNet">$0.00</div>
+            <div class="hero-track"><div class="hero-fill" id="heroBarFill"></div></div>
+            <div class="hero-foot">
+                <span id="heroFootIncome">$0.00</span>
+                <span id="heroFootExpenses">$0.00</span>
+            </div>
+            <div class="hero-sub" id="heroSub"></div>
+        </section>
+
+        <!-- Stats -->
+        <div class="stats">
+            <div class="stat">
+                <div class="num inc" id="statIncome">$0.00</div>
+                <div class="lbl" data-i18n="report.totalIncome">Total Income</div>
+            </div>
+            <div class="stat">
+                <div class="num exp" id="statExpenses">$0.00</div>
+                <div class="lbl" data-i18n="report.totalExpenses">Total Expenses</div>
+            </div>
+            <div class="stat">
+                <div class="num pri" id="statNet">$0.00</div>
+                <div class="lbl" data-i18n="report.margin">Profit Margin</div>
             </div>
         </div>
 
+        <!-- Quick add: one tap to the form that is already there -->
+        <div class="qr">
+            <button class="inc-btn" onclick="quickAdd('income')" data-i18n="income.addBtn">Add Income</button>
+            <button class="exp-btn" onclick="quickAdd('expenses')" data-i18n="expense.addBtn">Add Expense</button>
+        </div>
+
         <!-- Toolbar -->
-        <div class="bg-white rounded-lg shadow-sm p-4 mb-4">
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2">
-                    <label class="text-sm font-medium text-gray-700 whitespace-nowrap" for="monthInput" data-i18n="toolbar.month">Month (YYYY-MM)</label>
-                    <input
-                        type="month"
-                        id="monthInput"
-                        class="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        data-i18n-title="form.monthPlaceholder"
-                        title="YYYY-MM"
-                    >
-                </div>
-                <button onclick="newBudget()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-i18n="toolbar.newBudget">New Budget</button>
-                <label class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition cursor-pointer" data-i18n="toolbar.importCsv">
-                    Import CSV
+        <div class="card">
+            <div class="tools">
+                <button onclick="newBudget()" class="btn ghost" data-i18n="toolbar.newBudget">New Budget</button>
+                <label class="btn" style="display:inline-flex;align-items:center;">
+                    <span data-i18n="toolbar.importCsv">Import CSV</span>
                     <input type="file" id="csvImport" accept=".csv" class="hidden" onchange="importCsv(event)">
                 </label>
-                <button onclick="toggleStatementPanel()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.importStatement">Import Statement</button>
-                <button onclick="toggleRulesPanel()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.rules">Category Rules</button>
-                <button onclick="exportCsv()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportCsv">Export CSV</button>
-                <button onclick="exportJson()" class="px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-sm hover:bg-blue-100 transition" data-i18n="toolbar.exportJson">Export JSON</button>
+                <button onclick="toggleStatementPanel()" class="btn" data-i18n="toolbar.importStatement">Import Statement</button>
+                <button onclick="toggleRulesPanel()" class="btn" data-i18n="toolbar.rules">Category Rules</button>
+                <button onclick="exportCsv()" class="btn" data-i18n="toolbar.exportCsv">Export CSV</button>
+                <button onclick="exportJson()" class="btn" data-i18n="toolbar.exportJson">Export JSON</button>
             </div>
         </div>
 
@@ -187,150 +601,150 @@
              by. Same reading as the mobile app — case-insensitive substring,
              first match wins — because an import that filed every bank line
              under Uncategorized made the user re-file the month by hand. -->
-        <div id="rulesPanel" class="bg-white rounded-lg shadow-sm p-4 mb-4 hidden">
-            <div class="flex items-start justify-between gap-3 mb-3">
+        <div id="rulesPanel" class="card hidden">
+            <div class="panel-head">
                 <div>
-                    <h2 class="text-sm font-semibold text-gray-800" data-i18n="rules.title">Auto-category rules</h2>
-                    <p class="text-xs text-gray-500 mt-1" data-i18n="rules.hint">Type a word once, and every imported expense whose description contains it is filed under that category. Picking a category yourself always wins.</p>
+                    <h2 data-i18n="rules.title">Auto-category rules</h2>
+                    <p class="hint" data-i18n="rules.hint">Type a word once, and every imported expense whose description contains it is filed under that category. Picking a category yourself always wins.</p>
                 </div>
-                <button onclick="toggleRulesPanel()" class="text-gray-400 hover:text-gray-600 text-sm px-2" data-i18n-title="rules.close" title="Close">✕</button>
+                <button onclick="toggleRulesPanel()" class="panel-close" data-i18n-title="rules.close" title="Close">✕</button>
             </div>
 
-            <div class="flex flex-wrap items-end gap-3">
-                <div class="flex-1" style="min-width: 12rem;">
-                    <label class="block text-xs font-medium text-gray-600 mb-1" for="rulePattern" data-i18n="rules.word">Word in the description</label>
-                    <input type="text" id="rulePattern" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            <div class="form-grid" style="margin-bottom:8px;">
+                <div>
+                    <label class="field-label" for="rulePattern" data-i18n="rules.word">Word in the description</label>
+                    <input type="text" id="rulePattern" class="input"
                         data-i18n-placeholder="rules.wordPlaceholder" placeholder="e.g. carrefour">
                 </div>
                 <div>
-                    <label class="block text-xs font-medium text-gray-600 mb-1" for="ruleCategory" data-i18n="rules.category">Category</label>
-                    <select id="ruleCategory" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <label class="field-label" for="ruleCategory" data-i18n="rules.category">Category</label>
+                    <select id="ruleCategory" class="input">
                         <option value="" data-i18n-option="cat.selectCategory">Select category</option>
                     </select>
                 </div>
-                <button onclick="addRule()" class="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-i18n="rules.add">Add rule</button>
+                <div class="span-all">
+                    <button onclick="addRule()" class="btn primary" data-i18n="rules.add">Add rule</button>
+                </div>
             </div>
 
-            <div id="rulesList" class="mt-3"></div>
+            <div id="rulesList" class="rules-list"></div>
         </div>
 
         <!-- Bank statement import: paste, look, then confirm. The parser only
              reads — it decides nothing about the user's month and writes
              nothing — so this panel is where a paste of two hundred
              transactions becomes a deliberate action. -->
-        <div id="statementPanel" class="bg-white rounded-lg shadow-sm p-4 mb-4 hidden">
-            <div class="flex items-start justify-between gap-3 mb-3">
+        <div id="statementPanel" class="card hidden">
+            <div class="panel-head">
                 <div>
-                    <h2 class="text-sm font-semibold text-gray-800" data-i18n="st.title">Import a bank statement</h2>
-                    <p class="text-xs text-gray-500 mt-1" data-i18n="st.hint">Copy the rows out of your bank app or its CSV export — header line included — and paste them here. Nothing is added until you have seen what came out.</p>
+                    <h2 data-i18n="st.title">Import a bank statement</h2>
+                    <p class="hint" data-i18n="st.hint">Copy the rows out of your bank app or its CSV export — header line included — and paste them here. Nothing is added until you have seen what came out.</p>
                 </div>
-                <button onclick="toggleStatementPanel()" class="text-gray-400 hover:text-gray-600 text-sm px-2" data-i18n-title="st.close" title="Close">✕</button>
+                <button onclick="toggleStatementPanel()" class="panel-close" data-i18n-title="st.close" title="Close">✕</button>
             </div>
 
-            <label class="block text-xs font-medium text-gray-600 mb-1" for="statementText" data-i18n="st.label">Paste the statement here</label>
-            <textarea id="statementText" rows="6" dir="ltr"
-                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+            <label class="field-label" for="statementText" data-i18n="st.label">Paste the statement here</label>
+            <textarea id="statementText" rows="6" dir="ltr" class="input"></textarea>
 
-            <div class="flex flex-wrap items-center gap-3 mt-2">
-                <button onclick="previewStatement()" class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-i18n="st.previewBtn">Show me what came out</button>
-                <label class="flex items-center gap-2 text-xs text-gray-600">
+            <div class="row-flex" style="margin-top:10px;">
+                <button onclick="previewStatement()" class="btn primary" data-i18n="st.previewBtn">Show me what came out</button>
+                <label class="check-line">
                     <input type="checkbox" id="statementIncludeDups">
                     <span data-i18n="st.includeDups">Add the rows that already exist too</span>
                 </label>
             </div>
 
-            <p id="statementMonth" class="text-xs text-gray-500 mt-2"></p>
+            <p id="statementMonth" class="hint" style="margin-top:8px;"></p>
 
-            <div id="statementPreview" class="mt-3 hidden">
-                <h3 class="text-sm font-medium text-gray-700 mb-2" data-i18n="st.heading">What the paste produced</h3>
+            <div id="statementPreview" class="hidden" style="margin-top:12px;">
+                <h3 class="card-title" data-i18n="st.heading">What the paste produced</h3>
                 <div class="table-wrapper">
-                    <table class="w-full text-sm">
+                    <table>
                         <thead>
-                            <tr class="border-b border-gray-200 text-gray-600">
-                                <th class="py-2 text-start font-medium" data-i18n="st.col.date">Date</th>
-                                <th class="py-2 text-start font-medium" data-i18n="st.col.name">Description</th>
-                                <th class="py-2 text-start font-medium" data-i18n="st.col.category">Category</th>
-                                <th class="py-2 text-end font-medium" data-i18n="st.col.amount">Amount</th>
-                                <th class="py-2 text-center font-medium" data-i18n="st.col.note">Note</th>
+                            <tr>
+                                <th data-i18n="st.col.date">Date</th>
+                                <th data-i18n="st.col.name">Description</th>
+                                <th data-i18n="st.col.category">Category</th>
+                                <th data-i18n="st.col.amount">Amount</th>
+                                <th data-i18n="st.col.note">Note</th>
                             </tr>
                         </thead>
                         <tbody id="statementPreviewBody"></tbody>
                     </table>
                 </div>
-                <p id="statementCounts" class="text-xs text-gray-600 mt-2"></p>
-                <p id="statementMore" class="text-xs text-gray-500"></p>
-                <div class="flex flex-wrap gap-2 mt-3">
-                    <button id="statementConfirmBtn" onclick="importStatement()" class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition" data-i18n="st.confirm">Add these rows to the month</button>
-                    <button onclick="clearStatementPanel()" class="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200 transition" data-i18n="st.cancel">Cancel</button>
+                <p id="statementCounts" class="hint" style="margin-top:8px;"></p>
+                <p id="statementMore" class="hint"></p>
+                <div class="row-flex" style="margin-top:12px;">
+                    <button id="statementConfirmBtn" onclick="importStatement()" class="btn success" data-i18n="st.confirm">Add these rows to the month</button>
+                    <button onclick="clearStatementPanel()" class="btn ghost" data-i18n="st.cancel">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Tabs -->
-        <div class="bg-white rounded-lg shadow-sm mb-4">
-            <div class="border-b border-gray-200">
-                <div class="flex">
-                    <button class="tab-btn active px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="income" onclick="switchTab('income')" data-i18n="tab.income">Income</button>
-                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="expenses" onclick="switchTab('expenses')" data-i18n="tab.expenses">Expenses</button>
-                    <button class="tab-btn px-5 py-3 text-sm font-medium text-gray-600 hover:text-blue-600 transition" data-tab="report" onclick="switchTab('report')" data-i18n="tab.report">Report</button>
-                </div>
-            </div>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="income" onclick="switchTab('income')" data-i18n="tab.income">Income</button>
+            <button class="tab-btn" data-tab="expenses" onclick="switchTab('expenses')" data-i18n="tab.expenses">Expenses</button>
+            <button class="tab-btn" data-tab="report" onclick="switchTab('report')" data-i18n="tab.report">Report</button>
+        </div>
+
+        <div class="card">
 
             <!-- Income Tab -->
-            <div id="tab-income" class="tab-content p-5">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="income.addTitle">Add Income</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-5">
+            <div id="tab-income" class="tab-content">
+                <h2 class="card-title" data-i18n="income.addTitle">Add Income</h2>
+                <div class="form-grid">
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.name">Name</label>
-                        <input type="text" id="incomeName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        <label class="field-label" data-i18n="income.name">Name</label>
+                        <input type="text" id="incomeName" class="input"
                             data-i18n-placeholder="form.namePlaceholder" placeholder="e.g. Salary">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.amount">Amount</label>
-                        <input type="number" id="incomeAmount" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        <label class="field-label" data-i18n="income.amount">Amount</label>
+                        <input type="number" id="incomeAmount" min="0" step="0.01" class="input"
                             data-i18n-placeholder="form.amountPlaceholder" placeholder="0.00">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="income.date">Date</label>
-                        <input type="date" id="incomeDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="field-label" data-i18n="income.date">Date</label>
+                        <input type="date" id="incomeDate" class="input">
                     </div>
-                    <div class="flex items-end">
-                        <button onclick="addIncome()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition" data-i18n="income.addBtn">Add Income</button>
+                    <div style="display:flex;align-items:flex-end;">
+                        <button onclick="addIncome()" class="btn primary" style="width:100%;padding:12px;" data-i18n="income.addBtn">Add Income</button>
                     </div>
                 </div>
 
                 <div id="incomeTableWrapper" class="table-wrapper">
-                    <table class="w-full text-sm" id="incomeTable">
+                    <table id="incomeTable">
                         <thead>
-                            <tr class="border-b border-gray-200 text-gray-600">
-                                <th class="py-2 text-start font-medium" data-i18n="income.table.name">Name</th>
-                                <th class="py-2 text-end font-medium" data-i18n="income.table.amount">Amount</th>
-                                <th class="py-2 text-center font-medium" data-i18n="income.table.date">Date</th>
-                                <th class="py-2 text-center font-medium" data-i18n="income.table.remove">Remove</th>
+                            <tr>
+                                <th data-i18n="income.table.name">Name</th>
+                                <th data-i18n="income.table.amount">Amount</th>
+                                <th data-i18n="income.table.date">Date</th>
+                                <th data-i18n="income.table.remove">Remove</th>
                             </tr>
                         </thead>
                         <tbody id="incomeTableBody"></tbody>
                     </table>
-                    <p id="incomeEmpty" class="text-center text-gray-400 py-6" data-i18n="income.noEntries">No income entries yet</p>
+                    <p id="incomeEmpty" class="empty" data-i18n="income.noEntries">No income entries yet</p>
                 </div>
 
-                <div class="flex gap-2 mt-4">
-                    <button onclick="clearAll('income')" class="text-sm text-red-600 hover:underline" data-i18n="income.clearAll">Clear All</button>
+                <div class="row-flex" style="margin-top:12px;">
+                    <button onclick="clearAll('income')" class="btn ghost" style="color:#c5221f;" data-i18n="income.clearAll">Clear All</button>
                 </div>
             </div>
 
             <!-- Expenses Tab -->
-            <div id="tab-expenses" class="tab-content p-5 hidden">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="expense.addTitle">Add Expense</h2>
-                <div class="grid grid-cols-1 sm:grid-cols-5 gap-3 mb-5">
+            <div id="tab-expenses" class="tab-content hidden">
+                <h2 class="card-title" data-i18n="expense.addTitle">Add Expense</h2>
+                <div class="form-grid">
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.name">Name</label>
-                        <input type="text" id="expenseName" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        <label class="field-label" data-i18n="expense.name">Name</label>
+                        <input type="text" id="expenseName" class="input"
                             data-i18n-placeholder="form.expenseNamePlaceholder" placeholder="e.g. Rent">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.category">Category</label>
-                        <select id="expenseCategory" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="field-label" data-i18n="expense.category">Category</label>
+                        <select id="expenseCategory" class="input">
                             <option value="" data-i18n-option="cat.selectCategory">Select category</option>
                             <option value="Food" data-i18n-option="cat.food">Food</option>
                             <option value="Rent" data-i18n-option="cat.rent">Rent</option>
@@ -351,98 +765,94 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.amount">Amount</label>
-                        <input type="number" id="expenseAmount" min="0" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        <label class="field-label" data-i18n="expense.amount">Amount</label>
+                        <input type="number" id="expenseAmount" min="0" step="0.01" class="input"
                             data-i18n-placeholder="form.amountPlaceholder" placeholder="0.00">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-600 mb-1" data-i18n="expense.date">Date</label>
-                        <input type="date" id="expenseDate" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <label class="field-label" data-i18n="expense.date">Date</label>
+                        <input type="date" id="expenseDate" class="input">
                     </div>
-                    <div class="flex items-end">
-                        <button onclick="addExpense()" class="w-full bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition" data-i18n="expense.addBtn">Add Expense</button>
+                    <div class="span-all">
+                        <button onclick="addExpense()" class="btn primary" style="width:100%;padding:12px;background:#ea4335;" data-i18n="expense.addBtn">Add Expense</button>
                     </div>
                 </div>
 
                 <div id="expenseTableWrapper" class="table-wrapper">
-                    <table class="w-full text-sm" id="expenseTable">
+                    <table id="expenseTable">
                         <thead>
-                            <tr class="border-b border-gray-200 text-gray-600">
-                                <th class="py-2 text-start font-medium" data-i18n="expense.table.name">Name</th>
-                                <th class="py-2 text-start font-medium" data-i18n="expense.table.category">Category</th>
-                                <th class="py-2 text-end font-medium" data-i18n="expense.table.amount">Amount</th>
-                                <th class="py-2 text-center font-medium" data-i18n="expense.table.date">Date</th>
-                                <th class="py-2 text-center font-medium" data-i18n="expense.table.remove">Remove</th>
+                            <tr>
+                                <th data-i18n="expense.table.name">Name</th>
+                                <th data-i18n="expense.table.category">Category</th>
+                                <th data-i18n="expense.table.amount">Amount</th>
+                                <th data-i18n="expense.table.date">Date</th>
+                                <th data-i18n="expense.table.remove">Remove</th>
                             </tr>
                         </thead>
                         <tbody id="expenseTableBody"></tbody>
                     </table>
-                    <p id="expenseEmpty" class="text-center text-gray-400 py-6" data-i18n="expense.noEntries">No expense entries yet</p>
+                    <p id="expenseEmpty" class="empty" data-i18n="expense.noEntries">No expense entries yet</p>
                 </div>
 
-                <div class="flex gap-2 mt-4">
-                    <button onclick="clearAll('expenses')" class="text-sm text-red-600 hover:underline" data-i18n="expense.clearAll">Clear All</button>
+                <div class="row-flex" style="margin-top:12px;">
+                    <button onclick="clearAll('expenses')" class="btn ghost" style="color:#c5221f;" data-i18n="expense.clearAll">Clear All</button>
                 </div>
             </div>
 
             <!-- Report Tab -->
-            <div id="tab-report" class="tab-content p-5 hidden">
+            <div id="tab-report" class="tab-content hidden">
 
-                <!-- Summary cards -->
-                <h2 class="text-lg font-semibold text-gray-800 mb-4" data-i18n="report.summary">Summary</h2>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-green-50 rounded-lg p-4">
-                        <p class="text-xs text-green-700 font-medium mb-1" data-i18n="report.totalIncome">Total Income</p>
-                        <p id="reportTotalIncome" class="text-xl font-bold text-green-700">$0.00</p>
+                <h2 class="card-title" data-i18n="report.summary">Summary</h2>
+                <div class="report-stats">
+                    <div class="report-stat rs-inc">
+                        <p class="lbl" data-i18n="report.totalIncome">Total Income</p>
+                        <p class="val" id="reportTotalIncome">$0.00</p>
                     </div>
-                    <div class="bg-red-50 rounded-lg p-4">
-                        <p class="text-xs text-red-700 font-medium mb-1" data-i18n="report.totalExpenses">Total Expenses</p>
-                        <p id="reportTotalExpenses" class="text-xl font-bold text-red-700">$0.00</p>
+                    <div class="report-stat rs-exp">
+                        <p class="lbl" data-i18n="report.totalExpenses">Total Expenses</p>
+                        <p class="val" id="reportTotalExpenses">$0.00</p>
                     </div>
-                    <div class="bg-blue-50 rounded-lg p-4">
-                        <p class="text-xs text-blue-700 font-medium mb-1" data-i18n="report.net">Net (Profit)</p>
-                        <p id="reportNet" class="text-xl font-bold text-blue-700">$0.00</p>
+                    <div class="report-stat rs-net">
+                        <p class="lbl" data-i18n="report.net">Net (Profit)</p>
+                        <p class="val" id="reportNet">$0.00</p>
                     </div>
-                    <div class="bg-purple-50 rounded-lg p-4">
-                        <p class="text-xs text-purple-700 font-medium mb-1" data-i18n="report.margin">Profit Margin</p>
-                        <p id="reportMargin" class="text-xl font-bold text-purple-700">0.00%</p>
+                    <div class="report-stat rs-mar">
+                        <p class="lbl" data-i18n="report.margin">Profit Margin</p>
+                        <p class="val" id="reportMargin">0.00%</p>
                     </div>
                 </div>
 
-                <!-- Charts -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <p class="text-sm font-medium text-gray-700 mb-2" data-i18n="report.chart.incomeVsExpenses">Income vs Expenses</p>
-                        <canvas id="barChart" class="chart-canvas" width="400" height="220" style="border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;"></canvas>
-                    </div>
-                    <div>
-                        <p class="text-sm font-medium text-gray-700 mb-2" data-i18n="report.chart.expenseCategories">Expense Categories</p>
-                        <canvas id="pieChart" class="chart-canvas" width="400" height="220" style="border: 1px solid #e5e7eb; border-radius: 8px; background: #fff;"></canvas>
-                    </div>
+                <div class="chart-box">
+                    <p data-i18n="report.chart.incomeVsExpenses">Income vs Expenses</p>
+                    <canvas id="barChart" class="chart-canvas" width="400" height="220"></canvas>
+                </div>
+                <div class="chart-box">
+                    <p data-i18n="report.chart.expenseCategories">Expense Categories</p>
+                    <canvas id="pieChart" class="chart-canvas" width="400" height="220"></canvas>
                 </div>
 
-                <!-- Breakdown table -->
-                <h3 class="text-sm font-semibold text-gray-700 mb-3" data-i18n="report.breakdownTitle">Expense Breakdown by Category</h3>
+                <h3 class="card-title" data-i18n="report.breakdownTitle">Expense Breakdown by Category</h3>
                 <div class="table-wrapper">
-                    <table class="w-full text-sm">
+                    <table>
                         <thead>
-                            <tr class="border-b border-gray-200 text-gray-600">
-                                <th class="py-2 text-start font-medium" data-i18n="report.breakdown.category">Category</th>
-                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.amount">Amount</th>
-                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.pctIncome">% of Income</th>
-                                <th class="py-2 text-end font-medium" data-i18n="report.breakdown.pctExpenses">% of Expenses</th>
+                            <tr>
+                                <th data-i18n="report.breakdown.category">Category</th>
+                                <th data-i18n="report.breakdown.amount">Amount</th>
+                                <th data-i18n="report.breakdown.pctIncome">% of Income</th>
+>
+                                <th data-i18n="report.breakdown.pctExpenses">% of Expenses</th>
                             </tr>
                         </thead>
                         <tbody id="breakdownTableBody"></tbody>
                     </table>
-                    <p id="reportEmpty" class="text-center text-gray-400 py-6" data-i18n="report.noData">Add income or expenses to see your report</p>
+                    <p id="reportEmpty" class="empty" data-i18n="report.noData">Add income or expenses to see your report</p>
                 </div>
             </div>
         </div>
 
-        <!-- Status bar -->
-        <div class="bg-white rounded-lg shadow-sm px-4 py-2">
-            <p id="statusBar" class="text-sm text-gray-500" data-i18n="status.ready">Ready</p>
+        <!-- Status -->
+        <div>
+            <p id="statusBar" data-i18n="status.ready">Ready</p>
         </div>
     </div>
 

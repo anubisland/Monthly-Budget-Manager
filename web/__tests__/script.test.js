@@ -62,6 +62,9 @@ function buildFixtureDOM() {
   const ids = [
     'statusBar',
     'reportTotalIncome', 'reportTotalExpenses', 'reportNet', 'reportMargin',
+    // The month-at-a-glance block, same IDs as index.html.
+    'heroNet', 'heroSub', 'heroBarFill', 'heroFootIncome', 'heroFootExpenses',
+    'statIncome', 'statExpenses', 'statNet',
     'incomeTableBody', 'incomeEmpty',
     'expenseTableBody', 'expenseEmpty',
     'breakdownTableBody', 'reportEmpty',
@@ -837,5 +840,42 @@ describe('renderAll()', () => {
       ],
     });
     expect(() => app.renderAll()).not.toThrow();
+  });
+
+  test('fills the month block from the same totals as the report', () => {
+    storeSampleData({
+      month: '2025-08',
+      incomes: [{ name: 'Salary', amount: 5000, date: '2025-08-01' }],
+      expenses: [{ name: 'Rent', category: 'Rent', amount: 1250, date: '2025-08-02' }],
+    });
+    app.renderAll();
+
+    const data = app.loadData();
+    expect(document.getElementById('heroNet').textContent).toBe(app.fmtAmount(app.net(data)));
+    expect(document.getElementById('statIncome').textContent).toBe(app.fmtAmount(5000));
+    expect(document.getElementById('statExpenses').textContent).toBe(app.fmtAmount(1250));
+    // Margin is net over income: (5000 - 1250) / 5000.
+    expect(document.getElementById('statNet').textContent).toBe('75.0%');
+    expect(document.getElementById('heroBarFill').style.width).toBe('25%');
+    expect(document.getElementById('heroSub').textContent).toBe('home.spent');
+  });
+
+  test('a month that overspends fills the bar and says so', () => {
+    storeSampleData({
+      month: '2025-08',
+      incomes: [{ name: 'Salary', amount: 1000, date: '2025-08-01' }],
+      expenses: [{ name: 'Rent', category: 'Rent', amount: 1400, date: '2025-08-02' }],
+    });
+    app.renderAll();
+
+    expect(document.getElementById('heroBarFill').style.width).toBe('100%');
+    expect(document.getElementById('heroSub').textContent).toBe('home.over');
+  });
+
+  test('an empty month says nothing is recorded instead of 0% spent', () => {
+    app.renderAll();
+
+    expect(document.getElementById('heroBarFill').style.width).toBe('0%');
+    expect(document.getElementById('heroSub').textContent).toBe('home.empty');
   });
 });

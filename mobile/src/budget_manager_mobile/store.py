@@ -161,7 +161,7 @@ def _coerce_v2(raw: Dict, fallback_current: str) -> Dict:
     # Naming them here once meant recurring templates were saved and then
     # dropped on the next read — which also reset the guard that stops a
     # template being applied twice, so the rent came back every restart.
-    for passthrough in ("recurring", "rules", "settled"):
+    for passthrough in ("recurring", "rules", "favorites", "settled"):
         if passthrough in raw:
             coerced[passthrough] = raw[passthrough]
     return coerced

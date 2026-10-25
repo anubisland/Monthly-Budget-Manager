@@ -126,6 +126,12 @@ class App(toga.App):
         #: then act — the parser produces candidates, the confirm writes them.
         self.statement_preview = None
         self.last_import = None
+        #: Outcome of the last CSV export/import, and of the last search. The
+        #: page reads them from the state it already re-renders from, for the
+        #: same reason the export outcome lives here.
+        self.last_csv_export = None
+        self.last_csv_import = None
+        self.last_search = None
         self._i18n = I18n.get_instance()
         self._setup_storage()
         self._load_settings()
@@ -234,6 +240,12 @@ class App(toga.App):
             'margin': bm.profit_margin(),
             'categories': self._categories(bm),
             'total_budget': bm.total_budget,
+            'budget_limits': dict(bm.budget_limits),
+            'limit_rows': self._limit_rows(bm),
+            'favorites': [dict(f) for f in self.data.favorites],
+            'last_search': self.last_search,
+            'last_csv_export': self.last_csv_export,
+            'last_csv_import': self.last_csv_import,
             'goals': self._goals_state(),
             'dark': self.dark, 'lang': self.lang, 'currency': self.currency,
             'version': self.app_version(),
@@ -248,6 +260,35 @@ class App(toga.App):
             'trend': trend.series(self.data.months, self.data.current),
             'trend_avg': trend.averages(trend.series(self.data.months, self.data.current)),
         }
+
+    def _limit_rows(self, bm):
+        """One row per envelope: the ceiling, what went through it, and how far.
+
+        Built here rather than in the page because it is arithmetic, and the
+        phone has three places to get it wrong: a limit of zero (no envelope),
+        a category with a limit but no spending (still worth showing), and
+        spending in a category with no limit (not an envelope, so not a row).
+        The last one is the interesting case: showing it would invent a ceiling
+        the user never set.
+        """
+        spent_by_category = bm.expenses_by_category()
+        rows = []
+        for category, limit in bm.budget_limits.items():
+            spent = spent_by_category.get(category, 0.0)
+            pct = (spent / limit * 100) if limit > 0 else 0.0
+            rows.append({
+                'category': category,
+                'limit': limit,
+                'spent': spent,
+                'pct': min(pct, 100.0),
+                'raw_pct': pct,
+                'over': spent > limit,
+                'remaining': max(0.0, limit - spent),
+                'color': CAT_COLORS.get(category, '#B2BEC3'),
+            })
+        # Overspent first: the row that needs attention is the one to see.
+        rows.sort(key=lambda r: (not r['over'], -(r['raw_pct'])))
+        return rows
 
     def _categories(self, bm):
         return {

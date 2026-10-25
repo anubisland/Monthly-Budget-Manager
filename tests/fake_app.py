@@ -18,6 +18,9 @@ class FakeApp:
         self.lang = "en"
         self.currency = "USD"
         self.last_export = None
+        self.last_search = None
+        self.last_csv_export = None
+        self.last_csv_import = None
         self.export_dir = tmp_path / "exports"
         self.saved_data = 0
         self.saved_settings = 0

@@ -17,9 +17,11 @@ import json
 import re
 from typing import Callable, Dict, Optional
 
+import csv_transfer
 import decode
 import goals
 import report
+import search
 import share
 import statement
 import store
@@ -507,6 +509,160 @@ def _export(app, d: Dict) -> None:
 
 # ── settings and whole-file operations ───────────────────────────────────────
 
+# ── envelopes: a ceiling per category ────────────────────────────────────────
+
+def _set_category_limit(app, d: Dict) -> None:
+    """Set or clear the ceiling for one category.
+
+    Zero (or an empty amount) removes the ceiling rather than storing a limit
+    of nothing: an envelope of 0 would paint every row red on the first coffee,
+    which is not what "I have not decided yet" means.
+    """
+    category = validate.text(d.get("category"), limit=40)
+    if not category:
+        raise ApiError("a category is required")
+    amount = validate.amount(d.get("amount"), allow_zero=True)
+    if amount is None:
+        raise ApiError("a limit must be zero or a positive number")
+
+    limits = app.data.month.budget_limits
+    if amount == 0:
+        limits.pop(category, None)
+    else:
+        limits[category] = amount
+
+
+# ── favourites: an entry the user adds again and again ───────────────────────
+
+def _favorite_from(d: Dict) -> Dict:
+    """Validate one favourite, from either the star or the form."""
+    kind = d.get("kind")
+    if kind not in ("income", "expense"):
+        raise ApiError("kind must be income or expense")
+    name = validate.text(d.get("name"), limit=80)
+    if not name:
+        raise ApiError("a name is required")
+    amount = validate.amount(d.get("amount"))
+    if amount is None:
+        raise ApiError("an amount is required")
+    category = ""
+    if kind == "expense":
+        category = validate.text(d.get("category"), limit=40) or "Uncategorized"
+    return {"kind": kind, "name": name, "category": category, "amount": amount}
+
+
+def _add_favorite(app, d: Dict) -> None:
+    favorite = _favorite_from(d)
+    # Two identical buttons are one button's worth of use, and the store keeps
+    # only one copy anyway — refusing here says so instead of appearing to add.
+    if favorite in app.data.favorites:
+        return
+    app.data.favorites.append(favorite)
+
+
+def _delete_favorite(app, d: Dict) -> None:
+    index = validate.index(d.get("index"), len(app.data.favorites))
+    if index is None:
+        raise ApiError("no such favourite", 404)
+    app.data.favorites.pop(index)
+
+
+def _use_favorite(app, d: Dict) -> None:
+    """Add the favourite to the month on screen, dated by the add screen's rule.
+
+    Goes through the same handlers as a typed entry, so a favourite cannot
+    become a second way of writing an entry with different validation.
+    """
+    index = validate.index(d.get("index"), len(app.data.favorites))
+    if index is None:
+        raise ApiError("no such favourite", 404)
+    favorite = app.data.favorites[index]
+    payload = {"name": favorite["name"], "amount": favorite["amount"]}
+    if favorite["kind"] == "income":
+        _add_income(app, payload)
+    else:
+        payload["category"] = favorite.get("category")
+        _add_expense(app, payload)
+
+
+# ── search across every month ───────────────────────────────────────────────
+
+def _search(app, d: Dict) -> None:
+    """Answer a search into ``app.last_search``; the page reads it from state.
+
+    A write route that writes nothing: the result has to reach the page, and
+    every POST in this API answers with the whole application state rather than
+    a bespoke reply, so the result travels in the state like the export outcome
+    already does.
+    """
+    query = search.parse_query(d.get("query"))
+    if query is None:
+        app.last_search = None
+        return
+    found = search.find(app.data.months, query)
+    found["query"] = query
+    app.last_search = found
+
+
+# ── CSV: out to another program, and back in ────────────────────────────────
+
+def _export_csv(app, d: Dict) -> None:
+    """Write the month on screen as CSV and offer to share it.
+
+    Same two-outcome shape as the spreadsheet export: the file is written
+    first, so a share sheet that does not open costs the share, not the file.
+    """
+    month = d.get("month")
+    if not store.is_month_key(month):
+        month = app.data.current
+
+    path = app.export_path(f"budget-{month}.csv")
+    text = csv_transfer.build(app.data.months.get(month), month)
+    try:
+        path.write_text(text, "utf-8-sig")
+    except OSError as err:
+        raise ApiError(f"could not write the file: {err}", 500)
+
+    try:
+        shared, reason = share.share(path, f"Budget {month}")
+    except Exception as err:  # noqa: BLE001 - a written file must not be lost
+        shared, reason = False, f"sharing failed: {err}"
+    app.last_csv_export = {"path": str(path), "shared": shared, "reason": reason}
+
+
+def _import_csv(app, d: Dict) -> None:
+    """Read pasted or picked CSV text into the month on screen.
+
+    Rows that cannot be read are counted and named rather than dropped in
+    silence: a file that half-imported and said nothing is worse than one that
+    refused, because the month then looks complete and is not.
+    """
+    text = d.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError("there is nothing to import")
+    if len(text) > 2_000_000:
+        raise ApiError("that file is too large to import", 413)
+
+    rows, problems = csv_transfer.parse(text, default_date=_default_date(app))
+    added = 0
+    for row in rows:
+        payload = {"name": row["name"], "amount": row["amount"], "date": row["date"]}
+        if row["category"]:
+            payload["category"] = row["category"]
+        if row["kind"] == "income":
+            _add_income(app, payload)
+        else:
+            _add_expense(app, payload)
+        added += 1
+
+    app.last_csv_import = {
+        "added": added,
+        "skipped": len(problems),
+        "problems": problems[:5],
+        "more_problems": max(0, len(problems) - 5),
+    }
+
+
 def _set_budget(app, d: Dict) -> None:
     amount = validate.amount(d.get("total_budget"), allow_zero=True)
     if amount is None:
@@ -560,6 +716,13 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/preview-statement": _preview_statement,
     "/api/import-statement": _import_statement,
     "/api/set-budget": _set_budget,
+    "/api/set-category-limit": _set_category_limit,
+    "/api/add-favorite": _add_favorite,
+    "/api/delete-favorite": _delete_favorite,
+    "/api/use-favorite": _use_favorite,
+    "/api/search": _search,
+    "/api/export-csv": _export_csv,
+    "/api/import-csv": _import_csv,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,
     "/api/set-currency": _set_currency,
@@ -573,6 +736,9 @@ _SETTINGS_ROUTES = frozenset({"/api/toggle-theme", "/api/set-language", "/api/se
 #: would rewrite the data file for an operation that only read it.
 _READ_ONLY_ROUTES = frozenset({
     "/api/export", "/api/backup-file", "/api/preview-restore", "/api/preview-statement",
+    # Reading the month and answering a search change nothing on disk; the
+    # export writes a file, but not the data file.
+    "/api/export-csv", "/api/search",
 })
 
 

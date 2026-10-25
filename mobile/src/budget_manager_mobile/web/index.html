@@ -252,6 +252,42 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
 #toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 24px;border-radius:8px;font-size:13px;z-index:999;opacity:0;transition:opacity .3s ease;pointer-events:none;max-width:90%}
 #toast.show{opacity:1}
 
+/* An undo is only an undo if the toast can take the tap, so a toast that
+   carries an action stops being click-through. */
+#toast.action{pointer-events:auto;padding-inline-end:12px}
+.toast-action{margin-inline-start:12px;background:none;border:none;color:#8ab4f8;
+  font-size:13px;font-weight:700;cursor:pointer;padding:4px 2px}
+
+/* Search across months */
+.search-row{display:flex;align-items:center;gap:8px;padding:8px 0;
+  border-bottom:1px solid rgba(128,128,128,.12);cursor:pointer}
+.search-row:last-child{border-bottom:none}
+.search-row:active{opacity:.7}
+.search-body{flex:1;min-width:0}
+.search-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-meta{font-size:10px;color:var(--ts)}
+.search-amt{font-size:13px;font-weight:700;white-space:nowrap}
+
+/* Favourites: an entry the user adds again and again */
+.fav-chip{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;
+  border-radius:20px;border:1.5px solid rgba(128,128,128,.25);background:var(--card);
+  color:var(--tx);font-size:12px;font-weight:600;cursor:pointer}
+.fav-chip:active{transform:scale(.96)}
+.fav-chip .fav-amt{color:var(--ts);font-size:11px;font-weight:500}
+.fav-use{background:none;border:none;color:inherit;font:inherit;cursor:pointer;
+  display:inline-flex;align-items:center;gap:6px;padding:0}
+.fav-del{background:none;border:none;color:var(--ts);font-size:14px;padding:0 2px;cursor:pointer}
+.fav-del:active{color:var(--exp)}
+
+/* Envelope rows in settings */
+.limit-row{display:flex;align-items:center;gap:8px;padding:7px 0;
+  border-bottom:1px solid rgba(128,128,128,.12);font-size:12px}
+.limit-row:last-child{border-bottom:none}
+.limit-name{flex:1;font-weight:600}
+.limit-val{color:var(--ts);white-space:nowrap}
+.limit-del{background:none;border:none;color:var(--ts);font-size:14px;cursor:pointer;padding:2px 6px}
+.limit-del:active{color:var(--exp)}
+
 /* Donut canvas */
 #donut-wrap{display:flex;justify-content:center;margin:4px 0}
 #donut{max-width:160px;max-height:160px}
@@ -274,6 +310,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
   <header>
     <h1 id="title"></h1>
     <div style="display:flex;gap:4px">
+      <button class="hdr-btn" id="hdr-search" onclick="toggleSearch()" title="Search">🔍</button>
       <button class="hdr-btn" id="hdr-more" style="display:none">←</button>
     </div>
   </header>
@@ -292,6 +329,13 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
   <main id="main">
     <!-- DASHBOARD -->
     <section id="page-home" class="page active">
+      <!-- Search over every month, opened from the header. Hidden by default:
+           a box at the top of the dashboard is a box that asks to be typed in. -->
+      <div class="card" id="search-card" style="display:none">
+        <input class="form-input" id="search-input" autocomplete="off" oninput="runSearch()"
+          style="width:100%;padding:10px 12px;font-size:14px">
+        <div id="search-results"></div>
+      </div>
       <div class="safe-card" id="safe-card" style="background:var(--pri);color:#fff">
         <div class="label" id="safe-label" style="color:rgba(255,255,255,.7)"></div>
         <div id="budget-overview"></div>
@@ -312,6 +356,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       <div class="card">
         <div class="card-title" id="ct-budget"></div>
         <div id="budget-bars"></div>
+        <div id="envelope-bars"></div>
       </div>
       <div class="card">
         <div class="card-title" id="ct-recent"></div>
@@ -324,6 +369,12 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       <div class="add-tabs" id="add-tabs">
         <button class="add-tab active" data-tab="inc" onclick="switchAddTab('inc')">💰 Income</button>
         <button class="add-tab exp" data-tab="exp" onclick="switchAddTab('exp')">💳 Expense</button>
+      </div>
+      <!-- Saved entries: the coffee, the rent, the subscription. Shown above
+           the form because the point of a favourite is not filling the form. -->
+      <div class="card" id="fav-card" style="display:none">
+        <div class="card-title" id="ct-fav"></div>
+        <div class="chips" id="fav-chips"></div>
       </div>
       <div class="card">
         <div class="form-group" id="name-group">
@@ -438,6 +489,20 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <button class="setting-btn" id="btn-restore" onclick="toggleRestore()"></button>
         </div>
         <button class="setting-btn" id="btn-export" onclick="exportXLSX()" style="margin-top:6px">📊 Export XLSX</button>
+        <button class="setting-btn" id="btn-csv" onclick="toggleCsv()" style="margin-top:6px"></button>
+        <div id="csv-panel" style="display:none;margin-top:8px">
+          <label class="mini-label" id="l-csv"></label>
+          <input type="file" id="csv-file" accept=".csv,text/csv" onchange="readCsvFile(this)"
+            style="font-size:12px;margin-bottom:6px;color:var(--ts)">
+          <textarea class="form-input" id="csv-text" rows="5" dir="ltr"
+            style="width:100%;padding:9px 10px;font-size:12px;font-family:monospace"></textarea>
+          <div class="hint" id="hint-csv"></div>
+          <div class="setting-row" style="margin-top:6px">
+            <button class="setting-btn" id="btn-import-csv" onclick="importCsv()"></button>
+            <button class="setting-btn" id="btn-export-csv" onclick="exportCsv()"></button>
+          </div>
+          <div class="hint" id="csv-result"></div>
+        </div>
         <div id="restore-panel" style="display:none;margin-top:8px">
           <label class="mini-label" id="l-restore"></label>
           <textarea class="form-input" id="restore-text" rows="4"
@@ -469,6 +534,15 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
           <input class="form-input" id="input-total-budget" type="number" min="0" step="100" style="flex:1;padding:10px 12px;font-size:14px" inputmode="numeric" placeholder="0">
         </div>
         <button class="setting-btn" style="margin-top:8px;background:var(--pri);color:#fff;border:none" onclick="saveBudget()">Save Budget</button>
+        <div class="hint" id="hint-envelope" style="margin-top:12px"></div>
+        <div style="display:flex;gap:6px;margin-top:4px">
+          <select class="form-input" id="sel-limit-cat" style="flex:1;padding:9px 10px;font-size:12px"></select>
+          <input class="form-input" id="input-limit" type="number" min="0" step="10" inputmode="decimal"
+            placeholder="0" style="width:96px;padding:9px 10px;font-size:12px">
+        </div>
+        <button class="setting-btn" id="btn-save-limit" onclick="saveLimit()"
+          style="margin-top:6px;background:var(--pri);color:#fff;border:none"></button>
+        <div id="limit-list" style="margin-top:6px"></div>
       </div>
       <div class="setting-group">
         <h3 id="st-currency">Currency / العملة</h3>
@@ -498,6 +572,8 @@ let state = {
   total_income: 0, total_expenses: 0, net: 0,
   incomes: [], expenses: [], goals: [], categories: {},
   total_budget: 0, dark: false, lang: 'en', currency: 'USD',
+  budget_limits: {}, limit_rows: [], favorites: [],
+  last_search: null, last_csv_export: null, last_csv_import: null,
   year: 2026, month: 7, today: '2026-07-17',
   addTab: 'inc', dateMode: 'today', selDate: '', selCat: 'Uncategorized'
 };
@@ -614,11 +690,25 @@ async function postAndRefresh(path, data) {
 }
 
 // ── Toast ──
-function toast(msg, ms) {
+// `action` turns the toast into one with a button — {label, fn}. It exists for
+// undo: a deletion the user cannot take back must not be one tap away, and a
+// confirmation dialog in front of every delete is a dialogue nobody reads.
+function toast(msg, ms, action) {
   let t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = '';
+  t.appendChild(document.createTextNode(msg));
+  if (action) {
+    let button = document.createElement('button');
+    button.className = 'toast-action';
+    button.textContent = action.label;
+    button.onclick = () => { t.classList.remove('show'); action.fn(); };
+    t.appendChild(button);
+  }
+  t.classList.toggle('action', !!action);
+  t.classList.add('show');
   clearTimeout(t._t);
-  // Diagnostics need longer on screen than confirmations do.
+  // Diagnostics need longer on screen than confirmations do, and an undo
+  // needs longer still: it is gone the moment the toast fades.
   t._t = setTimeout(() => t.classList.remove('show'), ms || 2000);
 }
 
@@ -889,6 +979,25 @@ const TRANS = {
     budget_label: 'Budget', total_budget: 'Total Budget', spent: 'spent', remaining: 'remaining', over_by: 'over by',
     set_in_settings: 'Set a total budget in Settings', save_budget: 'Save Budget',
     currency_label: 'Currency / العملة',
+    // Search, envelopes, favourites, undo and CSV
+    search_ph: 'Search every month…', search_none: 'Nothing matched',
+    search_more: '{n} more not shown', found_in: 'Found in',
+    no_envelopes: 'No ceiling per category yet',
+    envelope_hint: 'A ceiling per category: set one and this month shows how much of it went, before the total says it did.',
+    save_limit: 'Save ceiling', limit_saved: 'Ceiling saved', limit_removed: 'Ceiling removed',
+    favorites_title: 'One tap to add again',
+    fav_added: 'Added', fav_removed: 'Favourite removed', fav_saved: 'Saved as a favourite',
+    star_entry: 'Save as a favourite', delete_entry: 'Delete',
+    deleted_toast: 'Entry deleted', undo: 'Undo', restored_toast: 'Restored',
+    csv_title: 'CSV import / export',
+    csv_hint: 'Rows are type,name,category,amount,date — the same order the web app writes. Choose a file or paste it.',
+    csv_import_btn: 'Import CSV', csv_export_btn: 'Export CSV',
+    csv_nothing: 'Choose a file or paste rows first',
+    csv_result: 'Added {a}, skipped {s}', csv_line: 'Line {n}',
+    csv_bad_type: 'the type is not income or expense',
+    csv_bad_name: 'no description', csv_bad_amount: 'no usable amount',
+    csv_bad_empty: 'the file has no rows',
+    csv_exported: 'CSV ready to share', csv_export_path: 'Saved to {path}',
   },
   ar: { export_saved: 'حُفِظ في {path}',
     backup_unavailable: 'هذا الجهاز لا يدعم التنزيل هنا — استخدم التصدير',
@@ -975,6 +1084,25 @@ const TRANS = {
     budget_label: 'الميزانية', total_budget: 'إجمالي الميزانية', spent: 'منصرف', remaining: 'متبقي', over_by: 'تجاوز بـ',
     set_in_settings: 'حدد ميزانية إجمالية من الإعدادات', save_budget: 'حفظ الميزانية',
     currency_label: 'العملة / Currency',
+    // البحث، والمغلفات، والمفضّلة، والتراجع، وCSV
+    search_ph: 'ابحث في كل الشهور…', search_none: 'لا يوجد تطابق',
+    search_more: 'و{n} أخرى غير معروضة', found_in: 'وُجدت في',
+    no_envelopes: 'لا يوجد سقف لأي فئة بعد',
+    envelope_hint: 'سقف لكل فئة: حدّده، فيبيّن الشهر كم استُهلك منه قبل أن يقولك الإجمالي ذلك.',
+    save_limit: 'حفظ السقف', limit_saved: 'تم حفظ السقف', limit_removed: 'تم إزالة السقف',
+    favorites_title: 'نقرة واحدة لتُضيفها مرة أخرى',
+    fav_added: 'أُضيفت', fav_removed: 'حُذفت من المفضّلة', fav_saved: 'حُفظت في المفضّلة',
+    star_entry: 'احفظها في المفضّلة', delete_entry: 'حذف',
+    deleted_toast: 'حُذفت الحركة', undo: 'تراجع', restored_toast: 'تمت الاستعادة',
+    csv_title: 'استيراد وتصدير CSV',
+    csv_hint: 'الأعمدة: النوع، الوصف، التصنيف، المبلغ، التاريخ — بنفس ترتيب تطبيق الويب. اختر ملفًا أو الصقه.',
+    csv_import_btn: 'استيراد CSV', csv_export_btn: 'تصدير CSV',
+    csv_nothing: 'اختر ملفًا أو الصق صفوفًا أولًا',
+    csv_result: 'أُضيف {a}، وتُخطّي {s}', csv_line: 'السطر {n}',
+    csv_bad_type: 'النوع ليس دخلًا ولا مصروفًا',
+    csv_bad_name: 'لا يوجد وصف', csv_bad_amount: 'لا يوجد مبلغ صالح',
+    csv_bad_empty: 'الملف لا يحتوي صفوفًا',
+    csv_exported: 'ملف CSV جاهز للمشاركة', csv_export_path: 'حُفظ في {path}',
   }
 };
 
@@ -1016,7 +1144,9 @@ function applyI18n() {
     'ct-active-goal': 'active_goal', 'ct-budget': 'budget_progress', 'ct-recent': 'recent',
     'ct-inc-vs-exp': 'inc_vs_exp', 'ct-income-sources': 'income_sources',
     'ct-spending': 'spending_by_cat', 'ct-cat-breakdown': 'cat_breakdown',
-    'ct-new-goal': 'new_goal',
+    'ct-new-goal': 'new_goal', 'ct-fav': 'favorites_title',
+    'btn-csv': 'csv_title', 'btn-import-csv': 'csv_import_btn',
+    'btn-export-csv': 'csv_export_btn', 'btn-save-limit': 'save_limit',
   };
   for (let [id, key] of Object.entries(ctMap)) {
     let el = document.getElementById(id);
@@ -1061,6 +1191,17 @@ function applyI18n() {
     let el = document.getElementById(id);
     if (el) el.textContent = t(key);
   }
+
+  // Hint lines and the placeholder of the new controls.
+  let hintMap = {
+    'hint-envelope': 'envelope_hint', 'hint-csv': 'csv_hint', 'l-csv': 'csv_title',
+  };
+  for (let [id, key] of Object.entries(hintMap)) {
+    let el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  }
+  let searchInput = document.getElementById('search-input');
+  if (searchInput) searchInput.placeholder = t('search_ph');
 
   // Total Budget label & Save button
   let budgetLbl = document.querySelector('.setting-group h3 + div span');
@@ -1721,12 +1862,17 @@ function render() {
     `;
   } else gc.style.display = 'none';
   
-  // Budget bars
+  // Budget bars, then the envelopes under them
   renderBudgetBars();
+  renderEnvelopes();
+  renderLimitList();
   // Recent
   renderRecent();
-  // History on add page
+  // History on add page, the favourites above the form, and the search results
   renderAddHistory();
+  renderFavorites();
+  renderSearch();
+  renderCsvResult();
   // Budget detail page
   renderBudgetDetail();
   renderIncomeBreakdown();
@@ -1792,6 +1938,8 @@ function renderAddHistory() {
       <span class="recent-name">${item.type==='inc'?tin(item.name):tc(item.category||item.name)}</span>
       <span class="recent-amt ${item.type==='inc'?'inc':'exp'}">${item.type==='inc'?'+':'-'}${cs()}${item.amount.toFixed(2)}</span>
       <span class="recent-date">${(item.date||'').slice(-5)}</span>
+      <span class="edit-btn" onclick="starEntry(${item._idx})" title="${t('star_entry')}">☆</span>
+      <span class="edit-btn" onclick="deleteEntry(${item._idx})" title="${t('delete_entry')}">🗑</span>
       <span class="edit-btn" onclick="editEntry(${item._idx})">✏️</span>
     </div>
   `).join('');
@@ -1838,6 +1986,244 @@ async function updateEntry(idx, tab) {
   btn.onclick = handleAdd;
   btn.textContent = t(tab === 'inc' ? 'add_income_btn' : 'add_expense_btn');
   toast(t('saved_toast'));
+}
+
+// ── Envelopes: a ceiling per category ─────────────────────────────────────
+// The month has one total budget; this is the plan underneath it. The server
+// computes each row (limit, spent, whether it is over) so the page never has to
+// decide what an envelope with no spending means.
+function renderEnvelopes() {
+  let box = document.getElementById('envelope-bars');
+  if (!box) return;
+  let rows = state.limit_rows || [];
+  if (rows.length === 0) {
+    box.innerHTML = '<div style="font-size:11px;color:var(--ts);margin-top:8px">' + t('no_envelopes') + '</div>';
+    return;
+  }
+  box.innerHTML = rows.map(r => {
+    // Amber before red: a row at 85% is a warning the user can still act on.
+    let colour = r.over ? 'var(--exp)' : (r.pct >= 80 ? 'var(--warn)' : r.color);
+    return `
+      <div class="budget-item">
+        <span class="budget-cat">${tc(r.category)}</span>
+        <div class="budget-bar-wrap"><div class="budget-bar" style="width:${Math.min(100, r.pct)}%;background:${colour}"></div></div>
+        <span class="budget-amt ${r.over ? 'over' : ''}">${cs()}${r.spent.toFixed(0)} / ${cs()}${r.limit.toFixed(0)}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderLimitList() {
+  let box = document.getElementById('limit-list');
+  if (!box) return;
+  let sel = document.getElementById('sel-limit-cat');
+  if (sel) {
+    let current = sel.value;
+    sel.innerHTML = CATS.map(c => `<option value="${c}">${tc(c)}</option>`).join('');
+    if (current) sel.value = current;
+  }
+  let rows = state.limit_rows || [];
+  if (rows.length === 0) {
+    box.innerHTML = '<div class="hint">' + t('no_envelopes') + '</div>';
+    return;
+  }
+  box.innerHTML = rows.map((r, i) => `
+    <div class="limit-row">
+      <span class="limit-name">${tc(r.category)}</span>
+      <span class="limit-val">${cs()}${r.limit.toFixed(0)}</span>
+      <button class="limit-del" onclick="removeLimit(${i})">✕</button>
+    </div>`).join('');
+}
+
+async function saveLimit() {
+  let sel = document.getElementById('sel-limit-cat');
+  let input = document.getElementById('input-limit');
+  let amount = parseFloat(input.value) || 0;
+  if (!sel || amount <= 0) { toast(t('enter_amount')); return; }
+  let ok = await postAndRefresh('/api/set-category-limit', {category: sel.value, amount});
+  if (!ok) return;
+  input.value = '';
+  toast(t('limit_saved'));
+}
+
+async function removeLimit(index) {
+  let row = (state.limit_rows || [])[index];
+  if (!row) return;
+  let ok = await postAndRefresh('/api/set-category-limit', {category: row.category, amount: 0});
+  if (ok) toast(t('limit_removed'));
+}
+
+// ── Search across every month ──────────────────────────────────────────────
+let searchTimer = null;
+
+function toggleSearch() {
+  let card = document.getElementById('search-card');
+  let opening = card.style.display === 'none';
+  card.style.display = opening ? 'block' : 'none';
+  if (opening) {
+    document.getElementById('search-input').focus();
+    return;
+  }
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '';
+}
+
+function runSearch() {
+  clearTimeout(searchTimer);
+  // Typing is not a request per keystroke; a third of a second after the last
+  // one is the search the user meant.
+  searchTimer = setTimeout(async () => {
+    let query = document.getElementById('search-input').value.trim();
+    if (!query) { document.getElementById('search-results').innerHTML = ''; return; }
+    let ok = await postAndRefresh('/api/search', {query});
+    if (ok) renderSearch();
+  }, 300);
+}
+
+function renderSearch() {
+  let box = document.getElementById('search-results');
+  if (!box) return;
+  let found = state.last_search;
+  if (!found) { box.innerHTML = ''; return; }
+  if (!found.rows || found.rows.length === 0) {
+    box.innerHTML = '<div class="hint" style="margin-top:8px">' + t('search_none') + '</div>';
+    return;
+  }
+  let limitNote = found.total > found.shown
+    ? `<div class="hint">${t('search_more').replace('{n}', found.total - found.shown)}</div>`
+    : '';
+  box.innerHTML = found.rows.map((r, i) => `
+    <div class="search-row" onclick="openSearchResult(${i})">
+      <div class="search-body">
+        <div class="search-name">${r.kind === 'income' ? tin(r.name) : r.name}</div>
+        <div class="search-meta">${monthKeyLabel(r.month)}${r.category ? ' · ' + tc(r.category) : ''}</div>
+      </div>
+      <span class="search-amt" style="color:${r.kind === 'income' ? 'var(--inc)' : 'var(--exp)'}">${r.kind === 'income' ? '+' : '-'}${cs()}${r.amount.toFixed(2)}</span>
+    </div>`).join('') + limitNote;
+}
+
+async function openSearchResult(index) {
+  let found = state.last_search;
+  let row = found && found.rows ? found.rows[index] : null;
+  if (!row) return;
+  let ok = await postAndRefresh('/api/set-month', {month: row.month});
+  if (!ok) return;
+  toggleSearch();
+  toast(t('found_in') + ' ' + monthKeyLabel(row.month));
+}
+
+// ── Favourites: an entry the user adds again and again ────────────────────
+function renderFavorites() {
+  let card = document.getElementById('fav-card');
+  let chips = document.getElementById('fav-chips');
+  if (!card || !chips) return;
+  let favourites = state.favorites || [];
+  card.style.display = favourites.length ? 'block' : 'none';
+  // Two buttons inside one pill rather than one button with a nested click
+  // handler: a nested handler needs event.stopPropagation(), and a pill that
+  // deletes its neighbour when you meant to add it is worse than one extra tap.
+  chips.innerHTML = favourites.map((f, i) => `
+    <span class="fav-chip">
+      <button class="fav-use" onclick="useFavorite(${i})">
+        <span>${f.kind === 'income' ? tin(f.name) : f.name}</span>
+        <span class="fav-amt">${cs()}${f.amount.toFixed(0)}</span>
+      </button>
+      <button class="fav-del" onclick="removeFavorite(${i})">✕</button>
+    </span>`).join('');
+}
+
+async function useFavorite(index) {
+  let ok = await postAndRefresh('/api/use-favorite', {index});
+  if (ok) toast(t('fav_added'));
+}
+
+async function removeFavorite(index) {
+  let ok = await postAndRefresh('/api/delete-favorite', {index});
+  if (ok) toast(t('fav_removed'));
+}
+
+async function starEntry(index) {
+  let tab = state.addTab || 'inc';
+  let item = tab === 'inc' ? state.incomes[index] : state.expenses[index];
+  if (!item) return;
+  let payload = {kind: tab === 'inc' ? 'income' : 'expense', name: item.name, amount: item.amount};
+  if (tab === 'exp') payload.category = item.category || 'Uncategorized';
+  let ok = await postAndRefresh('/api/add-favorite', payload);
+  if (ok) toast(t('fav_saved'));
+}
+
+// ── Delete, and the undo that makes it safe ───────────────────────────────
+let lastDeleted = null;
+
+async function deleteEntry(index) {
+  let tab = state.addTab || 'inc';
+  let item = tab === 'inc' ? state.incomes[index] : state.expenses[index];
+  if (!item) return;
+  let ok = await postAndRefresh(tab === 'inc' ? '/api/delete-income' : '/api/delete-expense', {index});
+  if (!ok) return;
+  lastDeleted = {tab, item: {...item}};
+  toast(t('deleted_toast'), 5000, {label: t('undo'), fn: undoDelete});
+}
+
+async function undoDelete() {
+  if (!lastDeleted) return;
+  let {tab, item} = lastDeleted;
+  lastDeleted = null;
+  let payload = {name: item.name, amount: item.amount, date: item.date || state.today};
+  if (tab === 'exp') payload.category = item.category;
+  let ok = await postAndRefresh(tab === 'inc' ? '/api/add-income' : '/api/add-expense', payload);
+  if (ok) toast(t('restored_toast'));
+}
+
+// ── CSV: out to another program, and back in ───────────────────────────────
+function toggleCsv() {
+  let panel = document.getElementById('csv-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function readCsvFile(input) {
+  let file = input.files && input.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = e => { document.getElementById('csv-text').value = String(e.target.result || ''); };
+  // The paste path still works when a picker cannot be opened, which is the
+  // case in some Android WebViews; this is the shortcut, not the only way in.
+  reader.onerror = () => toast(t('request_failed'));
+  reader.readAsText(file);
+}
+
+async function importCsv() {
+  let text = document.getElementById('csv-text').value;
+  if (!text.trim()) { toast(t('csv_nothing')); return; }
+  let ok = await postAndRefresh('/api/import-csv', {text});
+  if (!ok) return;
+  document.getElementById('csv-text').value = '';
+  renderCsvResult();
+}
+
+async function exportCsv() {
+  let ok = await postAndRefresh('/api/export-csv', {});
+  if (ok) renderCsvResult();
+}
+
+function renderCsvResult() {
+  let box = document.getElementById('csv-result');
+  if (!box) return;
+  let lines = [];
+  let imported = state.last_csv_import;
+  if (imported) {
+    lines.push(t('csv_result').replace('{a}', imported.added).replace('{s}', imported.skipped));
+    (imported.problems || []).forEach(p => {
+      lines.push('· ' + t('csv_line').replace('{n}', p.line) + ': ' + t('csv_bad_' + p.reason));
+    });
+    if (imported.more_problems) {
+      lines.push(t('search_more').replace('{n}', imported.more_problems));
+    }
+  }
+  let exported = state.last_csv_export;
+  if (exported) {
+    lines.push(exported.shared ? t('csv_exported') : t('csv_export_path').replace('{path}', exported.path));
+  }
+  box.innerHTML = lines.join('<br>');
 }
 
 function renderBudgetDetail() {

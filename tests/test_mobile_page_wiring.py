@@ -29,6 +29,8 @@ BUILT_IN = {
     "setTimeout", "clearTimeout", "parseInt", "parseFloat", "isNaN",
     "String", "Number", "Math", "JSON", "Object", "Array", "Date",
     "fetch", "alert", "confirm", "prompt", "encodeURIComponent",
+    # Reading a chosen CSV file is the browser's job, not the page's.
+    "FileReader",
 }
 
 
@@ -57,6 +59,10 @@ def test_every_handler_in_generated_markup_exists_too():
     ("export", "btn-export", "exportXLSX"),
     ("reset", "btn-reset", "resetAll"),
     ("statement import", "btn-statement", "toggleStatement"),
+    ("csv panel", "btn-csv", "toggleCsv"),
+    ("csv import", "btn-import-csv", "importCsv"),
+    ("csv export", "btn-export-csv", "exportCsv"),
+    ("category ceiling", "btn-save-limit", "saveLimit"),
 ])
 def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
     """Named one by one so a failure says which feature is dead, rather than
@@ -73,6 +79,9 @@ def test_each_settings_feature_is_wired_end_to_end(feature, button, handler):
     "/api/preview-statement", "/api/import-statement",
     "/api/fund-goal", "/api/step-month", "/api/set-month",
     "/api/add-income", "/api/add-expense", "/api/add-goal", "/api/set-budget",
+    "/api/set-category-limit", "/api/search", "/api/use-favorite",
+    "/api/delete-favorite", "/api/add-favorite", "/api/import-csv", "/api/export-csv",
+    "/api/delete-income", "/api/delete-expense",
 ])
 def test_the_page_calls_every_route_it_should(route):
     """A route with no caller is a feature the server offers and the app never

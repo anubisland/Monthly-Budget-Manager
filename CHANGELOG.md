@@ -20,6 +20,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   a word and the category it implies, case-insensitive, first match wins. The
   statement preview shows the category each imported expense will land in, so
   the import files the month instead of leaving it all under Uncategorized.
+- Envelopes in the mobile app: a ceiling per category, shown under the month's
+  total budget as a bar per category that turns amber near the ceiling and red
+  over it. The plan carries into the next month from the one before it, and
+  survives a restart — a plan that has to be retyped every month is not a plan.
+- Search across every month in the mobile app, from the header. Matches the
+  description, the category, and the Arabic category name the screen shows, so
+  searching what you see finds the row that is stored in English.
+- Favourites in the mobile app: star any entry, and it appears above the add
+  form as a chip that adds it to the month in one tap.
+- Deleting an entry in the mobile app, with an undo on the toast that follows.
+  The delete routes existed and nothing in the interface called them.
+- CSV import and export in the mobile app, in the same column order the web app
+  writes (`type,name,category,amount,date`), so a file moves between the two.
+  Import names the lines it refused and why; export writes the file before
+  offering to share it.
+
+### Changed
+
+- The web app now looks like the mobile app rather than a form on a white page:
+  the same palette, the same rounded cards, a gradient card at the top showing
+  the month's net, three coloured totals under it (income, expenses, margin),
+  one-tap buttons that open the matching form, and the tabs as a segmented
+  control. Every figure above the tabs is computed from the same totals the
+  Report tab uses, so the two cannot disagree.
 
 ### Fixed
 

@@ -85,7 +85,33 @@ def budget_from(raw: Dict, key: str) -> Tuple[BudgetMonth, int]:
     bm.incomes = incomes
     bm.expenses = expenses
     bm.total_budget = validate.amount(raw.get("total_budget"), allow_zero=True) or 0.0
+    bm.budget_limits, n = limits(raw.get("budget_limits"))
+    dropped += n
     return bm, dropped
+
+
+def limits(raw: object) -> Tuple[Dict[str, float], int]:
+    """Category ceilings: a name and a positive amount, and nothing else.
+
+    Zero is not a ceiling — it would paint every row red on the first coffee —
+    and a name that is not text cannot be shown, so both are dropped and
+    counted like any other damage rather than stored as a broken envelope.
+    """
+    if raw is None:
+        return {}, 0
+    if not isinstance(raw, dict):
+        return {}, 1
+
+    clean: Dict[str, float] = {}
+    dropped = 0
+    for category, value in raw.items():
+        name = category.strip()[:40] if isinstance(category, str) else ""
+        amount = validate.amount(value)
+        if not name or amount is None:
+            dropped += 1
+            continue
+        clean[name] = amount
+    return clean, dropped
 
 
 def _rows(raw: object, factory, fields) -> Tuple[List, int]:
@@ -243,6 +269,53 @@ def _template(item: object, factory, fields):
             if value is not None:
                 built[optional] = value
     return factory(**built)
+
+
+def favorites(raw: object) -> Tuple[List[Dict], int]:
+    """Saved entries the add screen can repeat, and how many were lost.
+
+    A favourite is only worth keeping if it can be added again, so anything
+    that would fail the add form is dropped here rather than stored as a button
+    that refuses to work. Exact repeats are skipped silently: two identical
+    buttons are one button's worth of use, and counting them as damage would
+    trigger a needless backup of a perfectly good file.
+    """
+    if raw is None:
+        return [], 0
+    if not isinstance(raw, list):
+        return [], 1
+
+    built, dropped, seen = [], 0, set()
+    for item in raw:
+        if not isinstance(item, dict):
+            dropped += 1
+            continue
+        kind = item.get("kind")
+        name = item.get("name")
+        if kind not in ("income", "expense") or not isinstance(name, str) or not name.strip():
+            dropped += 1
+            continue
+        try:
+            amount = float(item.get("amount"))
+        except (TypeError, ValueError):
+            dropped += 1
+            continue
+        if amount != amount or amount <= 0 or amount == float("inf"):
+            dropped += 1
+            continue
+        category = item.get("category") if isinstance(item.get("category"), str) else ""
+        record = {
+            "kind": kind,
+            "name": name.strip()[:80],
+            "category": category.strip()[:40] if kind == "expense" else "",
+            "amount": round(amount, 2),
+        }
+        key = (kind, record["name"].lower(), record["category"].lower(), record["amount"])
+        if key in seen:
+            continue
+        seen.add(key)
+        built.append(record)
+    return built, dropped
 
 
 def settled(raw: object) -> Tuple[Dict[str, List[int]], int]:
