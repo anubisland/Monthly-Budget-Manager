@@ -27,6 +27,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the web workflow asks GitHub whether Pages is configured and skips the deploy
   with a notice, instead of failing inside `configure-pages`.
 
+## [2.0.2] - 2026-10-25
+
+### Added
+
+- The web app carries the same header as the mobile app: the app name in
+  bright white on a blue rounded banner, with the tagline in pale white
+  beneath it. The two faces of the product now open looking like one app.
+  (The web layout was already fluid for tablets — a centred container that
+  widens with the screen — so it needed no tablet work.)
+
 ## [2.0.1] - 2026-10-25
 
 ### Fixed
