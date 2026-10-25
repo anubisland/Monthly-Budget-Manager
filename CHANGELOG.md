@@ -16,6 +16,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The web app can do the same, in both languages: the same paste, the same
   preview of what is to be added, what already exists and what could not be
   read, and the same confirmation before anything is written to the month.
+- Auto-category rules in the web app, read the way the mobile app reads them:
+  a word and the category it implies, case-insensitive, first match wins. The
+  statement preview shows the category each imported expense will land in, so
+  the import files the month instead of leaving it all under Uncategorized.
 
 ### Fixed
 
