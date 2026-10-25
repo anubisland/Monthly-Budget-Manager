@@ -42,7 +42,7 @@ jobs:
       - name: Package web assets
         run: |
           mkdir -p ../dist/web
-          cp -r index.html script.js tour.js i18n.js package.json \
+          cp -r index.html script.js statement.js tour.js i18n.js package.json \
             public/ __tests__/ scripts/ evidence/ \
             ../dist/web/ 2>/dev/null || true
 
