@@ -367,3 +367,148 @@ def test_a_name_with_no_past_deposits_can_be_reused_freely(app):
     post(app, "/api/delete-goal", {"index": 0})
     post(app, "/api/add-goal", {"name": "Car", "target": 2000})
     assert app.data.goals[0].target == 2000.0
+
+
+# ── importing a bank statement ───────────────────────────────────────────────
+
+#: A statement the way banks actually write one: a single signed amount column,
+#: a negative written in parentheses, a row from the previous month, and a
+#: running-balance line that carries no description at all.
+STATEMENT = """Date,Description,Amount
+01/08/2026,Weekly shop,-450.00
+02/08/2026,Salary,8000.00
+03/08/2026,Rent,(3000.00)
+04/08/2026,Coffee,-35.50
+05/07/2026,Last month's coffee,-20.00
+06/08/2026,,0.00
+"""
+
+
+def preview(app, text=STATEMENT):
+    post(app, "/api/preview-statement", {"text": text})
+    return app.statement_preview
+
+
+def test_previewing_reports_what_the_paste_produced(app):
+    got = preview(app)
+
+    assert got["month"] == "2026-08"
+    assert got["read"] == 6
+    assert got["skipped"] == 1, "the line with no description is the only one dropped"
+    assert [(e["name"], e["kind"], e["amount"]) for e in got["entries"]] == [
+        ("Weekly shop", "expense", 450.0),
+        ("Salary", "income", 8000.0),
+        ("Rent", "expense", 3000.0),
+        ("Coffee", "expense", 35.5),
+        ("Last month's coffee", "expense", 20.0),
+    ]
+
+
+def test_previewing_writes_nothing(app):
+    """The parser decides nothing; a preview must touch neither the month nor
+    the file."""
+    preview(app)
+    assert app.data.month.incomes == []
+    assert app.data.month.expenses == []
+    assert app.saved_data == 0
+
+
+def test_a_row_dated_in_another_month_lands_on_the_first_of_this_one(app):
+    """A statement often opens with the tail of the previous month. The import
+    lands in one month, so the date is clamped rather than the money lost."""
+    got = preview(app)
+    july = [e for e in got["entries"] if e["name"] == "Last month's coffee"][0]
+    assert july["date"] == "2026-08-01"
+
+
+def test_importing_without_a_preview_is_refused(app):
+    """Reading and writing are separate steps, so no request can do both."""
+    with pytest.raises(api.ApiError) as caught:
+        post(app, "/api/import-statement", {})
+    assert caught.value.status == 409
+    assert app.data.month.expenses == []
+
+
+def test_importing_adds_the_previewed_rows_to_the_month(app):
+    preview(app)
+    post(app, "/api/import-statement", {})
+
+    assert [i.name for i in app.data.month.incomes] == ["Salary"]
+    assert [e.name for e in app.data.month.expenses] == [
+        "Weekly shop", "Rent", "Coffee", "Last month's coffee",
+    ]
+    assert app.data.month.expenses[0].amount == 450.0
+    assert app.data.month.expenses[0].category == "Uncategorized"
+    assert app.statement_preview is None, "the preview is spent once it is applied"
+    assert app.last_import == {"month": "2026-08", "added": 5, "skipped": 0}
+    assert app.saved_data >= 1, "an import that is not written did not happen"
+
+
+def test_the_same_statement_twice_is_flagged_and_skipped_by_default(app):
+    """The obvious mistake: pasting the same statement again. It is shown as a
+    duplicate and left out unless the request asks for it."""
+    preview(app)
+    post(app, "/api/import-statement", {})
+
+    assert preview(app)["duplicates"] == 5
+    post(app, "/api/import-statement", {})
+    assert len(app.data.month.expenses) == 4, "nothing was doubled"
+    assert app.last_import == {"month": "2026-08", "added": 0, "skipped": 5}
+
+
+def test_duplicates_can_be_added_when_the_user_says_so(app):
+    """Two coffees on one day look exactly like a repeated paste, so the
+    decision is the user's rather than the parser's."""
+    preview(app)
+    post(app, "/api/import-statement", {})
+
+    preview(app)
+    post(app, "/api/import-statement", {"include_duplicates": True})
+    assert len(app.data.month.expenses) == 8
+
+
+@pytest.mark.parametrize("flag", ["yes", 1, None, "false"])
+def test_the_duplicate_flag_must_be_a_real_boolean(app, flag):
+    preview(app)
+    with pytest.raises(api.ApiError):
+        post(app, "/api/import-statement", {"include_duplicates": flag})
+
+
+def test_a_preview_going_stale_when_the_month_moves_is_refused(app):
+    """The preview was read against one month. Applying it after stepping away
+    would put rows somewhere the preview never showed."""
+    preview(app)
+    post(app, "/api/step-month", {"delta": -1})
+
+    with pytest.raises(api.ApiError) as caught:
+        post(app, "/api/import-statement", {})
+    assert caught.value.status == 409
+    assert app.data.month.expenses == []
+
+
+@pytest.mark.parametrize("text", ["", "   ", None, 42, {}])
+def test_an_empty_or_non_text_statement_is_refused(app, text):
+    with pytest.raises(api.ApiError):
+        post(app, "/api/preview-statement", {"text": text})
+    assert getattr(app, "statement_preview", None) is None
+
+
+def test_text_that_is_not_a_statement_says_so_without_a_traceback(app):
+    """No description column means this was not a statement; the user needs a
+    reason, not an exception out of the csv module."""
+    with pytest.raises(api.ApiError) as caught:
+        post(app, "/api/preview-statement", {"text": "a,b\n1,2\n"})
+    assert "description" in caught.value.message
+
+
+def test_a_name_matching_a_rule_is_filed_under_it(app):
+    """The import must not be a second, dumber way into the month: the rules
+    that categorise a typed entry categorise a pasted one too."""
+    from monthly_budget.core import TransactionRule
+
+    app.data.rules = [TransactionRule(pattern="coffee", category="Food")]
+    preview(app)
+    post(app, "/api/import-statement", {})
+
+    coffee = [e for e in app.data.month.expenses if e.name == "Coffee"][0]
+    assert coffee.category == "Food"

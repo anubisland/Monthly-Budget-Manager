@@ -21,6 +21,7 @@ import decode
 import goals
 import report
 import share
+import statement
 import store
 import validate
 import xlsx
@@ -343,6 +344,72 @@ def _backup(app, d: Dict) -> None:
     app.last_export = {"path": str(path), "shared": shared, "reason": reason}
 
 
+# ── importing a bank statement ───────────────────────────────────────────────
+
+def _preview_statement(app, d: Dict) -> None:
+    """Read pasted statement text and describe the rows importing it would add.
+
+    Two steps for the same reason restoring takes two: a statement is a few
+    hundred lines, and adding them to a month unseen is not an import. The
+    parser produces candidates; only the confirm writes them.
+    """
+    text = d.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ApiError("paste the statement text")
+    try:
+        parsed = statement.parse(text, app.data.current)
+    except statement.StatementError as err:
+        raise ApiError(f"could not read that statement: {err}")
+
+    entries = statement.mark_duplicates(parsed["entries"], app.data.month)
+    app.statement_preview = {
+        "month": app.data.current,
+        "entries": entries,
+        "read": parsed["read"],
+        "skipped": parsed["skipped"],
+        "duplicates": sum(1 for e in entries if e["duplicate"]),
+    }
+
+
+def _import_statement(app, d: Dict) -> None:
+    """Add the previewed rows to the month, then forget the preview.
+
+    Rows the parser flagged as already present are skipped unless the request
+    says otherwise: pasting the same statement twice is the obvious mistake,
+    but the same coffee bought twice in a day is real — so the preview shows
+    the flags and this route takes the user's answer rather than guessing.
+    """
+    preview = getattr(app, "statement_preview", None)
+    if preview is None:
+        raise ApiError("nothing has been previewed to import", 409)
+
+    # The preview was read against one month. Adding the rows after the user
+    # has moved to another would put them somewhere the preview never showed.
+    if preview["month"] != app.data.current:
+        raise ApiError("the month changed since the preview; read it again", 409)
+
+    include = d.get("include_duplicates", False)
+    if not isinstance(include, bool):
+        raise ApiError("include_duplicates must be true or false")
+
+    added = skipped = 0
+    for entry in preview["entries"]:
+        if entry["duplicate"] and not include:
+            skipped += 1
+            continue
+        if entry["kind"] == "income":
+            app.data.month.add_income(entry["name"], entry["amount"], entry["date"])
+        else:
+            app.data.month.add_expense(
+                entry["name"], entry["amount"],
+                _category_for(app, {}, entry["name"]), entry["date"],
+            )
+        added += 1
+
+    app.statement_preview = None
+    app.last_import = {"month": preview["month"], "added": added, "skipped": skipped}
+
+
 #: Characters that cannot survive an Excel number format. The quote ends the
 #: quoted literal the currency sits in; a control character is written into
 #: xl/styles.xml raw, and the file then fails to open with a message naming
@@ -490,6 +557,8 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/backup-file": _backup,
     "/api/preview-restore": _preview_restore,
     "/api/restore": _apply_restore,
+    "/api/preview-statement": _preview_statement,
+    "/api/import-statement": _import_statement,
     "/api/set-budget": _set_budget,
     "/api/toggle-theme": _toggle_theme,
     "/api/set-language": _set_language,
@@ -502,7 +571,9 @@ _SETTINGS_ROUTES = frozenset({"/api/toggle-theme", "/api/set-language", "/api/se
 
 #: Routes that change nothing worth persisting. Saving after one of these
 #: would rewrite the data file for an operation that only read it.
-_READ_ONLY_ROUTES = frozenset({"/api/export", "/api/backup-file", "/api/preview-restore"})
+_READ_ONLY_ROUTES = frozenset({
+    "/api/export", "/api/backup-file", "/api/preview-restore", "/api/preview-statement",
+})
 
 
 def dispatch(app, path: str, payload: Dict) -> None:

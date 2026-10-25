@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- The mobile app can import a bank statement. Paste the rows out of the bank's
+  export, see what they became — with the ones already in the month marked —
+  and only then add them. Reading and writing are separate steps, so a paste of
+  two hundred transactions never lands in a month unseen, and a preview read
+  against one month cannot be applied to another.
+
 ### Fixed
 
 - A push to `main` no longer fails when the repository has no GitHub Pages site:
