@@ -507,7 +507,7 @@ jobs:
         run: |
           mkdir -p ../dist/web
           # Include all web assets in a deployable bundle
-          cp -r index.html script.js statement.js tour.js i18n.js package.json \
+          cp -r index.html script.js statement.js tour.js i18n.js package.json icon.png \
             public/ __tests__/ scripts/ evidence/ \
             ../dist/web/ 2>/dev/null || true
           cd ../dist

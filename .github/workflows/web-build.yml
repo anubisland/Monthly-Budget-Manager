@@ -42,7 +42,7 @@ jobs:
       - name: Package web assets
         run: |
           mkdir -p ../dist/web
-          cp -r index.html script.js statement.js tour.js i18n.js package.json \
+          cp -r index.html script.js statement.js tour.js i18n.js package.json icon.png \
             public/ __tests__/ scripts/ evidence/ \
             ../dist/web/ 2>/dev/null || true
 
@@ -68,6 +68,11 @@ jobs:
       # is nowhere to deploy to.
       - name: Check whether GitHub Pages is configured
         id: pages
+        # The deploy job has no checkout, so the workflow default
+        # working-directory (web) does not exist here and bash refuses to
+        # start — which is how every push to main went red before Pages
+        # existed, and how the site stayed unpublished after it did.
+        working-directory: .
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
