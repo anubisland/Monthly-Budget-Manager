@@ -104,6 +104,42 @@ function buildFixtureDOM() {
     }
   });
 
+  // Bank statement panel — same IDs as index.html.
+  if (!document.getElementById('statementPanel')) {
+    const panel = document.createElement('div');
+    panel.id = 'statementPanel';
+    panel.className = 'hidden';
+    document.body.appendChild(panel);
+  }
+  if (!document.getElementById('statementText')) {
+    const box = document.createElement('textarea');
+    box.id = 'statementText';
+    document.body.appendChild(box);
+  }
+  ['statementPreview', 'statementCounts', 'statementMore', 'statementMonth'].forEach(id => {
+    if (!document.getElementById(id)) {
+      const el = document.createElement('div');
+      el.id = id;
+      document.body.appendChild(el);
+    }
+  });
+  if (!document.getElementById('statementPreviewBody')) {
+    const tbody = document.createElement('tbody');
+    tbody.id = 'statementPreviewBody';
+    document.body.appendChild(tbody);
+  }
+  if (!document.getElementById('statementIncludeDups')) {
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.id = 'statementIncludeDups';
+    document.body.appendChild(check);
+  }
+  if (!document.getElementById('statementConfirmBtn')) {
+    const btn = document.createElement('button');
+    btn.id = 'statementConfirmBtn';
+    document.body.appendChild(btn);
+  }
+
   ['income', 'expenses', 'report'].forEach(name => {
     if (!document.getElementById('tab-' + name)) {
       const el = document.createElement('div');
@@ -126,6 +162,7 @@ buildFixtureDOM();
 // ---------------------------------------------------------------------------
 // Load script.js (IIFE; sets window.budgetApp on execution)
 // ---------------------------------------------------------------------------
+require('../statement.js');
 require('../script.js');
 
 const app = window.budgetApp;
@@ -390,6 +427,164 @@ describe('loadData() / saveData()', () => {
     localStorageMock.getItem.mockReturnValue('not-valid-json{{{');
     const d = app.loadData();
     expect(d.incomes).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Bank statement import — paste, look, confirm
+// ---------------------------------------------------------------------------
+describe('bank statement import', () => {
+  let mem;
+
+  function statusText() {
+    return document.getElementById('statusBar').textContent;
+  }
+
+  function panel() {
+    return document.getElementById('statementPanel');
+  }
+
+  function putStatement(text) {
+    document.getElementById('statementText').value = text;
+  }
+
+  function stored() {
+    return JSON.parse(mem['anubisland-budget']);
+  }
+
+  beforeEach(() => {
+    mem = {};
+    localStorageMock._reset();
+    localStorageMock.getItem.mockClear();
+    localStorageMock.setItem.mockClear();
+    localStorageMock.getItem.mockImplementation(key => (key in mem ? mem[key] : null));
+    localStorageMock.setItem.mockImplementation((key, value) => { mem[key] = String(value); });
+    document.getElementById('monthInput').value = '2026-08';
+    putStatement('');
+    document.getElementById('statementIncludeDups').checked = false;
+    document.getElementById('statusBar').textContent = '';
+    window.clearStatementPanel();
+    panel().classList.add('hidden');
+  });
+
+  test('a preview shows what came out and writes nothing', () => {
+    putStatement(
+      'Date,Description,Amount\n' +
+      '2026-08-02,Salary,5000\n' +
+      '2026-08-03,Rent,-1500\n'
+    );
+    app.previewStatement();
+
+    const preview = app._statementPreview();
+    expect(preview.entries).toHaveLength(2);
+    expect(preview.entries[0].kind).toBe('income');
+    expect(preview.entries[1].kind).toBe('expense');
+
+    const rows = document.getElementById('statementPreviewBody').textContent;
+    expect(rows).toContain('Salary');
+    expect(rows).toContain('Rent');
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+  });
+
+  test('an empty paste is reported, not previewed', () => {
+    putStatement('   ');
+    app.previewStatement();
+
+    expect(app._statementPreview()).toBeNull();
+    expect(statusText()).toBe('st.pasteFirst');
+  });
+
+  test('text that is not a statement reports why and previews nothing', () => {
+    putStatement('Date,Amount\n2026-08-01,10');
+    app.previewStatement();
+
+    expect(app._statementPreview()).toBeNull();
+    expect(statusText()).toBe('st.unreadable');
+  });
+
+  test('confirming adds the previewed rows to the month', () => {
+    putStatement(
+      'Date,Description,Amount\n' +
+      '2026-08-02,Salary,5000\n' +
+      '2026-08-03,Rent,-1500\n'
+    );
+    app.previewStatement();
+    app.importStatement();
+
+    const data = stored();
+    expect(data.month).toBe('2026-08');
+    expect(data.incomes).toEqual([{ name: 'Salary', amount: 5000, date: '2026-08-02' }]);
+    expect(data.expenses).toEqual([
+      { name: 'Rent', category: 'Uncategorized', amount: 1500, date: '2026-08-03' },
+    ]);
+    expect(statusText()).toBe('st.done');
+    expect(app._statementPreview()).toBeNull();
+    expect(panel().classList.contains('hidden')).toBe(true);
+  });
+
+  test('a row already in the month is flagged and skipped unless asked for', () => {
+    mem['anubisland-budget'] = JSON.stringify({
+      month: '2026-08',
+      incomes: [],
+      expenses: [{ name: 'Rent', category: 'Rent', amount: 1500, date: '2026-08-03' }],
+    });
+    putStatement('Date,Description,Amount\n2026-08-03,Rent,-1500');
+
+    app.previewStatement();
+    expect(app._statementPreview().entries[0].duplicate).toBe(true);
+    app.importStatement();
+
+    expect(stored().expenses).toHaveLength(1);
+    expect(stored().expenses[0].category).toBe('Rent');
+
+    putStatement('Date,Description,Amount\n2026-08-03,Rent,-1500');
+    app.previewStatement();
+    document.getElementById('statementIncludeDups').checked = true;
+    app.importStatement();
+
+    expect(stored().expenses).toHaveLength(2);
+  });
+
+  test('a month changed after the preview refuses the import', () => {
+    putStatement('Date,Description,Amount\n2026-08-03,Rent,-1500');
+    app.previewStatement();
+
+    document.getElementById('monthInput').value = '2026-09';
+    app.importStatement();
+
+    expect(mem['anubisland-budget']).toBeUndefined();
+    expect(statusText()).toBe('st.monthChanged');
+    expect(app._statementPreview()).not.toBeNull();
+  });
+
+  test('clearing the panel forgets the preview', () => {
+    putStatement('Date,Description,Amount\n2026-08-03,Rent,-1500');
+    app.previewStatement();
+
+    window.clearStatementPanel();
+
+    expect(app._statementPreview()).toBeNull();
+    expect(document.getElementById('statementText').value).toBe('');
+    expect(document.getElementById('statementPreviewBody').children).toHaveLength(0);
+  });
+
+  test('the panel opens and closes', () => {
+    window.toggleStatementPanel();
+    expect(panel().classList.contains('hidden')).toBe(false);
+
+    putStatement('Date,Description,Amount\n2026-08-03,Rent,-1500');
+    app.previewStatement();
+    window.toggleStatementPanel();
+
+    expect(panel().classList.contains('hidden')).toBe(true);
+    expect(app._statementPreview()).toBeNull();
+  });
+
+  test('confirming without a preview adds nothing', () => {
+    app.importStatement();
+
+    expect(mem['anubisland-budget']).toBeUndefined();
+    expect(statusText()).toBe('st.previewFirst');
   });
 });
 

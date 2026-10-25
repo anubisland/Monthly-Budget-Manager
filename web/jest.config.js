@@ -2,7 +2,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   testMatch: ['<rootDir>/__tests__/**/*.test.js'],
   testPathIgnorePatterns: ['/node_modules/'],
-  collectCoverageFrom: ['script.js'],
+  collectCoverageFrom: ['script.js', 'statement.js'],
   // These floors are the measured baseline, not an aspiration: they are set
   // here so the gate runs (it previously never did, because CI called `jest`
   // without --coverage). Raise them as tests are added; never lower them.

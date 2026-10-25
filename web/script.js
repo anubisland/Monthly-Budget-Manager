@@ -601,11 +601,188 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Bank statement import — paste, look, confirm (see statement.js)
+  // ---------------------------------------------------------------------------
+
+  //: The preview the user is looking at, if any. Kept so confirming adds the
+  //: rows that were shown rather than re-reading a text box that may have
+  //: changed since.
+  var statementPreview = null;
+
+  //: How many preview rows to draw. A busy month is hundreds of rows, and the
+  //: point of the preview is the shape of what came out, not scrolling all of it.
+  var STATEMENT_PREVIEW_ROWS = 40;
+
+  function _setHidden(el, hidden) {
+    if (!el) return;
+    if (hidden) el.classList.add('hidden');
+    else el.classList.remove('hidden');
+  }
+
+  /** The month rows would land in: the picker if it has one, else today's. */
+  function currentMonth() {
+    var monthEl = document.getElementById('monthInput');
+    var picked = monthEl ? (monthEl.value || '').trim() : '';
+    if (_validYM(picked)) return picked;
+    var stored = loadData().month;
+    if (stored && _validYM(stored)) return stored;
+    return new Date().toISOString().slice(0, 7);
+  }
+
+  function toggleStatementPanel() {
+    var panel = document.getElementById('statementPanel');
+    if (!panel) return;
+    var opening = panel.classList.contains('hidden');
+    _setHidden(panel, !opening);
+    if (!opening) clearStatementPanel();
+  }
+
+  function clearStatementPanel() {
+    statementPreview = null;
+    var box = document.getElementById('statementText');
+    if (box) box.value = '';
+    var body = document.getElementById('statementPreviewBody');
+    if (body) _clearChildren(body);
+    var counts = document.getElementById('statementCounts');
+    if (counts) counts.textContent = '';
+    var more = document.getElementById('statementMore');
+    if (more) more.textContent = '';
+    var monthNote = document.getElementById('statementMonth');
+    if (monthNote) monthNote.textContent = '';
+    var dups = document.getElementById('statementIncludeDups');
+    if (dups) dups.checked = false;
+    _setHidden(document.getElementById('statementPreview'), true);
+  }
+
+  function previewStatement() {
+    var box = document.getElementById('statementText');
+    var text = box ? box.value.trim() : '';
+    if (!text) {
+      setStatus('st.pasteFirst');
+      return;
+    }
+    if (!window.statementParser) {
+      setStatus('st.unreadable', { why: window.i18n.t('st.reason.unknown') });
+      return;
+    }
+
+    var month = currentMonth();
+    var parsed;
+    try {
+      parsed = window.statementParser.parse(text, month);
+    } catch (err) {
+      var reason = window.i18n.t('st.reason.' + (err && err.code ? err.code : 'unknown'));
+      setStatus('st.unreadable', { why: reason });
+      return;
+    }
+
+    statementPreview = {
+      month: month,
+      entries: window.statementParser.markDuplicates(parsed.entries, loadData()),
+      read: parsed.read,
+      skipped: parsed.skipped,
+    };
+    renderStatementPreview();
+  }
+
+  function renderStatementPreview() {
+    if (!statementPreview) return;
+    var preview = document.getElementById('statementPreview');
+    var body = document.getElementById('statementPreviewBody');
+    if (!body) return;
+
+    _clearChildren(body);
+    var shown = statementPreview.entries.slice(0, STATEMENT_PREVIEW_ROWS);
+
+    shown.forEach(function (entry) {
+      var incoming = entry.kind === 'income';
+      var tr = document.createElement('tr');
+      tr.className = 'border-b border-gray-100 hover:bg-gray-50';
+      tr.appendChild(_makeTd(fmtDateDisplay(entry.date, window.i18n.getCurrentLang()), 'text-gray-500 text-xs'));
+      tr.appendChild(_makeTd(entry.name, 'text-gray-800'));
+      tr.appendChild(_makeTd(
+        (incoming ? '+' : '\u2212') + fmtAmount(entry.amount),
+        'text-end font-medium ' + (incoming ? 'text-green-700' : 'text-red-700')
+      ));
+      tr.appendChild(_makeTd(entry.duplicate ? window.i18n.t('st.dup') : '', 'text-center text-xs text-amber-600'));
+      body.appendChild(tr);
+    });
+
+    var duplicates = statementPreview.entries.filter(function (e) { return e.duplicate; }).length;
+    var counts = document.getElementById('statementCounts');
+    if (counts) {
+      counts.textContent = window.i18n.t('st.counts', {
+        read: statementPreview.read,
+        add: statementPreview.entries.length - duplicates,
+        dup: duplicates,
+        skip: statementPreview.skipped,
+      });
+    }
+
+    var more = document.getElementById('statementMore');
+    if (more) {
+      var rest = statementPreview.entries.length - shown.length;
+      more.textContent = rest > 0 ? window.i18n.t('st.more', { n: rest }) : '';
+    }
+
+    var monthNote = document.getElementById('statementMonth');
+    if (monthNote) monthNote.textContent = window.i18n.t('st.month', { month: statementPreview.month });
+
+    _setHidden(preview, statementPreview.entries.length === 0);
+  }
+
+  function importStatement() {
+    if (!statementPreview) {
+      setStatus('st.previewFirst');
+      return;
+    }
+    // The preview was read against one month. Adding the rows after the user
+    // has moved to another would put them somewhere the preview never showed.
+    if (statementPreview.month !== currentMonth()) {
+      setStatus('st.monthChanged');
+      return;
+    }
+
+    var dups = document.getElementById('statementIncludeDups');
+    var include = !!(dups && dups.checked);
+
+    var data = loadData();
+    var added = 0;
+    var skipped = 0;
+    statementPreview.entries.forEach(function (entry) {
+      if (entry.duplicate && !include) {
+        skipped++;
+        return;
+      }
+      if (entry.kind === 'income') {
+        data.incomes.push({ name: entry.name, amount: entry.amount, date: entry.date });
+      } else {
+        data.expenses.push({
+          name: entry.name,
+          category: 'Uncategorized',
+          amount: entry.amount,
+          date: entry.date,
+        });
+      }
+      added++;
+    });
+
+    if (!data.month) data.month = statementPreview.month;
+    saveData(data);
+
+    clearStatementPanel();
+    _setHidden(document.getElementById('statementPanel'), true);
+    renderAll();
+    setStatus('st.done', { n: added, s: skipped });
+  }
+
+  // ---------------------------------------------------------------------------
   // Language change — re-render dynamic content
   // ---------------------------------------------------------------------------
 
   document.addEventListener('langchange', function () {
     renderAll();
+    if (statementPreview) renderStatementPreview();
   });
 
   // ---------------------------------------------------------------------------
@@ -638,6 +815,10 @@
   window.switchTab = switchTab;
   window.toggleLanguage = toggleLanguage;
   window.importCsv = importCsv;
+  window.toggleStatementPanel = toggleStatementPanel;
+  window.clearStatementPanel = clearStatementPanel;
+  window.previewStatement = previewStatement;
+  window.importStatement = importStatement;
   window.exportCsv = exportCsv;
   window.exportJson = exportJson;
 
@@ -654,5 +835,9 @@
     saveData: saveData,
     fmtAmount: fmtAmount,
     renderAll: renderAll,
+    currentMonth: currentMonth,
+    previewStatement: previewStatement,
+    importStatement: importStatement,
+    _statementPreview: function () { return statementPreview; },
   };
 })();

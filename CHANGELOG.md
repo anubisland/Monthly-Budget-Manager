@@ -13,6 +13,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   and only then add them. Reading and writing are separate steps, so a paste of
   two hundred transactions never lands in a month unseen, and a preview read
   against one month cannot be applied to another.
+- The web app can do the same, in both languages: the same paste, the same
+  preview of what is to be added, what already exists and what could not be
+  read, and the same confirmation before anything is written to the month.
 
 ### Fixed
 
