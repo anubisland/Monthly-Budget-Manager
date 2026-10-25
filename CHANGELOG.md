@@ -27,6 +27,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   the web workflow asks GitHub whether Pages is configured and skips the deploy
   with a notice, instead of failing inside `configure-pages`.
 
+## [2.0.1] - 2026-10-25
+
+### Fixed
+
+- **Security: user-typed text is escaped before it is rendered.** An entry
+  name, a category, a goal name, or a description cell inside a pasted bank
+  statement used to be written back into the page as HTML. Markup in any of
+  them ran as part of the app, in the context that can read and rewrite the
+  whole budget. Every such render now passes through an escaping function.
+- **Security: the local API no longer answers
+  `Access-Control-Allow-Origin: *`.** The WebView is served from this very
+  server and calls it same-origin, so the header was never needed — it only
+  widened the reach of the hole above to any other origin on the device.
+- `build-and-release`: a failing iOS build leg can no longer stop the Android
+  APK from being attached to a release. The APK is built either way; the iOS
+  artifacts are best-effort.
+
+### Added
+
+- A header for the app: its name in bright white on a blue rounded banner,
+  the same on every page. The system title bar is hidden on Android, so this
+  strip is the only header there is, and until now it carried the name of
+  whichever tab was open instead of the name of the app.
+- Tablet layout. The phone layout was a 480px column that sat in empty grey
+  on a tablet; the column now widens with the screen — to 620px, 740px and
+  820px at 600px, 840px and 1100px — and the goals list re-flows into
+  columns on wide screens instead of stacking one card per screen-width.
+
 ## [2.0.0] - 2026-10-24
 
 ### Added

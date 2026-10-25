@@ -20,10 +20,16 @@
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--tx);user-select:none;-webkit-user-select:none;overflow:hidden;height:100vh}
 #app{height:100vh;display:flex;flex-direction:column;max-width:480px;margin:auto;position:relative;background:var(--bg)}
-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 4px;background:var(--bg);z-index:10}
-header h1{font-size:20px;font-weight:700;color:var(--pri)}
-header .hdr-btn{background:none;border:none;font-size:20px;padding:6px;cursor:pointer;color:var(--ts);border-radius:50%}
-header .hdr-btn:active{background:var(--card)}
+/* The app header: a blue rounded banner with the app's name in bright white.
+   The system title bar is hidden on Android (chrome.py), so this strip is the
+   only header there is — it carries the name of the app, and it is the same
+   on every page, because the bottom bar already says which page is open. */
+header{display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;margin:10px 16px 0;background:var(--pri);
+  border-radius:var(--radius);box-shadow:var(--shadow);z-index:10}
+header h1{font-size:18px;font-weight:800;color:#fff;letter-spacing:.2px}
+header .hdr-btn{background:none;border:none;font-size:20px;padding:6px;cursor:pointer;color:rgba(255,255,255,.9);border-radius:50%}
+header .hdr-btn:active{background:rgba(255,255,255,.18)}
 
 /* Month bar: always visible, above every tab. Uses the same card surface,
    radius and shadow as the rest of the app so it reads as part of it. */
@@ -264,6 +270,15 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
 [dir=rtl] .recent-item{direction:rtl}
 [dir=rtl] .stats-row{direction:rtl}
 
+/* Tablet and wide screens. The phone layout is a 480px column; on a tablet
+   that column sat in empty grey and read as a blown-up phone rather than a
+   tablet app. The column widens with the screen, and the goal list re-flows
+   into columns so the extra width is used, not just padded. */
+@media (min-width:600px){#app{max-width:620px}}
+@media (min-width:840px){#app{max-width:740px}}
+@media (min-width:1100px){#app{max-width:820px}}
+@media (min-width:720px){#goal-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}}
+
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-thumb{background:rgba(128,128,128,.3);border-radius:2px}
@@ -272,7 +287,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
 <body>
 <div id="app">
   <header>
-    <h1 id="title"></h1>
+    <h1 id="title">Budget Manager</h1>
     <div style="display:flex;gap:4px">
       <button class="hdr-btn" id="hdr-more" style="display:none">←</button>
     </div>
@@ -556,6 +571,15 @@ function transIncomeOpts() {
 }
 const CURRENCIES = { USD:'$', EUR:'€', GBP:'£', JPY:'¥', AED:'د.إ', SAR:'﷼', EGP:'ج.م', IQD:'د.ع', MAD:'د.م.', KWD:'د.ك', QAR:'﷼', OMR:'﷼', BHD:'د.ب' };
 function cs() { return CURRENCIES[state.currency] || '$'; }
+
+// Anything a user typed — an entry name, a category, a goal name, a row
+// pasted out of a bank export — is as untrusted as a link in an email: it
+// can carry markup, and this page can read and rewrite the whole budget.
+// It must be escaped before it is interpolated back into the page as HTML.
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g,
+    c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function fmt(v) { return cs() + Number(v).toLocaleString(); }
 function renderCurrencyOptions() {
   let sel = document.getElementById('sel-currency');
@@ -630,9 +654,9 @@ function showPage(name, tab) {
   let icons = ['🏠','➕','📊','🎯','⚙️'];
   let idx = ['home','add','budget','goals','settings'].indexOf(name);
   document.querySelectorAll('.nav-btn')[idx]?.classList.add('active');
-  
-  document.getElementById('title').textContent = 
-    ({home:t('title'), add:t('add'), budget:t('budget'), goals:t('goals'), settings:t('settings')})[name];
+
+  // The header keeps the app's name on every page (set in applyI18n); the
+  // highlighted bottom button already says which page is open.
   
   if (name === 'add') {
     if (tab) switchAddTab(tab);
@@ -833,6 +857,7 @@ const TRANS = {
     no_change: 'no change', fund_goal: 'Add to goal', goal_done: 'Achieved',
     carried_over: 'carried over', remaining: 'Remaining', added_this_month: 'this month',
     goal_full: 'This goal is already fully funded', deposit_added: 'Added to goal',
+    app_name: 'Budget Manager',
     title: 'Budget', home: 'Home', add: 'Add', budget: 'Budget', goals: 'Goals', settings: 'Settings',
     reset_hint: 'Erases every month, every entry and every goal. Take a backup first if you might want any of it.',
     report_title: 'Budget report', margin: 'Margin', share: 'Share',
@@ -919,6 +944,7 @@ const TRANS = {
     no_change: 'لا تغيير', fund_goal: 'أضف للهدف', goal_done: 'تحقّق',
     carried_over: 'مُرحّل', remaining: 'المتبقّي', added_this_month: 'هذا الشهر',
     goal_full: 'هذا الهدف مُكتمل التمويل بالفعل', deposit_added: 'أُضيف للهدف',
+    app_name: 'مدير الميزانية',
     title: 'الميزانية', home: 'الرئيسية', add: 'إضافة', budget: 'الميزانية', goals: 'الأهداف', settings: 'الإعدادات',
     reset_hint: 'يمحو كل الأشهر وكل الحركات وكل الأهداف. خذ نسخة احتياطية أوّلًا إن كنت قد تحتاج شيئًا منها.',
     report_title: 'تقرير الميزانية', margin: 'هامش الربح', share: 'النسبة',
@@ -1000,6 +1026,10 @@ function applyI18n() {
   if (navs[3]) navs[3].innerHTML = '<span class="icon">🎯</span>' + t('goals');
   if (navs[4]) navs[4].innerHTML = '<span class="icon">⚙️</span>' + t('settings');
   document.getElementById('safe-label').textContent = t('budget_label');
+  // The header is the app's name on every page — see the header rule in the
+  // stylesheet. It lives here rather than in showPage() so it is written by
+  // the one function that re-runs on every language change.
+  document.getElementById('title').textContent = t('app_name');
   try { document.querySelector('.inc-btn').textContent = t('add_income'); } catch(e) {}
   try { document.querySelector('.exp-btn').textContent = t('add_expense'); } catch(e) {}
   document.getElementById('l-name').textContent = t('description');
@@ -1181,7 +1211,7 @@ function renderRestoreDiff() {
     let lost = m.mine && !m.theirs;
     let gained = !m.mine && m.theirs;
     return `<div class="rst-row">
-        <span class="rst-m">${monthKeyLabel(m.month)}</span>
+        <span class="rst-m">${esc(monthKeyLabel(m.month))}</span>
         <span class="rst-side ${lost ? 'rst-gone' : ''}">${t('rst_now')}: ${side(m.mine)}</span>
         <span class="rst-side ${gained ? 'rst-new' : ''}">${t('rst_after')}: ${side(m.theirs)}</span>
       </div>`;
@@ -1239,8 +1269,8 @@ function renderStatementPreview() {
     let incoming = e.kind === 'income';
     let sign = incoming ? '+' : '\u2212';
     return `<div class="rst-row">
-        <span class="rst-m">${e.date}</span>
-        <span class="rst-side">${e.name}</span>
+        <span class="rst-m">${esc(e.date)}</span>
+        <span class="rst-side">${esc(e.name)}</span>
         <span class="rst-side" style="color:${incoming ? 'var(--inc)' : 'var(--exp)'}">
           ${sign}${cs()}${Number(e.amount).toLocaleString()}</span>
         ${e.duplicate ? `<span class="rst-side rst-gone">${t('st_dup')}</span>` : ''}
@@ -1465,7 +1495,7 @@ function renderComparison() {
     // not an overspend. Colouring it like rent would paint every contribution
     // to a goal in the same red as a blown budget.
     cats.slice(0, 6).forEach(c => {
-      html += cmpRow(tc(c.name), c.now, c.was, c.name === SAVINGS_CATEGORY);
+      html += cmpRow(esc(tc(c.name)), c.now, c.was, c.name === SAVINGS_CATEGORY);
     });
   }
   el.innerHTML = html;
@@ -1676,7 +1706,7 @@ function renderSettingsLabels() {
   let about = document.getElementById('about-text');
   if (about) {
     about.innerHTML = t('about_text') +
-      (state.version ? '<br>v' + state.version : '');
+      (state.version ? '<br>v' + esc(state.version) : '');
   }
   setPlaceholders();
 }
@@ -1710,8 +1740,8 @@ function render() {
     let pct = g.target > 0 ? Math.min(g.current/g.target*100,100) : 0;
     gcont.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <span style="font-size:18px">${g.icon}</span>
-        <span style="font-size:14px;font-weight:600;flex:1">${g.name}</span>
+        <span style="font-size:18px">${esc(g.icon)}</span>
+        <span style="font-size:14px;font-weight:600;flex:1">${esc(g.name)}</span>
         <span style="font-size:12px;color:var(--ts)">${cs()}${g.current.toFixed(0)}/${cs()}${g.target.toFixed(0)}</span>
       </div>
       <div style="height:8px;background:rgba(128,128,128,.15);border-radius:4px;overflow:hidden">
@@ -1770,9 +1800,9 @@ function renderRecent() {
     r.innerHTML += `
       <div class="recent-item">
         <div class="recent-dot" style="background:${isInc?'var(--inc)':item.color}"></div>
-        <span class="recent-name">${isInc?tin(item.name):tc(item.category||item.name)}</span>
+        <span class="recent-name">${esc(isInc?tin(item.name):tc(item.category||item.name))}</span>
         <span class="recent-amt ${isInc?'inc':'exp'}">${isInc?'+':'-'}${cs()}${item.amount.toFixed(2)}</span>
-        <span class="recent-date">${(item.date||'').slice(-5)}</span>
+        <span class="recent-date">${esc((item.date||'').slice(-5))}</span>
       </div>`;
   });
 }
@@ -1789,9 +1819,9 @@ function renderAddHistory() {
   h.innerHTML = all.slice(0,8).map((item, i) => `
     <div class="recent-item">
       <div class="recent-dot" style="background:${item.type==='inc'?'var(--inc)':item.color}"></div>
-      <span class="recent-name">${item.type==='inc'?tin(item.name):tc(item.category||item.name)}</span>
+      <span class="recent-name">${esc(item.type==='inc'?tin(item.name):tc(item.category||item.name))}</span>
       <span class="recent-amt ${item.type==='inc'?'inc':'exp'}">${item.type==='inc'?'+':'-'}${cs()}${item.amount.toFixed(2)}</span>
-      <span class="recent-date">${(item.date||'').slice(-5)}</span>
+      <span class="recent-date">${esc((item.date||'').slice(-5))}</span>
       <span class="edit-btn" onclick="editEntry(${item._idx})">✏️</span>
     </div>
   `).join('');
@@ -1849,7 +1879,7 @@ function renderBudgetDetail() {
     let pct = data.amount / total * 100;
     d.innerHTML += `
       <div class="budget-item">
-        <span class="budget-cat">${tc(cat)}</span>
+        <span class="budget-cat">${esc(tc(cat))}</span>
         <div class="budget-bar-wrap"><div class="budget-bar" style="width:${pct}%;background:${data.color||'#636E72'}"></div></div>
         <span class="budget-amt">${cs()}${data.amount.toFixed(0)}</span>
       </div>`;
@@ -1876,8 +1906,8 @@ function renderGoals() {
     g.innerHTML += `
       <div class="card goal-card">
         <div class="goal-header">
-          <span style="font-size:20px">${goal.icon}</span>
-          <span class="goal-name">${goal.name}</span>
+          <span style="font-size:20px">${esc(goal.icon)}</span>
+          <span class="goal-name">${esc(goal.name)}</span>
           ${badges}
           <button class="goal-del" onclick="delGoal(${idx})">✕</button>
         </div>
@@ -1943,7 +1973,7 @@ function renderDonut() {
   leg.innerHTML = cats.sort((a,b) => b[1].amount - a[1].amount).map(([cat, data]) => `
     <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px">
       <span style="width:12px;height:12px;border-radius:3px;background:${data.color};flex-shrink:0"></span>
-      <span style="flex:1">${tc(cat)}</span>
+      <span style="flex:1">${esc(tc(cat))}</span>
       <span style="font-weight:600">${cs()}${data.amount.toFixed(0)}</span>
       <span style="color:var(--ts);min-width:36px;text-align:right">${(data.amount/total*100).toFixed(0)}%</span>
     </div>
@@ -1984,7 +2014,7 @@ function renderIncomeDonut() {
   leg.innerHTML = entries.sort((a,b) => b[1] - a[1]).map(([name, amt], i) => `
     <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px">
       <span style="width:12px;height:12px;border-radius:3px;background:${INCOME_COLORS[i % INCOME_COLORS.length]};flex-shrink:0"></span>
-      <span style="flex:1">${tin(name)}</span>
+      <span style="flex:1">${esc(tin(name))}</span>
       <span style="font-weight:600">${cs()}${amt.toFixed(0)}</span>
       <span style="color:var(--ts);min-width:36px;text-align:right">${(amt/total*100).toFixed(0)}%</span>
     </div>
@@ -2012,7 +2042,7 @@ function renderIncomeBreakdown() {
     return `
       <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(128,128,128,.08)">
         <span style="width:10px;height:10px;border-radius:50%;background:${colors[i%colors.length]};flex-shrink:0"></span>
-        <span style="flex:1;font-size:13px">${tin(name)}</span>
+        <span style="flex:1;font-size:13px">${esc(tin(name))}</span>
         <span style="font-weight:600;font-size:13px">${cs()}${amt.toFixed(0)}</span>
         <span style="color:var(--ts);font-size:11px">${pct.toFixed(0)}%</span>
       </div>`;
@@ -2064,7 +2094,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // apart, and this one would have quietly overridden the other.
   state.lang = state.lang || 'ar';
   applyI18n();
-  document.getElementById('title').textContent = t('title');
 });
 </script>
 </body>

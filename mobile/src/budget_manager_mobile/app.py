@@ -82,9 +82,12 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
         return self.rfile.read(length) if length else b""
 
     def _json(self, data, status=200):
+        # No Access-Control-Allow-Origin header. The WebView loads from this
+        # very server and calls it same-origin, so it never needed one; the
+        # wildcard only told every other origin on the device that reading
+        # this response was allowed.
         self.send_response(status)
         self.send_header('Content-Type','application/json')
-        self.send_header('Access-Control-Allow-Origin','*')
         self.end_headers()
         self.wfile.write(json.dumps(data, ensure_ascii=False).encode())
 
@@ -97,7 +100,6 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
             '.json':'application/json','.txt':'text/plain',
         }.get(ext, 'application/octet-stream')
         self.send_header('Content-Type', mt)
-        self.send_header('Access-Control-Allow-Origin','*')
         self.end_headers()
         self.wfile.write(path.read_bytes())
 
