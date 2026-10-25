@@ -175,6 +175,11 @@ jobs:
       - name: Build iOS (macOS)
         if: runner.os == 'macOS'
         working-directory: mobile
+        # Best-effort. release-mobile attaches the Android APK with a plain
+        # `needs: [release, mobile]`, so a red iOS leg — Xcode drift on the
+        # runner is common and the artifact ships nothing for Android — used
+        # to take the APK down with it: built, green-looking, and absent.
+        continue-on-error: true
         run: |
           briefcase create iOS -v
           briefcase build iOS -v
