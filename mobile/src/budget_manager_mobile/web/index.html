@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Budget Manager</title>
+<link rel="icon" type="image/png" href="icon.png">
 <!-- Cairo for the app name in the header. If the device is offline the link
      simply does not resolve and the name falls back to the system face —
      the header reads the same either way, only the lettering differs. -->
@@ -517,6 +518,15 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
   <div id="toast"></div>
 </div>
 
+<!-- On the GitHub Pages web build there is no local Python server, so this
+     shim answers the same /api/* routes from localStorage. It self-disables
+     on 127.0.0.1/localhost, where the real server (the mobile app) is
+     present — so the same file serves both the APK and the web unchanged.
+     statement.js is the parser the shim uses for statement imports; the
+     device server answers that route itself, but the script loads here too
+     (a 404 on the device is harmless) so one bundle serves both. -->
+<script src="statement.js"></script>
+<script src="apishim.js"></script>
 <script>
 // ── State ──
 let state = {

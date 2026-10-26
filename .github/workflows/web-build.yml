@@ -6,10 +6,12 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'mobile/src/budget_manager_mobile/web/**'
   pull_request:
     branches: [main]
     paths:
       - 'web/**'
+      - 'mobile/src/budget_manager_mobile/web/**'
 
 permissions:
   contents: read
@@ -24,6 +26,11 @@ jobs:
   test:
     name: Test & build
     runs-on: ubuntu-latest
+    # Overlapping builds of the same ref produce nothing anyone reads; the
+    # newer run supersedes the older one, so cancel it.
+    concurrency:
+      group: web-build-test-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
 
@@ -40,11 +47,14 @@ jobs:
         run: npm test
 
       - name: Package web assets
+        # The deployed site is the unified UI: the mobile index.html, the
+        # localStorage shim (active only off 127.0.0.1), the statement parser
+        # it needs, and the header icon. No `|| true` here: a missing file
+        # must fail the build, not publish a site that breaks at first use.
         run: |
           mkdir -p ../dist/web
-          cp -r index.html script.js statement.js tour.js i18n.js package.json icon.png \
-            public/ __tests__/ scripts/ evidence/ \
-            ../dist/web/ 2>/dev/null || true
+          M=../mobile/src/budget_manager_mobile/web
+          cp "$M/index.html" "$M/apishim.js" "$M/statement.js" "$M/icon.png" ../dist/web/
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4
@@ -58,6 +68,11 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: test
     runs-on: ubuntu-latest
+    # Deploys queue rather than cancel: killing a run mid-deploy can leave
+    # the previous version live until the next one lands.
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}

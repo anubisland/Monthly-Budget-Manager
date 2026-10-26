@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-25
+
 ### Added
 
+- One face for both devices. The published web page is now the mobile app
+  itself: the same five pages, the same header, the same behaviour. Since a
+  Pages visitor has no on-device server, a small shim answers the same
+  `/api/*` routes from browser storage — and on the phone, where the real
+  server is listening, the shim stays entirely out of the way, so one file
+  set ships to both.
 - The mobile app can import a bank statement. Paste the rows out of the bank's
   export, see what they became — with the ones already in the month marked —
   and only then add them. Reading and writing are separate steps, so a paste of

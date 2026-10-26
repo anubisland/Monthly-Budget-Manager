@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__version__ = "2.0.3"
+__version__ = "2.1.0"
 __app_name__ = "Monthly Budget Manager"
 
 from .core import BudgetMonth, Expense, Income, interactive_collect, print_report, read_csv
