@@ -1,0 +1,26 @@
+# Budget Manager gitleaks configuration.
+#
+# Extends the built-in default ruleset unchanged - nothing is weakened - and
+# allowlists exactly one known value: the Firebase WEB client apiKey.
+#
+# A Firebase web apiKey is a public identifier, not a credential: it ships
+# inside every client bundle by design, and it cannot authorize anything on
+# its own. Access to the sync data is enforced by firestore.rules
+# (owner-only budgets/{uid}), which was verified against the emulator (8/8
+# checks) and against the live project (5/5 checks), not by this key.
+#
+# Syntax note: CI pins gitleaks 8.21.2, which uses the singular [allowlist]
+# table ([[allowlists]] only exists from 8.25.0).
+#
+# The key is referenced in exactly one file today:
+# mobile/src/budget_manager_mobile/web/sync.js. If it ever shows up somewhere
+# unexpected, that is still worth investigating.
+
+title = "Budget Manager - defaults plus the public Firebase web config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public Firebase web client apiKey (identifier, not a secret)"
+regexes = [ '''AIzaSyAhQJckeshPLMWva3crKA0iQKe3U9amMgE''' ]
