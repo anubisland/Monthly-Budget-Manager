@@ -218,7 +218,62 @@ describe('statement import', () => {
   });
 });
 
-describe('settings and reset', () => {
+describe('sync endpoints', () => {
+  const docWithIncome = (month, name, amount) => ({
+    version: 2,
+    current: month,
+    months: {
+      [month]: { incomes: [{ name, amount }], expenses: [], total_budget: 0 },
+    },
+    goals: [],
+  });
+
+  test('GET /api/doc returns the whole document across months', async () => {
+    await api('add-income', { name: 'Salary', amount: 100 });
+    await api('set-month', { month: shiftKey(thisMonth(), -1) });
+    await api('add-expense', { name: 'Rent', amount: 40 });
+
+    const { status, data } = await api('doc');
+    expect(status).toBe(200);
+    expect(data.version).toBe(2);
+    expect(Object.keys(data.months).sort()).toEqual([shiftKey(thisMonth(), -1), thisMonth()]);
+  });
+
+  test('POST /api/sync-apply replaces everything and keeps the old document', async () => {
+    await api('add-income', { name: 'Local', amount: 1 });
+    const applied = (await api('sync-apply', { doc: docWithIncome('2026-07', 'Remote', 777) })).data;
+    expect(applied.month_key).toBe('2026-07');
+    expect(applied.total_income).toBe(777);
+    expect(applied.incomes.map((i) => i.name)).toEqual(['Remote']);
+
+    // The document the pull overwrote survives on a side key, like the
+    // phone's before-sync file.
+    const presync = JSON.parse(localStorage.getItem('bm.data.presync'));
+    expect(presync.months[thisMonth()].incomes[0].name).toBe('Local');
+
+    // And a reload starts from the applied document, not the old one.
+    jest.resetModules();
+    delete window.fetch;
+    require('../../mobile/src/budget_manager_mobile/web/apishim.js');
+    const s = (await api('data')).data;
+    expect(s.month_key).toBe('2026-07');
+    expect(s.total_income).toBe(777);
+  });
+
+  test('POST /api/sync-apply refuses foreign and future documents untouched', async () => {
+    await api('add-income', { name: 'Local', amount: 1 });
+    expect((await api('sync-apply', { doc: { nonsense: true } })).status).toBe(400);
+    expect((await api('sync-apply', { doc: { version: 99, months: {} } })).status).toBe(400);
+    expect((await api('sync-apply', {})).status).toBe(400);
+    expect((await api('sync-apply', { doc: 'text' })).status).toBe(400);
+
+    const s = (await api('data')).data;
+    expect(s.incomes.map((i) => i.name)).toEqual(['Local']);
+    expect(localStorage.getItem('bm.data.presync')).toBe(null);
+  });
+});
+
+describe('settings, reset and corrupt storage', () => {
   test('set-currency and toggle-theme persist in their own key', async () => {
     let s = (await api('set-currency', { currency: 'EUR' })).data;
     expect(s.currency).toBe('EUR');

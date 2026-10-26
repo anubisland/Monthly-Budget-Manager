@@ -817,6 +817,24 @@
     if (taken <= 0) throw new ApiError('that goal is already fully funded');
   }
 
+  function doSyncApply(d) {
+    var raw = d.doc;
+    if (!isPlainObject(raw)) throw new ApiError('doc must be a saved document of this app');
+    var migrated = migrateDoc(raw, thisMonth());
+    if (migrated.note === 'unreadable' || migrated.note === 'future-version') {
+      throw new ApiError('that document was not written by this app');
+    }
+    // The last local document before a pull, on a side key: on the phone this
+    // is the before-sync file, and the browser is owed the same undo.
+    try {
+      localStorage.setItem(DOC_KEY + '.presync', JSON.stringify(toDoc()));
+    } catch (err) { /* full or private mode: the cloud itself is the other copy */ }
+    var built = buildModel(migrated.doc);
+    model = built.model;
+    session.dropped = built.dropped;
+    session.note = migrated.note || (built.dropped ? 'partial' : null);
+  }
+
   function doSetBudget(d) {
     var amount = validateAmount(d.total_budget, true);
     if (amount === null) throw new ApiError('budget must be zero or a positive number');
@@ -1022,6 +1040,7 @@
     '/api/backup-file': doBackupFile,
     '/api/preview-restore': doPreviewRestore,
     '/api/restore': doRestore,
+    '/api/sync-apply': doSyncApply,
     '/api/preview-statement': doPreviewStatement,
     '/api/import-statement': doImportStatement,
     '/api/set-budget': doSetBudget,
@@ -1092,8 +1111,9 @@
     var method = String((init && init.method) ||
       (input && typeof input !== 'string' && input.method) || 'GET').toUpperCase();
     if (method === 'GET') {
-      // do_GET on the Python side answers only these two; anything else 404s.
+      // do_GET on the Python side answers only these; anything else 404s.
       if (route === '/api/data' || route === '/api/backup') return Promise.resolve(apiState());
+      if (route === '/api/doc') return Promise.resolve(toDoc());
       throw new ApiError('not found', 404);
     }
     return bodyText(input, init).then(function (raw) {
