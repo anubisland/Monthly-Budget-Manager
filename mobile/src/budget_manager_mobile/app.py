@@ -49,6 +49,11 @@ class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
         p = urlparse(self.path).path
         if p in ('/api/data', '/api/backup'):
             return self._json(self.app.api_state())
+        if p == '/api/doc':
+            # The whole saved document, for sync.js to push. Not the computed
+            # per-month view /api/data returns, but the raw all-months form
+            # store.py writes to disk.
+            return self._json(self.app.data.to_doc())
         f = _web_dir / (p.lstrip('/') or 'index.html')
         if f.exists() and f.is_file() and _web_dir in f.resolve().parents:
             return self._file(f)

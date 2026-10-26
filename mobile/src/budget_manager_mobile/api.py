@@ -272,6 +272,36 @@ def _apply_restore(app, d: Dict) -> None:
     app.last_export = {"path": str(before), "shared": False, "reason": "kept as a safety copy"}
 
 
+def _sync_apply(app, d: Dict) -> None:
+    """Apply a whole document arriving from the cloud (see sync.js).
+
+    Unlike /api/restore this is a machine path: there is no human to preview
+    it, so the two protections a person would have supplied are made here
+    instead. The incoming document goes through the same migration the app's
+    own storage demands of any file, and the current data is written aside
+    first — a wrong pull is then reversible exactly the way a restore is.
+    """
+    raw = d.get("doc")
+    if not isinstance(raw, dict):
+        raise ApiError("doc must be a saved document of this app")
+
+    doc, note = store.migrate(raw, app.data.this_month())
+    if note in ("unreadable", "future-version"):
+        raise ApiError("that document was not written by this app")
+
+    before = app.export_path(f"before-sync-{app.data.current}.json")
+    try:
+        before.write_text(
+            json.dumps(app.data.to_doc(), indent=2, ensure_ascii=False), "utf-8"
+        )
+    except OSError as err:
+        raise ApiError(f"could not save the current data first: {err}", 507)
+
+    store.write_doc(app.data._path, doc)
+    app.data.load()
+    app.last_export = {"path": str(before), "shared": False, "reason": "kept as a safety copy"}
+
+
 def _incoming(app, d: Dict) -> Dict:
     """Parse pasted backup text into a document and a BudgetData to compare."""
     text = d.get("text")
@@ -557,6 +587,7 @@ ROUTES: Dict[str, Callable[[object, Dict], None]] = {
     "/api/backup-file": _backup,
     "/api/preview-restore": _preview_restore,
     "/api/restore": _apply_restore,
+    "/api/sync-apply": _sync_apply,
     "/api/preview-statement": _preview_statement,
     "/api/import-statement": _import_statement,
     "/api/set-budget": _set_budget,
