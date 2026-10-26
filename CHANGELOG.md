@@ -6,6 +6,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-26
+
+### Added
+
+- Optional cross-device sync. On the Settings page a user can create an
+  account or sign in, and the whole budget then mirrors to a private cloud
+  document that only their account can read or write (enforced by Firestore
+  rules, not by the client). Everything works exactly as before when signed
+  out: the device's own storage stays the source of truth, and no network is
+  used until someone signs in on purpose.
+- When the same account is used on two devices, the last change wins. The one
+  case that cannot be settled by time alone — a first sign-in while both the
+  phone and the cloud already hold a different budget — is never resolved on
+  the user's behalf: the app shows an explicit "which copy should win" choice,
+  because the phone's browser cannot rely on pop-up dialogs (a pop-up answers
+  itself there, which would have silently overwritten one side).
+
+### Security
+
+- The cloud store is closed by default: `firestore.rules` lets a signed-in
+  user read and write only their own document, forbids deleting it, and denies
+  everything else on the database to everyone. The web API key is a public
+  identifier; these rules, not the key, are the access control — verified
+  against the Firebase emulator and live project.
+- A pulled cloud document goes through the same migration the app demands of
+  its own backups and is refused before any write if it is foreign or from a
+  future version; the document it would replace is kept aside first, so a wrong
+  pull can be undone.
+
 ## [2.1.0] - 2026-10-25
 
 ### Added
