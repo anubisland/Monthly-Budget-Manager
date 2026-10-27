@@ -54,7 +54,8 @@ jobs:
         run: |
           mkdir -p ../dist/web
           M=../mobile/src/budget_manager_mobile/web
-          cp "$M/index.html" "$M/apishim.js" "$M/statement.js" "$M/icon.png" ../dist/web/
+          cp "$M/index.html" "$M/apishim.js" "$M/statement.js" \
+             "$M/synclogic.js" "$M/sync.js" "$M/icon.png" ../dist/web/
 
       - name: Upload web artifact
         uses: actions/upload-artifact@v4

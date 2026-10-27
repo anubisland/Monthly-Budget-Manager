@@ -501,6 +501,28 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <select class="form-input" id="sel-currency" onchange="setCurrency(this.value)" style="padding:10px 12px;font-size:14px"></select>
       </div>
       <div class="setting-group">
+        <h3>Sync / المزامنة</h3>
+        <div class="hint" id="sync-status">not signed in</div>
+        <form id="sync-form" onsubmit="return false" style="margin-top:6px">
+          <input class="form-input" id="sync-email" type="email" autocomplete="email"
+            placeholder="email / البريد" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
+          <input class="form-input" id="sync-pass" type="password" autocomplete="current-password"
+            placeholder="password / كلمة المرور" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
+          <button type="submit" class="setting-btn" style="background:var(--pri);color:#fff;border:none">Sign in / دخول</button>
+        </form>
+        <button class="setting-btn" id="sync-toggle" style="margin-top:6px">need an account? create one</button>
+        <button class="setting-btn" id="sync-signout" style="display:none;margin-top:6px">Sign out / خروج</button>
+        <!-- First sign-in conflict: an explicit tap, never a blocking dialog
+             (the Android WebView answers confirm() false, silently picking a
+             side — see the reset flow below). -->
+        <div id="sync-conflict" style="display:none;margin-top:8px">
+          <div class="hint">This account has a budget saved in the cloud, and this device holds a different one. Which copy should win?</div>
+          <button class="setting-btn" id="sync-keep-cloud" style="margin-top:6px;background:var(--pri);color:#fff;border:none">Use the cloud copy / نسخة السحابة</button>
+          <button class="setting-btn" id="sync-keep-device" style="margin-top:6px">Keep this device's copy / نسخة هذا الجهاز</button>
+        </div>
+        <div class="hint" id="sync-err" style="color:var(--exp)"></div>
+      </div>
+      <div class="setting-group">
         <h3 id="st-about"></h3>
         <div class="card" id="about-text" style="font-size:12px;color:var(--ts);text-align:center;padding:12px"></div>
       </div>
@@ -527,6 +549,11 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
      (a 404 on the device is harmless) so one bundle serves both. -->
 <script src="statement.js"></script>
 <script src="apishim.js"></script>
+<!-- Optional cross-device sync: synclogic.js is the testable decision half,
+     sync.js the Firebase half. Both are inert until someone signs in on the
+     Settings page, and inert without network. -->
+<script src="synclogic.js"></script>
+<script type="module" src="sync.js"></script>
 <script>
 // ── State ──
 let state = {
