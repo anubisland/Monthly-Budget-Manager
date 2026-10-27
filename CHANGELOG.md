@@ -6,6 +6,33 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.5] - 2026-10-27
+
+### Fixed
+
+- **Signing in could make the whole app reload over and over.** The bridge
+  compared the two copies by hashing the document as one serialized string.
+  Firestore hands a document's fields back in its own order, so the same
+  budget serialized differently on each side, each side concluded the other had
+  changed, and they pushed and pulled in a loop - on a phone that is the screen
+  shaking several times a second. It showed up right after signing in, on both
+  Android and desktop, and it did not settle on its own.
+  The hash is now taken over a canonical form - keys sorted recursively, arrays
+  left alone because their order means something - so equal content hashes
+  equal wherever it has been. A test asserts the reordered-document case.
+- As a second line of defence, reloads are now counted. If the page reloads
+  more than three times inside twenty seconds, the bridge unsubscribes and says
+  so instead of cycling. Local data is untouched either way.
+
+### Changed
+
+- The sync card is translated - status lines, the conflict question, the
+  buttons and the field placeholders - through the app's own language table
+  rather than English text baked into the markup.
+- A one-time, dismissible invitation to turn on sync appears for anyone who is
+  not signed in. Saying "not now" is remembered, because a reminder that comes
+  back every launch trains people to swipe past the ones that matter.
+
 ## [2.2.4] - 2026-10-27
 
 ### Changed

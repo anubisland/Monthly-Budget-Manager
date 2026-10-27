@@ -9,7 +9,7 @@
 
 require('../../mobile/src/budget_manager_mobile/web/synclogic.js');
 
-const { hashOf, decide, friendlyAuthError } = window.__bmSyncLogic;
+const { hashOf, hashOfDoc, canonical, decide, friendlyAuthError } = window.__bmSyncLogic;
 
 describe('hashOf', () => {
   test('same text, same hash; different text, different hash', () => {
@@ -19,6 +19,62 @@ describe('hashOf', () => {
 
   test('length is part of the hash, so truncation cannot collide', () => {
     expect(hashOf('abcdef')).not.toBe(hashOf('abcde'));
+  });
+});
+
+describe('hashOfDoc', () => {
+  // The bug this guards: the app hashes what it has, Firestore hands the same
+  // document back with its map fields in its own order, a raw-string hash calls
+  // that a change, and the bridge pushes and pulls forever — on a phone the
+  // whole screen reloads several times a second.
+  const doc = {
+    version: 2, current: '2026-10',
+    months: { '2026-10': { entries: [{ name: 'إيجار', amount: 1200.5 }], income: 0, expense: 1200.5 } },
+    goals: [{ name: 'g', target: 100 }], recurring: [], rules: [], settled: {},
+  };
+
+  function reordered(value) {
+    if (Array.isArray(value)) return value.map(reordered);
+    if (value && typeof value === 'object') {
+      const out = {};
+      Object.keys(value).reverse().forEach((k) => { out[k] = reordered(value[k]); });
+      return out;
+    }
+    return value;
+  }
+
+  test('key order does not change it', () => {
+    const flipped = reordered(doc);
+    expect(JSON.stringify(flipped)).not.toBe(JSON.stringify(doc)); // genuinely different strings
+    expect(hashOfDoc(flipped)).toBe(hashOfDoc(doc));
+  });
+
+  test('nested key order does not change it either', () => {
+    expect(hashOfDoc(reordered(reordered(doc)))).toBe(hashOfDoc(doc));
+  });
+
+  test('a real value change still changes it', () => {
+    const changed = JSON.parse(JSON.stringify(doc));
+    changed.months['2026-10'].entries[0].amount = 1201;
+    expect(hashOfDoc(changed)).not.toBe(hashOfDoc(doc));
+  });
+
+  test('array order still matters — months and entries mean something', () => {
+    const swapped = { list: [1, 2] };
+    const other = { list: [2, 1] };
+    expect(hashOfDoc(swapped)).not.toBe(hashOfDoc(other));
+  });
+
+  test('undefined reads as null, so a dropped field is not a phantom change', () => {
+    expect(canonical({ a: undefined })).toBe(canonical({ a: null }));
+  });
+
+  test('the decide step agrees the two sides match, so nothing ping-pongs', () => {
+    const h = hashOfDoc(doc);
+    expect(decide({
+      localHash: h, remoteHash: hashOfDoc(reordered(doc)),
+      lastHash: h, localAt: 1, remoteAt: 2,
+    })).toBe('none');
   });
 });
 
