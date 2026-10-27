@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.3] - 2026-10-27
+
+### Changed
+
+- The card surface is sky blue. It was a sandy camel in 2.2.1 and 2.2.2, which
+  read yellow against the blue header, and then a near-white in between; what
+  was wanted is the pale sky blue of a clear day. Cards are now `#cfe7f7` on a
+  lighter sky page (`#eaf3fb`), so the ramp runs navy header, blue month strip,
+  sky panels.
+- The bottom bar and shadows follow the same cool palette, so nothing on the
+  screen keeps a warm cast.
+- Secondary text darkened to `#42505f` so it still reads on sky blue: black
+  text sits at 13:1 and secondary at 6.5:1.
+- The three counters under the summary are no longer three identical boxes.
+  Each carries a soft wash of the color its number already uses - green for
+  income, red for expenses, blue for net - so the row reads by color before the
+  labels are read.
+- Income moved from turquoise `#00bfa6` to green `#0b8f4a`. On the sky surface
+  the old turquoise managed 1.8:1 - effectively decorative rather than
+  readable - and it read as teal, not as the green the owner asked for. The new
+  green reaches 3.3:1 for those large figures and 4.6:1 for white text on it.
+
 ## [2.2.2] - 2026-10-27
 
 ### Fixed
