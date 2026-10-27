@@ -62,7 +62,16 @@ let pendingConflict = null;
 const realFetch = window.fetch.bind(window);
 
 const state = {
-  key: (name) => "bm.sync." + (uid || "-") + "." + name,
+  // The keys carry a scheme version. v2.2.5 changed what a hash *is* (a
+  // canonical form rather than a raw serialization), and a remembered hash
+  // from the old scheme never matches a new one — not even for a document that
+  // has not changed at all. Read as a live value it routes decide() past the
+  // "first sign-in, ask the human" branch and into last-write-wins, which can
+  // replace the user's cloud copy without asking, on an install that did
+  // nothing wrong but upgrade. Read as null it routes to the ask branch, which
+  // is the honest answer: the two sides have not agreed on anything lately.
+  // Bump this suffix whenever the meaning of a stored value changes.
+  key: (name) => "bm.sync." + (uid || "-") + "." + name + ".v2",
   lastHash() { try { return localStorage.getItem(this.key("hash")); } catch (e) { return null; } },
   lastAt() { try { return Number(localStorage.getItem(this.key("at")) || 0); } catch (e) { return 0; } },
   remember(hash, when) {
@@ -111,25 +120,36 @@ function setStatus(key, fallback) {
 // drawn. It is also the one thing here that can loop — apply, reload, push,
 // snapshot, apply — and on a phone that reads as the whole app shaking.
 // Reloads are therefore counted across page loads inside a short window; once
-// they are clearly repeating, the bridge unsubsribes and says so instead of
-// cycling. Local data is left exactly as it was: the stop is the safe state.
+// they are clearly repeating, the bridge unsubscribes and says so instead of
+// cycling, and logs what it saw so a field report can be diagnosed rather than
+// guessed at.
+//
+// What this does NOT claim: that the screen left standing is current. A
+// suppressed reload means the pulled document is saved but this page still
+// shows the old one, so a further edit here writes over the pull. That is a
+// known limitation of stopping rather than reloading; the page says sync has
+// stopped, and reloading it by hand is the remedy.
 const RELOAD_WINDOW_MS = 20000;
 const RELOAD_LIMIT = 3;
 
 function reloadBudget() {
-  const KEY = "bm.sync.reloads";
+  const KEY = "bm.sync.reloads." + (uid || "-");
   let marks = [];
   try {
     const parsed = JSON.parse(localStorage.getItem(KEY) || "[]");
     if (Array.isArray(parsed)) marks = parsed.filter((x) => typeof x === "number");
   } catch (e) { marks = []; }
   const now = Date.now();
-  marks = marks.filter((when) => now - when < RELOAD_WINDOW_MS);
+  // `when <= now` matters: a backward clock jump leaves future-dated marks
+  // whose age is negative, and a negative age is always inside the window —
+  // the guard would stay tripped until the clock caught up.
+  marks = marks.filter((when) => when <= now && now - when < RELOAD_WINDOW_MS);
   if (marks.length >= RELOAD_LIMIT) {
     try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {}
     if (unsub) { unsub(); unsub = null; }
+    console.error("sync: reload loop suppressed after", marks.length, "reload(s) in", RELOAD_WINDOW_MS, "ms");
     setStatus("sync_loop_stopped",
-      "sync kept restarting itself and was stopped — your data on this device is untouched");
+      "sync kept restarting itself and was stopped — reload the page to catch it up");
     return false;
   }
   marks.push(now);
@@ -173,7 +193,7 @@ async function pushNow() {
   if (!uid || applyingRemote || pendingConflict) return false;
   const doc0 = await localDoc();
   const text = JSON.stringify(doc0);
-  if (utf8Bytes(text) > MAX_DOC_BYTES) { setStatus("data too large to sync — make a backup instead"); return false; }
+  if (utf8Bytes(text) > MAX_DOC_BYTES) { setStatus("sync_too_big", "data too large to sync — make a backup instead"); return false; }
   const hash = LOGIC.hashOfDoc(doc0);
   if (hash === state.lastHash()) return false; // nothing we have not said
   const at = Date.now();
@@ -205,7 +225,7 @@ async function pullApply(remoteDocData, remoteHash, remoteAt) {
     reloadBudget(); // same reasoning as after a restore, counted now
     return true;
   } catch (e) {
-    setStatus("sync is offline — nothing was applied");
+    setStatus("sync_apply_failed", "sync is offline — nothing was applied");
     return false;
   } finally {
     applyingRemote = false;
@@ -297,7 +317,7 @@ function wireUi() {
     const panel = document.getElementById("sync-conflict");
     if (panel) panel.style.display = "none";
     try { await pullApply(c.data, c.hash, c.at); }
-    catch (e) { setStatus("sync is offline — nothing was applied"); }
+    catch (e) { setStatus("sync_apply_failed", "sync is offline — nothing was applied"); }
   });
   const device = document.getElementById("sync-keep-device");
   if (device) device.addEventListener("click", async function () {

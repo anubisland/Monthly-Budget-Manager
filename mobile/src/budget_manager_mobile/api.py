@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Callable, Dict, Optional
 
 import decode
@@ -272,6 +273,11 @@ def _apply_restore(app, d: Dict) -> None:
     app.last_export = {"path": str(before), "shared": False, "reason": "kept as a safety copy"}
 
 
+#: How long a safety copy counts as "just taken", so a burst of pulls keeps the
+#: copy from before the burst instead of one taken halfway through it.
+SAFETY_KEEP_SECONDS = 600
+
+
 def _sync_apply(app, d: Dict) -> None:
     """Apply a whole document arriving from the cloud (see sync.js).
 
@@ -290,12 +296,21 @@ def _sync_apply(app, d: Dict) -> None:
         raise ApiError("that document was not written by this app")
 
     before = app.export_path(f"before-sync-{app.data.current}.json")
-    try:
-        before.write_text(
-            json.dumps(app.data.to_doc(), indent=2, ensure_ascii=False), "utf-8"
-        )
-    except OSError as err:
-        raise ApiError(f"could not save the current data first: {err}", 507)
+    # Keep the FIRST copy of a burst rather than the last. A pull that repeats —
+    # a sync loop, someone tapping the button twice — would otherwise overwrite
+    # the one file holding "what this device had before sync" with a mid-burst
+    # state, which protects nothing. Past the window it is a new event, so the
+    # copy is replaced.
+    keep_existing = before.exists() and (
+        time.time() - before.stat().st_mtime
+    ) < SAFETY_KEEP_SECONDS
+    if not keep_existing:
+        try:
+            before.write_text(
+                json.dumps(app.data.to_doc(), indent=2, ensure_ascii=False), "utf-8"
+            )
+        except OSError as err:
+            raise ApiError(f"could not save the current data first: {err}", 507)
 
     store.write_doc(app.data._path, doc)
     app.data.load()

@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.6] - 2026-10-27
+
+### Fixed
+
+- **An upgraded install could replace your cloud copy without asking.** Found
+  by an independent review of 2.2.5, not by testing. The remembered "last
+  agreed" hash is stored on the device, and 2.2.5 changed what that hash *is* —
+  a canonical form instead of a raw serialization — without versioning where it
+  is stored. For an install that had synced before, the remembered value could
+  then match neither side, which routes the decision past "first sign-in: ask
+  the human" and into last-write-wins. The protection the design has for exactly
+  that case was skipped, and the cloud document could be overwritten silently.
+  The stored keys now carry a scheme version, so a stale value reads as *no
+  agreement yet* and the app asks.
+- **A burst of pulls no longer destroys the safety copy it exists to make.**
+  Every pull writes `before-sync-<month>.json` first. During the reload loop
+  that file — the one holding "what this device had before sync" — was
+  overwritten several times a second, so after the loop the safety copy held a
+  halfway state and protected nothing. The first copy in a burst is now kept.
+  (This also answers a worry raised earlier: the fixed filename means a loop
+  cannot fill the disk, but it could quietly ruin the undo copy.)
+- Three status messages were passing whole English sentences as their
+  translation key, so Arabic users saw English for "data too large to sync" and
+  "nothing was applied". They use real keys now.
+- The reload guard: a backward clock change used to leave future-dated marks
+  that are always "recent", keeping sync stopped until the wall clock caught up;
+  the counter is per account rather than shared; and when it trips it logs what
+  it saw, and no longer claims your data is untouched — a suppressed reload
+  leaves the page showing yesterday's copy until you reload it yourself.
+
 ## [2.2.5] - 2026-10-27
 
 ### Fixed
