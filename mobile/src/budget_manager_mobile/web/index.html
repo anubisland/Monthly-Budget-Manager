@@ -172,6 +172,12 @@ main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overf
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 .card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+/* Chart surfaces are white, deliberately, and are the one exception to the sky
+   tier. The gridlines and the colored series were picked against white, and a
+   pale blue ground makes two of those series read as one. .plain opts a card in
+   by hand; the whole budget page opts in as a page, because every panel on it
+   carries a canvas or a bar. */
+#page-budget .card,.card.plain{background:#fff}
 .card-title{font-size:13px;font-weight:600;color:var(--ts);margin-bottom:8px}
 .big-num{font-size:36px;font-weight:800;letter-spacing:-1px}
 .big-num.green{color:var(--inc)}.big-num.red{color:var(--exp)}.big-num.blue{color:var(--pri)}
@@ -355,11 +361,11 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div class="card-title" id="ct-active-goal"></div>
         <div id="goal-content"></div>
       </div>
-      <div class="card">
+      <div class="card plain">
         <div class="card-title" id="ct-budget"></div>
         <div id="budget-bars"></div>
       </div>
-      <div class="card">
+      <div class="card plain">
         <div class="card-title" id="ct-recent"></div>
         <div id="recent-list"></div>
       </div>

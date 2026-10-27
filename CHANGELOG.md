@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-10-27
+
+### Changed
+
+- Chart surfaces are white again. The budget page and the two panels under the
+  summary on the home page - budget bars and recent movements - now sit on
+  white, because their gridlines and colored series were chosen against white
+  and a pale blue ground makes some of them read as one. Every other panel
+  keeps the sky tier.
+
 ## [2.2.3] - 2026-10-27
 
 ### Changed
