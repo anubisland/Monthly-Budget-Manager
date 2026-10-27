@@ -12,11 +12,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;800&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #f0f2f5; --card: #e7d7bf; --tx: #1a1a2e; --ts: #525a67;
-  --pri: #1a73e8; --inc: #00bfa6; --exp: #ea4335; --warn: #ff6b35;
-  --nav: #fff; --nav-border: #e5e7eb; --shadow: 0 2px 12px rgba(0,0,0,.08);
+  --bg: #eaf3fb; --card: #cfe7f7; --tx: #1a1a2e; --ts: #42505f;
+  --pri: #1a73e8; --inc: #0b8f4a; --exp: #ea4335; --warn: #ff6b35;
+  --nav: #eaf3fb; --nav-border: #b9d8ee; --shadow: 0 2px 12px rgba(20,60,100,.16);
   --radius: 14px; --radius-sm: 10px;
-  --safe-bg: linear-gradient(160deg,#ead9c1,#dcc6a6);
+  --safe-bg: linear-gradient(160deg,#dcecfb,#c2ddf4);
   /* Three-tier surface ramp down the screen: navy header, blue month strip,
      then the calm beige the cards sit on. Each tier is a token rather than a
      literal so dark mode can answer it with a quieter value — beige in a dark
@@ -190,6 +190,12 @@ main{flex:1;overflow-y:auto;overflow-x:hidden;padding:4px 16px 8px;-webkit-overf
 /* Stats row */
 .stats-row{display:flex;gap:8px}
 .stat-card{flex:1;background:var(--card);border-radius:var(--radius-sm);padding:10px;text-align:center;box-shadow:var(--shadow)}
+/* The three counters mean three different things, so they are not allowed to
+   look identical. Each takes a soft wash of the color its number already uses,
+   which says "income", "expense", "net" before the label is read. */
+.stat-card.income{background:rgba(11,143,74,.22)}
+.stat-card.expense{background:rgba(234,67,53,.20)}
+.stat-card.net{background:rgba(22,101,207,.22)}
 .stat-card .num{font-size:18px;font-weight:700}
 .stat-card .lbl{font-size:10px;color:var(--ts);margin-top:2px}
 
@@ -337,9 +343,9 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <div id="budget-overview"></div>
       </div>
       <div class="stats-row">
-        <div class="stat-card"><div class="num" style="color:var(--inc)" id="stat-inc">$0</div><div class="lbl">Income</div></div>
-        <div class="stat-card"><div class="num" style="color:var(--exp)" id="stat-exp">$0</div><div class="lbl">Expenses</div></div>
-        <div class="stat-card"><div class="num" style="color:var(--pri)" id="stat-net">$0</div><div class="lbl">Net</div></div>
+        <div class="stat-card income"><div class="num" style="color:var(--inc)" id="stat-inc">$0</div><div class="lbl">Income</div></div>
+        <div class="stat-card expense"><div class="num" style="color:var(--exp)" id="stat-exp">$0</div><div class="lbl">Expenses</div></div>
+        <div class="stat-card net"><div class="num" style="color:var(--pri)" id="stat-net">$0</div><div class="lbl">Net</div></div>
       </div>
       <div class="qr">
         <button class="inc-btn" onclick="showPage('add','inc')">+ Income</button>
