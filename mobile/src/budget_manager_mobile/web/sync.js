@@ -56,6 +56,10 @@ let pushTimer = null;
 // A parked "ask" conflict: the cloud copy waits here for an explicit tap on
 // one of the two buttons in the Settings card. Never auto-resolved.
 let pendingConflict = null;
+// Set when the reload guard stops a reload: this page is now showing a
+// document the cloud has moved past, so its own writes are refused until
+// someone reloads it. See the fetch wrapper.
+let syncStale = false;
 
 // This wraps fetch after apishim, so mutations on both hosts are visible
 // here; everything the bridge itself sends goes through realFetch.
@@ -73,7 +77,8 @@ const state = {
   // Bump this suffix whenever the meaning of a stored value changes.
   key: (name) => "bm.sync." + (uid || "-") + "." + name + ".v2",
   lastHash() { try { return localStorage.getItem(this.key("hash")); } catch (e) { return null; } },
-  lastAt() { try { return Number(localStorage.getItem(this.key("at")) || 0); } catch (e) { return 0; } },
+  // The time is kept for debugging only. It is deliberately not read back: a
+  // device clock that never reaches a decision cannot overwrite anyone's work.
   remember(hash, when) {
     try {
       localStorage.setItem(this.key("hash"), hash);
@@ -93,6 +98,17 @@ window.fetch = function (input, init) {
   const path = apiPath(input);
   const mutating = method === "POST" && /\/api\/[a-z0-9-]+$/.test(path) &&
     !/\/api\/(data|doc|backup)$/.test(path);
+  // A page the reload guard left standing is showing a document the cloud has
+  // already replaced. Its next edit would write that stale copy back over the
+  // pulled one and the loss would then be pushed to the cloud, so while the
+  // page knows it is out of date, writes are refused. Every caller reloads the
+  // screen when a request fails, which is precisely the recovery wanted here.
+  if (mutating && syncStale) {
+    return Promise.resolve(new Response(
+      JSON.stringify({ error: "data changed — reload the page first" }),
+      { status: 409, headers: { "Content-Type": "application/json" } }
+    ));
+  }
   return realFetch(input, init).then(function (res) {
     if (mutating && res.ok) schedulePush();
     return res;
@@ -147,6 +163,7 @@ function reloadBudget() {
   if (marks.length >= RELOAD_LIMIT) {
     try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {}
     if (unsub) { unsub(); unsub = null; }
+    syncStale = true;
     console.error("sync: reload loop suppressed after", marks.length, "reload(s) in", RELOAD_WINDOW_MS, "ms");
     setStatus("sync_loop_stopped",
       "sync kept restarting itself and was stopped — reload the page to catch it up");
@@ -244,15 +261,16 @@ async function onRemoteWrite(snap) {
   const action = LOGIC.decide({
     localHash, remoteHash,
     lastHash: state.lastHash(),
-    localAt: state.lastAt(), remoteAt,
   });
   if (action === "ask") {
-    // "ask": first sign-in, both sides hold different data. The choice must be
-    // a real tap. confirm() is deliberately not used: the Android WebView
-    // answers blocking dialogs false unless the host implements onJsConfirm —
-    // exactly the silent-default this page's own reset flow warns about — and
-    // a false here would overwrite the cloud unseen. Without the card at all,
-    // take the non-destructive branch: pulling can be undone by the next push,
+    // "ask": the two copies diverged and nothing here can order them — a first
+    // sign-in where both sides already hold different data, or both sides
+    // moving since the last agreement. The choice must be a real tap.
+    // confirm() is deliberately not used: the Android WebView answers blocking
+    // dialogs false unless the host implements onJsConfirm — exactly the
+    // silent-default this page's own reset flow warns about — and a false here
+    // would overwrite the cloud unseen. Without the card at all, take the
+    // non-destructive branch: pulling can be undone by the next push,
     // overwriting the cloud cannot.
     pendingConflict = { data: remote.data, hash: remoteHash, at: remoteAt };
     const panel = document.getElementById("sync-conflict");

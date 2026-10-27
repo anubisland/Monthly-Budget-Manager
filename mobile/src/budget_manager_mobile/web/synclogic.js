@@ -48,15 +48,30 @@
    *   'none' — nothing to do (same content, or a remote echo of our own push)
    *   'push' — local changed; send it
    *   'pull' — remote changed; apply it
-   *   'ask'  — first sign-in and both sides have different data: the user
-   *            chooses which device wins
+   *   'ask'  — the two sides diverged in a way this function cannot order:
+   *            first sign-in, or both moved since the last agreement. The user
+   *            chooses which copy wins.
    */
   function decide(s) {
     if (s.localHash === s.remoteHash) return 'none';
     if (s.remoteHash === s.lastHash) return 'push';   // remote is what we left it
     if (s.localHash === s.lastHash) return 'pull';    // we left it matching; cloud moved
-    if (s.lastHash === null) return 'ask';            // first sign-in, both sides differ
-    return (s.localAt > s.remoteAt) ? 'push' : 'pull'; // diverged: last write wins
+    // Diverged: neither side is what we left, and both hold something new.
+    //
+    // This used to fall back to "last write wins" on the two timestamps. It
+    // does not any more, because the timestamps are not evidence. The remote
+    // one comes from whoever's phone wrote it; the local one is our own clock.
+    // A device an hour fast therefore wins every argument it has, forever, and
+    // the other device's work is overwritten each time it connects. Calling
+    // that last-write-wins was generous: it is wrongest-clock-wins.
+    //
+    // Ordering these two edits honestly needs a clock both sides trust. Our own
+    // un-sent edits do not have one — they have no server time until they are
+    // pushed, and pushing is the very thing in question — so the answer is to
+    // ask, which is the same protection already used at first sign-in. The
+    // everyday case is unaffected: one active device always lands in push or
+    // pull above, where the order is actually known.
+    return 'ask';
   }
 
   var AUTH_ERRORS = {
