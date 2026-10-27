@@ -18,11 +18,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The budget summary panel no longer paints itself solid blue from an inline
   style. It sits on the beige tier like the panels below it and keeps its color
   in the amounts, which is where the color was doing work.
-- Secondary text on light cards went from `#6b7280` to `#5b6472`. Beige is a
-  warmer, slightly darker surface than the white it replaced, and the old grey
-  landed at 4.5:1 against it - on the line. It now sits at 4.8:1. The month
-  strip blue moved from 4.5:1 to 5.5:1 against its white label for the same
-  reason.
+- The panel's own text, the progress bar and the pace line were still written
+  as white-on-blue inside the JavaScript that renders them, so the first beige
+  shipped them invisible: a white "0" and white captions on a beige card. They
+  now use the theme's text colors, and the progress bar fills blue (red when
+  over budget) instead of white-on-white.
+- Secondary text on light cards went from `#6b7280` to `#525a67`, and the month
+  strip blue from `#1a73e8` to `#1665cf`. Both landed at 4.5:1 against the
+  surface they now sit on - exactly on the WCAG AA line, which a rounding
+  difference in a gate could fail - and now sit at 4.9:1 and 5.5:1.
+
+### Fixed
+
+- The About panel reported `v2.1.0-web` on the hosted build through two
+  releases. `apishim.js` carries its own version string and nothing compared it
+  to the package; a test now does, so the two cannot drift again.
 
 ## [2.2.0] - 2026-10-26
 
