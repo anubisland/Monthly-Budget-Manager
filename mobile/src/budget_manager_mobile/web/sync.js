@@ -90,9 +90,52 @@ window.fetch = function (input, init) {
   });
 };
 
-function setStatus(text) {
+/** One place turns a message key into the language the page is showing.
+ *  `t` is a plain global from the inline script, which runs before this
+ *  deferred module; if it is missing, or does not know the key, the English
+ *  fallback keeps the card truthful. Marking the line as live is what stops
+ *  applyI18n from stamping "not signed in" over a real status mid-flight. */
+function setStatus(key, fallback) {
+  let text = fallback || key;
+  try {
+    if (typeof t === "function") {
+      const v = t(key);
+      if (v && v !== key) text = v;
+    }
+  } catch (e) { /* keep the fallback */ }
   const el = document.getElementById("sync-status");
-  if (el) el.textContent = text;
+  if (el) { el.textContent = text; el.dataset.live = "1"; }
+}
+
+// A reload is how a pulled document reaches every screen that is already
+// drawn. It is also the one thing here that can loop — apply, reload, push,
+// snapshot, apply — and on a phone that reads as the whole app shaking.
+// Reloads are therefore counted across page loads inside a short window; once
+// they are clearly repeating, the bridge unsubsribes and says so instead of
+// cycling. Local data is left exactly as it was: the stop is the safe state.
+const RELOAD_WINDOW_MS = 20000;
+const RELOAD_LIMIT = 3;
+
+function reloadBudget() {
+  const KEY = "bm.sync.reloads";
+  let marks = [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEY) || "[]");
+    if (Array.isArray(parsed)) marks = parsed.filter((x) => typeof x === "number");
+  } catch (e) { marks = []; }
+  const now = Date.now();
+  marks = marks.filter((when) => now - when < RELOAD_WINDOW_MS);
+  if (marks.length >= RELOAD_LIMIT) {
+    try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {}
+    if (unsub) { unsub(); unsub = null; }
+    setStatus("sync_loop_stopped",
+      "sync kept restarting itself and was stopped — your data on this device is untouched");
+    return false;
+  }
+  marks.push(now);
+  try { localStorage.setItem(KEY, JSON.stringify(marks)); } catch (e) {}
+  window.location.reload();
+  return true;
 }
 
 function clearConflict() {
@@ -106,12 +149,12 @@ function schedulePush() {
   // While a first-sign-in conflict is parked, nothing pushes: an edit made
   // before the user answers would otherwise overwrite the very cloud copy
   // the question is about. The answer gates both directions.
-  if (pendingConflict) { setStatus("resolve the sync question first"); return; }
+  if (pendingConflict) { setStatus("sync_resolve", "resolve the sync question first"); return; }
   if (pushTimer) clearTimeout(pushTimer);
   // The catch keeps a failed push from becoming an unhandled rejection: the
   // status line is the user's only signal, so it must carry it.
   pushTimer = setTimeout(function () {
-    pushNow().catch(function () { setStatus("sync is offline — changes kept on this device"); });
+    pushNow().catch(function () { setStatus("sync_offline_edit", "sync is offline — changes kept on this device"); });
   }, PUSH_DEBOUNCE_MS);
 }
 
@@ -131,17 +174,17 @@ async function pushNow() {
   const doc0 = await localDoc();
   const text = JSON.stringify(doc0);
   if (utf8Bytes(text) > MAX_DOC_BYTES) { setStatus("data too large to sync — make a backup instead"); return false; }
-  const hash = LOGIC.hashOf(text);
+  const hash = LOGIC.hashOfDoc(doc0);
   if (hash === state.lastHash()) return false; // nothing we have not said
   const at = Date.now();
   try {
     await setDoc(doc(db, "budgets", uid), { data: doc0, savedAt: at, updatedAt: serverTimestamp() });
   } catch (e) {
-    setStatus("sync is offline — changes kept on this device");
+    setStatus("sync_offline_edit", "sync is offline — changes kept on this device");
     return false;
   }
   state.remember(hash, at);
-  setStatus("synced");
+  setStatus("sync_synced", "synced");
   return true;
 }
 
@@ -157,9 +200,9 @@ async function pullApply(remoteDocData, remoteHash, remoteAt) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ doc: remoteDocData }),
     });
-    if (!r.ok) { setStatus("the cloud copy was refused"); return false; }
+    if (!r.ok) { setStatus("sync_refused", "the cloud copy was refused"); return false; }
     state.remember(remoteHash, remoteAt);
-    window.location.reload(); // same reasoning as after a restore
+    reloadBudget(); // same reasoning as after a restore, counted now
     return true;
   } catch (e) {
     setStatus("sync is offline — nothing was applied");
@@ -173,11 +216,11 @@ async function onRemoteWrite(snap) {
   if (!uid || applyingRemote || !snap.exists()) return;
   const remote = snap.data();
   const remoteAt = remote.savedAt || 0;
-  const remoteJson = JSON.stringify(remote.data);
-  const remoteHash = LOGIC.hashOf(remoteJson);
+  // Both sides hash the canonical form, never a raw string: Firestore reorders
+  // map fields, and a raw-string comparison calls that a change forever.
+  const remoteHash = LOGIC.hashOfDoc(remote.data);
   const local0 = await localDoc();
-  const localJson = JSON.stringify(local0);
-  const localHash = LOGIC.hashOf(localJson);
+  const localHash = LOGIC.hashOfDoc(local0);
   const action = LOGIC.decide({
     localHash, remoteHash,
     lastHash: state.lastHash(),
@@ -194,7 +237,7 @@ async function onRemoteWrite(snap) {
     pendingConflict = { data: remote.data, hash: remoteHash, at: remoteAt };
     const panel = document.getElementById("sync-conflict");
     if (!panel) { await pullApply(remote.data, remoteHash, remoteAt); return; }
-    setStatus("choose which copy to keep");
+    setStatus("sync_choose", "choose which copy to keep");
     panel.style.display = "";
     return;
   }
@@ -202,16 +245,19 @@ async function onRemoteWrite(snap) {
   // question from an earlier snapshot is stale now, and offering it again
   // would apply an old copy over data that has since converged.
   clearConflict();
-  if (action === "none") { setStatus("synced"); return; }
+  if (action === "none") { setStatus("sync_synced", "synced"); return; }
   if (action === "push") { await pushNow(); return; }
   await pullApply(remote.data, remoteHash, remoteAt);
 }
 
 function startSession(user) {
   uid = user.uid;
+  // The invitation is only honest while nobody is signed in.
+  window.__bmSyncSignedIn = true;
+  if (window.hideSyncNudge) window.hideSyncNudge();
   if (unsub) unsub();
   clearConflict(); // a park from a previous session belongs to no one
-  setStatus("syncing");
+  setStatus("sync_syncing", "syncing");
   // A brand-new account adopts the local data first, so signing in on the
   // phone that holds the budget does not start from an empty cloud.
   getDoc(doc(db, "budgets", uid)).then(function (snap) {
@@ -223,19 +269,21 @@ function startSession(user) {
   unsub = onSnapshot(doc(db, "budgets", uid),
     function (snap) {
       Promise.resolve(onRemoteWrite(snap)).catch(function () {
-        setStatus("sync is offline");
+        setStatus("sync_conn_off", "sync is offline");
       });
     },
-    function () { setStatus("sync is offline"); });
+    function () { setStatus("sync_conn_off", "sync is offline"); });
 }
 
 function endSession() {
   uid = null;
+  window.__bmSyncSignedIn = false;
+  if (window.maybeShowSyncNudge) window.maybeShowSyncNudge();
   if (unsub) { unsub(); unsub = null; }
   // A parked conflict names a cloud document; it must not survive the
   // session that was asked about it, nor its panel stay answerable.
   clearConflict();
-  setStatus("not signed in");
+  setStatus("sync_off", "not signed in");
 }
 
 function wireUi() {
@@ -258,7 +306,7 @@ function wireUi() {
     const panel = document.getElementById("sync-conflict");
     if (panel) panel.style.display = "none";
     try { await pushNow(); }
-    catch (e) { setStatus("sync is offline — changes kept on this device"); }
+    catch (e) { setStatus("sync_offline_edit", "sync is offline — changes kept on this device"); }
   });
 
   const form = document.getElementById("sync-form");
@@ -284,6 +332,12 @@ function wireUi() {
   });
 }
 
+// The card exists on this build and the module loaded: only now is it
+  // honest to invite anyone. index.html reads this before showing the
+  // one-time nudge, so a page without sync never offers to turn it on.
+window.__bmSyncReady = true;
+if (window.maybeShowSyncNudge) window.maybeShowSyncNudge();
+
 onAuthStateChanged(auth, function (user) {
   const form = document.getElementById("sync-form");
   const out = document.getElementById("sync-signout");
@@ -293,4 +347,4 @@ onAuthStateChanged(auth, function (user) {
 });
 
 wireUi();
-setStatus("checking");
+setStatus("sync_checking", "checking");

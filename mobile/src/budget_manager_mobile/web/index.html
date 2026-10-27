@@ -80,6 +80,15 @@ header .hdr-btn:active{background:rgba(255,255,255,.18)}
 #notice.show{display:flex}
 #notice .nt-text{flex:1}
 #notice .nt-close{background:none;border:none;color:#fff;font-size:16px;cursor:pointer;padding:0 2px}
+/* The sync invitation is an offer, not an alarm, so it borrows the notice's
+   shape and the app's own blue rather than the warning orange. */
+#sync-nudge{display:none;margin:8px 16px 0;padding:10px 12px;border-radius:var(--radius-sm);
+  font-size:12px;line-height:1.5;background:var(--mb-bg);color:#fff;align-items:center;gap:8px}
+#sync-nudge.show{display:flex}
+#sync-nudge .nt-text{flex:1}
+#sync-nudge .nj-go{background:#fff;color:var(--mb-bg);border:none;border-radius:14px;
+  padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+#sync-nudge .nt-close{background:none;border:none;color:rgba(255,255,255,.85);font-size:18px;cursor:pointer;padding:0 2px}
 /* Month comparison */
 .cmp-empty{font-size:12px;color:var(--ts);text-align:center;padding:8px 0}
 .cmp-sub{font-size:11px;color:var(--ts);margin-bottom:10px}
@@ -341,6 +350,15 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
     <button class="nt-close" onclick="dismissNotice()">&times;</button>
   </div>
 
+  <!-- One-time invitation to turn on sync. It appears once, it is dismissible,
+       and dismissal is permanent: a reminder that comes back every launch is
+       nagging, and nagging trains people to swipe past real warnings. -->
+  <div id="sync-nudge" style="display:none">
+    <span class="nt-text"></span>
+    <button class="nj-go" id="sync-nudge-go" onclick="goToSyncSettings()"></button>
+    <button class="nt-close" id="sync-nudge-hide" onclick="hideSyncNudge()">&times;</button>
+  </div>
+
   <main id="main">
     <!-- DASHBOARD -->
     <section id="page-home" class="page active">
@@ -527,24 +545,24 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
         <select class="form-input" id="sel-currency" onchange="setCurrency(this.value)" style="padding:10px 12px;font-size:14px"></select>
       </div>
       <div class="setting-group">
-        <h3>Sync / المزامنة</h3>
+        <h3 id="st-sync">Sync</h3>
         <div class="hint" id="sync-status">not signed in</div>
         <form id="sync-form" onsubmit="return false" style="margin-top:6px">
           <input class="form-input" id="sync-email" type="email" autocomplete="email"
-            placeholder="email / البريد" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
+            placeholder="email" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
           <input class="form-input" id="sync-pass" type="password" autocomplete="current-password"
-            placeholder="password / كلمة المرور" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
-          <button type="submit" class="setting-btn" style="background:var(--pri);color:#fff;border:none">Sign in / دخول</button>
+            placeholder="password" style="padding:10px 12px;font-size:14px;margin-bottom:6px;width:100%">
+          <button type="submit" class="setting-btn" id="sync-signin" style="background:var(--pri);color:#fff;border:none">Sign in</button>
         </form>
         <button class="setting-btn" id="sync-toggle" style="margin-top:6px">need an account? create one</button>
-        <button class="setting-btn" id="sync-signout" style="display:none;margin-top:6px">Sign out / خروج</button>
+        <button class="setting-btn" id="sync-signout" style="display:none;margin-top:6px">Sign out</button>
         <!-- First sign-in conflict: an explicit tap, never a blocking dialog
              (the Android WebView answers confirm() false, silently picking a
              side — see the reset flow below). -->
         <div id="sync-conflict" style="display:none;margin-top:8px">
-          <div class="hint">This account has a budget saved in the cloud, and this device holds a different one. Which copy should win?</div>
-          <button class="setting-btn" id="sync-keep-cloud" style="margin-top:6px;background:var(--pri);color:#fff;border:none">Use the cloud copy / نسخة السحابة</button>
-          <button class="setting-btn" id="sync-keep-device" style="margin-top:6px">Keep this device's copy / نسخة هذا الجهاز</button>
+          <div class="hint" id="sync-conflict-q"></div>
+          <button class="setting-btn" id="sync-keep-cloud" style="margin-top:6px;background:var(--pri);color:#fff;border:none">Use the cloud copy</button>
+          <button class="setting-btn" id="sync-keep-device" style="margin-top:6px">Keep this device's copy</button>
         </div>
         <div class="hint" id="sync-err" style="color:var(--exp)"></div>
       </div>
@@ -987,6 +1005,24 @@ const TRANS = {
     budget_label: 'Budget', total_budget: 'Total Budget', spent: 'spent', remaining: 'remaining', over_by: 'over by',
     set_in_settings: 'Set a total budget in Settings', save_budget: 'Save Budget',
     currency_label: 'Currency / العملة',
+    // Sync card and the one-time sign-in nudge. sync.js reads these through
+    // window.t so a status line is written in the language the user is looking
+    // at, rather than the one the code was written in.
+    sync_title: 'Sync', sync_off: 'not signed in',
+    sync_email_ph: 'email', sync_pass_ph: 'password',
+    sync_sign_in: 'Sign in', sync_create: 'need an account? create one', sync_sign_out: 'Sign out',
+    sync_conflict_q: 'This account has a budget saved in the cloud, and this device holds a different one. Which copy should win?',
+    sync_use_cloud: 'Use the cloud copy', sync_keep_device: "Keep this device's copy",
+    sync_syncing: 'syncing', sync_synced: 'synced', sync_conn_off: 'sync is offline',
+    sync_offline_edit: 'sync is offline — changes kept on this device',
+    sync_choose: 'choose which copy to keep', sync_resolve: 'resolve the sync question first',
+    sync_too_big: 'data too large to sync — make a backup instead',
+    sync_refused: 'the cloud copy was refused',
+    sync_apply_failed: 'sync is offline \u2014 nothing was applied',
+    sync_checking: 'checking',
+    sync_loop_stopped: 'sync kept restarting itself and was stopped — your data on this device is untouched',
+    sync_nudge: 'Turn on sync so a lost phone does not take your budget with it',
+    sync_nudge_go: 'Set it up', sync_nudge_hide: 'Not now',
   },
   ar: { export_saved: 'حُفِظ في {path}',
     backup_unavailable: 'هذا الجهاز لا يدعم التنزيل هنا — استخدم التصدير',
@@ -1074,6 +1110,21 @@ const TRANS = {
     budget_label: 'الميزانية', total_budget: 'إجمالي الميزانية', spent: 'منصرف', remaining: 'متبقي', over_by: 'تجاوز بـ',
     set_in_settings: 'حدد ميزانية إجمالية من الإعدادات', save_budget: 'حفظ الميزانية',
     currency_label: 'العملة / Currency',
+    sync_title: 'المزامنة', sync_off: 'مش داخل بحساب',
+    sync_email_ph: 'البريد الإلكتروني', sync_pass_ph: 'كلمة المرور',
+    sync_sign_in: 'دخول', sync_create: 'ما عندكش حساب؟ اعمل واحد', sync_sign_out: 'خروج',
+    sync_conflict_q: 'الحساب ده عليه ميزانية محفوظة في السحابة، والجهاز ده فيه ميزانية مختلفة. أنهي واحدة تتحفظ؟',
+    sync_use_cloud: 'نسخة السحابة', sync_keep_device: 'نسخة الجهاز ده',
+    sync_syncing: 'بيرفع بياناته…', sync_synced: 'متزامن', sync_conn_off: 'المزامنة متوقفة',
+    sync_offline_edit: 'المزامنة متوقفة — بياناتك محفوظة على الجهاز',
+    sync_choose: 'اختار أنهي نسخة تتحفظ', sync_resolve: 'ردّ على سؤال المزامنة الأول',
+    sync_too_big: 'البيانات أكبر من حد المزامنة — اعمل نسخة احتياطية بدلها',
+    sync_refused: 'السحابة رفضت النسخة دي',
+    sync_apply_failed: 'المزامنة متوقفة — ما تطبق شيء',
+    sync_checking: 'بيشوف…',
+    sync_loop_stopped: 'المزامنة فضلت تعيد نفسها فوقفناها — بياناتك على الجهاز ما اتغيّرتش',
+    sync_nudge: 'فعّل المزامنة عشان موبايل لو ضاع ما يودّي ميزانيتك معاه',
+    sync_nudge_go: 'فعّلها', sync_nudge_hide: 'مش دلوقتي',
   }
 };
 
@@ -1158,11 +1209,38 @@ function applyI18n() {
   // Settings section titles by ID
   let stMap = {
     'st-language': 'language', 'st-theme': 'theme', 'st-data': 'data', 'st-currency': 'currency_label',
-    'st-budget': 'budget_label', 'st-about': 'about',
+    'st-budget': 'budget_label', 'st-about': 'about', 'st-sync': 'sync_title',
   };
   for (let [id, key] of Object.entries(stMap)) {
     let el = document.getElementById(id);
     if (el) el.textContent = t(key);
+  }
+
+  // Sync card. sync.js writes its status lines through window.t, so the card
+  // is translated in one place: here for the static parts, there for the
+  // messages it produces at runtime. The status line is only re-labelled when
+  // no session has written a live one, so a translated label never overwrites
+  // "syncing" or an error mid-flight.
+  let syncPairs = {
+    'sync-signin': 'sync_sign_in', 'sync-toggle': 'sync_create', 'sync-signout': 'sync_sign_out',
+    'sync-conflict-q': 'sync_conflict_q', 'sync-keep-cloud': 'sync_use_cloud',
+    'sync-keep-device': 'sync_keep_device',
+  };
+  for (let [id, key] of Object.entries(syncPairs)) {
+    let el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  }
+  let se = document.getElementById('sync-email');
+  if (se) se.placeholder = t('sync_email_ph');
+  let sp = document.getElementById('sync-pass');
+  if (sp) sp.placeholder = t('sync_pass_ph');
+  let st = document.getElementById('sync-status');
+  if (st && !st.dataset.live) st.textContent = t('sync_off');
+  let ng = document.getElementById('sync-nudge');
+  if (ng) {
+    let tx = ng.querySelector('.nt-text'); if (tx) tx.textContent = t('sync_nudge');
+    let go = document.getElementById('sync-nudge-go'); if (go) go.textContent = t('sync_nudge_go');
+    let hd = document.getElementById('sync-nudge-hide'); if (hd) hd.textContent = t('sync_nudge_hide');
   }
 
   // Total Budget label & Save button
@@ -1602,6 +1680,38 @@ function renderNotice() {
 function dismissNotice() {
   noticeDismissed = state.note;
   document.getElementById('notice').classList.remove('show');
+}
+
+// ── One-time sync invitation ──
+// The key is a plain local flag, not a server thing: whether someone wants to
+// be asked is a property of this install, and it must be answerable offline.
+const SYNC_NUDGE_KEY = 'bm-sync-nudge-hidden';
+
+function hideSyncNudge() {
+  try { localStorage.setItem(SYNC_NUDGE_KEY, '1'); } catch (e) {}
+  let el = document.getElementById('sync-nudge');
+  if (el) el.classList.remove('show');
+}
+
+function goToSyncSettings() {
+  showPage('settings');
+  // The sync group is the last one on the page, so scrolling is what actually
+  // lands the user on it; classList alone would leave them at the top.
+  let g = document.getElementById('st-sync');
+  if (g && g.parentElement) g.parentElement.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+/** Show the invitation only when all of these hold: the person has not said
+ *  "not now" before, they are not already signed in, and sync is actually
+ *  wired up on this build. sync.js sets window.__bmSyncReady once the Firebase
+ *  module has loaded — without it the card would offer something that cannot
+ *  be switched on. */
+function maybeShowSyncNudge() {
+  let el = document.getElementById('sync-nudge');
+  if (!el) return;
+  try { if (localStorage.getItem(SYNC_NUDGE_KEY)) return; } catch (e) { return; }
+  if (!window.__bmSyncReady || window.__bmSyncSignedIn) return;
+  el.classList.add('show');
 }
 
 // ── Month bar ──

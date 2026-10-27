@@ -11,6 +11,27 @@
 (function () {
   'use strict';
 
+  function canonical(value) {
+    // Same content, same string — whatever order the keys arrived in. Firestore
+    // hands map fields back in its own order, while the app writes them in the
+    // order its own serializer chose. Comparing the raw strings therefore says
+    // "different" forever, and the bridge spends its life pushing a copy the
+    // cloud already has and pulling a copy the device already holds. Sorting
+    // recursively (arrays keep their order; they mean something) makes the
+    // comparison mean what it claims.
+    if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
+    if (value && typeof value === 'object') {
+      return '{' + Object.keys(value).sort().map(function (k) {
+        return JSON.stringify(k) + ':' + canonical(value[k]);
+      }).join(',') + '}';
+    }
+    return JSON.stringify(value === undefined ? null : value);
+  }
+
+  function hashOfDoc(value) {
+    return hashOf(canonical(value));
+  }
+
   function hashOf(text) {
     // FNV-1a over the serialized document. Sync correctness leans on the hash
     // only to answer "is anything different", never to authenticate.
@@ -59,5 +80,5 @@
     return AUTH_ERRORS[code] || 'sync error — see console';
   }
 
-  window.__bmSyncLogic = { hashOf, decide, friendlyAuthError };
+  window.__bmSyncLogic = { hashOf, hashOfDoc, canonical, decide, friendlyAuthError };
 }());
