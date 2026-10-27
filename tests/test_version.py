@@ -60,3 +60,18 @@ def test_release_gate_reads_the_package_not_a_shim():
 def test_version_is_a_literal_so_the_build_can_read_it_statically():
     source = (ROOT / "monthly_budget" / "__init__.py").read_text(encoding="utf-8")
     assert re.search(r'^__version__\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"$', source, re.MULTILINE)
+
+
+def test_build_files_do_not_start_with_a_byte_order_mark():
+    """Editing a file with a shell tool that writes "UTF-8" on Windows tends to
+    prepend an invisible BOM. `pyproject.toml` then still reads fine in Python,
+    but Briefcase refuses it - `Invalid pyproject.toml: Invalid statement (at
+    line 1, column 1)` - so the Android build produces no APK while the rest of
+    the release goes out looking healthy. That is exactly how v2.2.1 shipped
+    with desktop builds and no APK."""
+    offenders = []
+    for rel in ("mobile/pyproject.toml", "monthly_budget/__init__.py", "CHANGELOG.md"):
+        raw = (ROOT / rel).read_bytes()
+        if raw.startswith(b"\xef\xbb\xbf"):
+            offenders.append(rel)
+    assert not offenders, f"these files start with a UTF-8 BOM: {offenders}"

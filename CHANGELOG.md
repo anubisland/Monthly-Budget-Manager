@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-10-27
+
+### Fixed
+
+- v2.2.1 shipped no Android APK. Bumping the version with a shell command
+  prepended an invisible byte-order mark to `mobile/pyproject.toml`, Briefcase
+  rejected the file with `Invalid statement (at line 1, column 1)`, and the
+  Android job died - while the release itself published with its desktop builds
+  and gave no sign that the phone build was missing. Both files are BOM-free
+  now, and a test fails if one ever reappears.
+- The colour work in v2.2.1 is unchanged in this release; it simply never
+  reached a phone, because there was no APK to install it from.
+
 ## [2.2.1] - 2026-10-27
 
 ### Changed
