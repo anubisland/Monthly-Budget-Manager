@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-10-27
+
+### Changed
+
+- The screen now reads as one colour ramp instead of a white page with a blue
+  strip on top: a navy header carrying the app name, a blue month strip, and
+  beige cards, stat boxes and summary panel underneath. The three surfaces are
+  CSS variables, so the dark theme answers with the same hue at dark values
+  rather than beige, which would glare.
+- The budget summary panel no longer paints itself solid blue from an inline
+  style. It sits on the beige tier like the panels below it and keeps its color
+  in the amounts, which is where the color was doing work.
+- Secondary text on light cards went from `#6b7280` to `#5b6472`. Beige is a
+  warmer, slightly darker surface than the white it replaced, and the old grey
+  landed at 4.5:1 against it - on the line. It now sits at 4.8:1. The month
+  strip blue moved from 4.5:1 to 5.5:1 against its white label for the same
+  reason.
+
 ## [2.2.0] - 2026-10-26
 
 ### Added
