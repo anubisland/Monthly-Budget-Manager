@@ -102,6 +102,21 @@ def test_sync_apply_writes_the_current_data_aside_first(live):
     assert json.loads(safety.read_text("utf-8")) == before
 
 
+def test_a_burst_of_pulls_keeps_the_copy_from_before_the_burst(live):
+    """Two pulls in a row — a sync loop, or someone tapping twice — must leave
+    the safety copy holding what the device had *before* the burst. Overwriting
+    it each time leaves a "safety copy" taken halfway through the damage, which
+    protects nothing."""
+    post(live, "/api/add-income", {"name": "Original", "amount": 90})
+    _, before = get(live, "/api/doc")
+
+    post(live, "/api/sync-apply", {"doc": _doc_with_income("2026-07", "First", 1)})
+    post(live, "/api/sync-apply", {"doc": _doc_with_income("2026-07", "Second", 2)})
+
+    safety = live.export_path(f"before-sync-{before['current']}.json")
+    assert json.loads(safety.read_text("utf-8")) == before
+
+
 def test_sync_apply_refuses_a_foreign_document_without_touching_data(live):
     post(live, "/api/add-income", {"name": "Local", "amount": 1})
 
