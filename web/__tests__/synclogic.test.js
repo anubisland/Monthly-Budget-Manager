@@ -110,14 +110,30 @@ describe('decide', () => {
       .toBe('ask');
   });
 
-  test('both sides diverged: the newer local write wins', () => {
+  // Divergence is asked, not decided by a clock. These replaced "the newer
+  // write wins" cases: comparing two device clocks does not establish order,
+  // it just rewards whichever device is set wrong. A phone an hour fast used to
+  // overwrite the other device on every connection, forever.
+  test('both sides diverged is asked, whatever the clocks say', () => {
     expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: T + 5, remoteAt: T }))
-      .toBe('push');
+      .toBe('ask');
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: T, remoteAt: T + 5 }))
+      .toBe('ask');
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: 0, remoteAt: 0 }))
+      .toBe('ask');
   });
 
-  test('both sides diverged: the newer remote write wins', () => {
-    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: T, remoteAt: T + 5 }))
-      .toBe('pull');
+  test('a fast local clock does not quietly win the argument', () => {
+    // The exact shape of the old bug: local timestamp years ahead of the cloud.
+    const years = T + 1000 * 60 * 60 * 24 * 365 * 5;
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: years, remoteAt: T }))
+      .toBe('ask');
+  });
+
+  test('a fast remote clock does not quietly overwrite the device either', () => {
+    const years = T + 1000 * 60 * 60 * 24 * 365 * 5;
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: T, remoteAt: years }))
+      .toBe('ask');
   });
 });
 

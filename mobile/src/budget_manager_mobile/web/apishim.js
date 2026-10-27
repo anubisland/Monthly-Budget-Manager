@@ -27,7 +27,7 @@
   var BEFORE_RESTORE_PREFIX = 'bm.before-restore-';
 
   var SCHEMA_VERSION = 2;
-  var APP_VERSION = '2.2.6-web';
+  var APP_VERSION = '2.2.7-web';
   var SAVINGS_CATEGORY = 'Savings';
   var MAX_AMOUNT = 1e12;
   var UNWRITABLE = /[\x00-\x1f\x7f"\\]/;
@@ -1190,4 +1190,18 @@
     session.dropped = built.dropped;
     session.note = migrated.note || (built.dropped ? 'partial' : null);
   }());
+  // ── another tab wrote the same document ──
+  // bm.data is one document for the whole origin, so whoever writes last owns
+  // the whole file. Without this, a second tab keeps its in-memory copy of the
+  // OLD document and its next edit writes all of that back — quietly undoing
+  // whatever the first tab, or a sync pull, had just stored. The storage event
+  // fires only in the other tabs, never in the one that wrote, so rebuilding
+  // here is enough to make them converge; the cost is one parse per change.
+  window.addEventListener('storage', function (e) {
+    if (!e || e.key !== DOC_KEY || e.newValue === null) return;
+    var parsed;
+    try { parsed = JSON.parse(e.newValue); } catch (err) { return; }  // leave this tab alone
+    var rebuilt = buildModel(migrateDoc(parsed, thisMonth()).doc);
+    model = rebuilt.model;
+  });
 })();

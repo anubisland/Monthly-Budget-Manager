@@ -6,6 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.7] - 2026-10-27
+
+### Changed
+
+- **A wrong clock can no longer decide a conflict.** When both the device and
+  the cloud had changed since they last agreed, the app compared the two
+  timestamps and kept the newer. Those timestamps were device clocks, so a
+  phone set an hour fast won every argument it had — permanently, and silently,
+  overwriting the other device's work each time it connected. That case now
+  asks, the same protection already used at first sign-in. The everyday case is
+  untouched: one active device still resolves to push or pull on its own. This
+  narrows the "last write wins" policy the owner chose, on the grounds that a
+  clock neither side trusts is not evidence of which write was last.
+- The web build now keeps two open tabs of the same account in step. `bm.data`
+  is one document, so a second tab holding an old in-memory copy would write
+  all of it back on its next edit and quietly undo the first tab — or a sync
+  pull. A `storage` listener rebuilds the stale copy instead.
+- Related: a page the reload guard left standing now refuses its own writes
+  until it is reloaded, rather than pushing a document the cloud has already
+  moved past.
+
+### Added
+
+- Tests pin the new behaviour: a fast clock on either side is asked, not
+  obeyed. They replaced the two "newer write wins" cases.
+
 ## [2.2.6] - 2026-10-27
 
 ### Fixed
