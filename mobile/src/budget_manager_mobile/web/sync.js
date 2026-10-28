@@ -349,6 +349,7 @@ function wireUi() {
 
   const form = document.getElementById("sync-form");
   if (!form) return; // old cached page without the card: stay headless
+
   const err = document.getElementById("sync-err");
   form.addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -370,6 +371,41 @@ function wireUi() {
   });
 }
 
+/** Show or hide the full-screen sign-in gate. Only this module knows whether the
+ *  page is signed in, so it owns the gate's visibility rather than the markup.
+ *  Hidden for a signed-in person (the normal, post-persistence launch — no
+ *  reason to show a gate they have already passed); shown for a signed-out one,
+ *  unless they have already chosen to continue on this device. */
+function setGate(signedIn) {
+  const gate = document.getElementById("login-gate");
+  if (!gate) return; // a build whose cached page has no gate
+  if (signedIn) { gate.classList.remove("show"); return; }
+  if (window.__bmGateOfflineOk) return;
+  gate.classList.add("show");
+}
+
+/** Wire the gate's sign-in form. Kept separate from wireUi so it is not gated
+ *  behind the settings card's early return, and so the two entry points (the
+ *  gate and the card) each own their own DOM without sharing element ids. */
+function wireGate() {
+  const gateForm = document.getElementById("gate-form");
+  if (!gateForm) return;
+  const err = document.getElementById("gate-err");
+  gateForm.addEventListener("submit", function (ev) {
+    ev.preventDefault();
+    const email = document.getElementById("gate-email").value.trim();
+    const pass = document.getElementById("gate-pass").value;
+    if (err) err.textContent = "";
+    const run = gateForm.dataset.mode === "signup"
+      ? createUserWithEmailAndPassword(auth, email, pass)
+      : signInWithEmailAndPassword(auth, email, pass);
+    // Success changes the auth state, and onAuthStateChanged hides the gate and
+    // starts the session; the only thing to handle here is the failure, kept on
+    // the gate itself so the person sees why they did not get in.
+    run.catch(function (e) { if (err) err.textContent = LOGIC.friendlyAuthError(e && e.code); });
+  });
+}
+
 // The card exists on this build and the module loaded: only now is it
   // honest to invite anyone. index.html reads this before showing the
   // one-time nudge, so a page without sync never offers to turn it on.
@@ -381,8 +417,10 @@ onAuthStateChanged(auth, function (user) {
   const out = document.getElementById("sync-signout");
   if (form) form.style.display = user ? "none" : "";
   if (out) out.style.display = user ? "" : "none";
+  setGate(!!user);
   if (user) startSession(user); else endSession();
 });
 
 wireUi();
+wireGate();
 setStatus("sync_checking", "checking");

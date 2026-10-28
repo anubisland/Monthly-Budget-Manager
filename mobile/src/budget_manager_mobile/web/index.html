@@ -325,9 +325,52 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
 /* Scrollbar */
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-thumb{background:rgba(128,128,128,.3);border-radius:2px}
+
+/* Full-screen sign-in gate. Covers the app until the person is signed in (or
+   chooses to continue on this device). Uses theme tokens so dark mode follows.
+   display is driven from JS: sync.js shows it only on a signed-out, sync-ready
+   build, so a build without sync.js — and the page's own tests — never see it. */
+#login-gate{position:fixed;inset:0;z-index:1000;background:var(--bg);
+  display:none;align-items:center;justify-content:center;padding:22px;overflow:auto}
+#login-gate.show{display:flex}
+.gate-card{background:var(--card);color:var(--tx);width:100%;max-width:360px;
+  padding:26px 22px;border-radius:var(--radius);box-shadow:0 6px 24px rgba(0,0,0,.12);text-align:center}
+.gate-card .gate-icon{width:56px;height:56px;border-radius:14px;margin:0 auto 10px;display:block}
+.gate-card h2{margin:0 0 6px;font-size:20px}
+.gate-card .gate-sub{color:var(--ts);font-size:13px;margin:0 0 18px;line-height:1.5}
+.gate-card form{display:flex;flex-direction:column;gap:9px}
+.gate-card .gate-submit{padding:13px;border:none;border-radius:var(--radius-sm);
+  background:var(--pri);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.gate-card .gate-submit:disabled{opacity:.6;cursor:default}
+.gate-card .gate-toggle{margin-top:4px;background:none;border:none;color:var(--pri);
+  font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
+.gate-card .gate-err{color:var(--exp);font-size:13px;min-height:16px}
+.gate-card .gate-offline{margin-top:16px;background:none;border:none;color:var(--ts);
+  font-size:13px;cursor:pointer;text-decoration:underline;padding:4px}
 </style>
 </head>
 <body>
+<!-- Full-screen sign-in gate. It covers the app before it opens; sign-in lives
+     here, at the entrance, not buried in Settings. sync.js reveals it only when
+     a sync-ready build is signed out, and hides it once signed in or when the
+     person taps "continue on this device". With no sync.js on the page (the
+     tests, and any build that never wires Firebase) it stays display:none and
+     the app behaves exactly as it did before. -->
+<div id="login-gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
+  <div class="gate-card">
+    <img class="gate-icon" src="icon.png" alt="">
+    <h2 id="gate-title">Budget Manager</h2>
+    <p class="gate-sub" id="gate-sub"></p>
+    <form id="gate-form" onsubmit="return false" data-mode="signin">
+      <input class="form-input" id="gate-email" type="email" autocomplete="email" placeholder="email">
+      <input class="form-input" id="gate-pass" type="password" autocomplete="current-password" placeholder="password">
+      <button type="submit" class="gate-submit" id="gate-signin">Sign in</button>
+    </form>
+    <button class="gate-toggle" id="gate-toggle">need an account? create one</button>
+    <div class="gate-err" id="gate-err"></div>
+    <button class="gate-offline" id="gate-offline" onclick="gateContinueOffline()">Continue on this device only</button>
+  </div>
+</div>
 <div id="app">
   <header>
     <div style="display:flex;align-items:center;gap:10px">
@@ -1023,6 +1066,11 @@ const TRANS = {
     sync_loop_stopped: 'sync kept restarting itself and was stopped — your data on this device is untouched',
     sync_nudge: 'Turn on sync so a lost phone does not take your budget with it',
     sync_nudge_go: 'Set it up', sync_nudge_hide: 'Not now',
+    gate_welcome: 'Budget Manager',
+    gate_sub: 'Sign in to keep your budget in sync across your devices.',
+    gate_have_account: 'have an account? sign in',
+    gate_create_btn: 'Create account',
+    gate_offline: 'Continue on this device only',
   },
   ar: { export_saved: 'حُفِظ في {path}',
     backup_unavailable: 'هذا الجهاز لا يدعم التنزيل هنا — استخدم التصدير',
@@ -1125,6 +1173,11 @@ const TRANS = {
     sync_loop_stopped: 'المزامنة فضلت تعيد نفسها فوقفناها — بياناتك على الجهاز ما اتغيّرتش',
     sync_nudge: 'فعّل المزامنة عشان موبايل لو ضاع ما يودّي ميزانيتك معاه',
     sync_nudge_go: 'فعّلها', sync_nudge_hide: 'مش دلوقتي',
+    gate_welcome: 'إدارة الميزانية',
+    gate_sub: 'ادخل بحسابك عشان ميزانيتك تفضل محفوظة ومتزامنة على كل أجهزتك.',
+    gate_have_account: 'عندك حساب؟ ادخل',
+    gate_create_btn: 'إنشاء حساب',
+    gate_offline: 'أكمل على الجهاز ده بس',
   }
 };
 
@@ -1242,6 +1295,9 @@ function applyI18n() {
     let go = document.getElementById('sync-nudge-go'); if (go) go.textContent = t('sync_nudge_go');
     let hd = document.getElementById('sync-nudge-hide'); if (hd) hd.textContent = t('sync_nudge_hide');
   }
+  // The sign-in gate carries its own copy; relabel it here too so a language
+  // switch reaches a screen shown before the app does.
+  applyGateLabels();
 
   // Total Budget label & Save button
   let budgetLbl = document.querySelector('.setting-group h3 + div span');
@@ -1712,6 +1768,45 @@ function maybeShowSyncNudge() {
   try { if (localStorage.getItem(SYNC_NUDGE_KEY)) return; } catch (e) { return; }
   if (!window.__bmSyncReady || window.__bmSyncSignedIn) return;
   el.classList.add('show');
+}
+
+// ── Sign-in gate ──
+// The gate is shown/hidden by sync.js in step with the auth state, because only
+// it knows whether the page is signed in. These two globals are the parts the
+// markup's own buttons reach: choosing to keep working on the device without an
+// account, and flipping the form between sign-in and create-account.
+//
+// __bmGateOfflineOk is deliberately session-only (not localStorage). A reload is
+// a deliberate act, and if sign-in persistence works the reload lands signed-in
+// and never shows the gate; a person who chose "this device only" has not signed
+// in, so re-asking after a reload is the gate doing its job, not nagging.
+window.gateContinueOffline = function () {
+  window.__bmGateOfflineOk = true;
+  let el = document.getElementById('login-gate');
+  if (el) el.classList.remove('show');
+};
+
+window.gateToggleMode = function () {
+  let form = document.getElementById('gate-form');
+  if (!form) return;
+  form.dataset.mode = form.dataset.mode === 'signup' ? 'signin' : 'signup';
+  applyGateLabels();
+};
+
+// Gate text in the current language, read on demand so a language switch (and
+// the create/sign-in toggle) relabel it without a reload.
+function applyGateLabels() {
+  let form = document.getElementById('gate-form');
+  let signup = form && form.dataset.mode === 'signup';
+  let set = function (id, text) { let el = document.getElementById(id); if (el) el.textContent = text; };
+  let ph = function (id, text) { let el = document.getElementById(id); if (el) el.placeholder = text; };
+  set('gate-title', t('gate_welcome'));
+  set('gate-sub', t('gate_sub'));
+  set('gate-signin', signup ? t('gate_create_btn') : t('sync_sign_in'));
+  set('gate-toggle', signup ? t('gate_have_account') : t('sync_create'));
+  set('gate-offline', t('gate_offline'));
+  ph('gate-email', t('sync_email_ph'));
+  ph('gate-pass', t('sync_pass_ph'));
 }
 
 // ── Month bar ──

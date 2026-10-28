@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.9] - 2026-10-27
+
+### Added
+
+- **A full-screen sign-in screen at the entrance.** Opening the app now greets
+  you with a sign-in screen instead of the budget itself. You sign in there —
+  not buried in Settings — and once in, you are not asked again while the app
+  stays open. Signing out from Settings returns you to this screen.
+  - "Continue on this device only" is always on the screen, so a failed or
+    unwanted sign-in never locks you out of the budget saved locally.
+  - On a build without sync wired up, or if the Firebase module cannot load at
+    all, the screen never appears and the app opens straight through, exactly
+    as before — there is no gate to a feature that is not there.
+
+### Known limitation
+
+- The "which copy to keep" question, when an existing account and this device
+  hold different data, still appears in the Settings sync card rather than on
+  the entrance screen. Moving it onto the sign-in screen is the next step.
+
 ## [2.2.8] - 2026-10-27
 
 ### Fixed
