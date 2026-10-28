@@ -366,7 +366,7 @@ nav{display:flex;background:var(--nav);border-top:1px solid var(--nav-border);pa
       <input class="form-input" id="gate-pass" type="password" autocomplete="current-password" placeholder="password">
       <button type="submit" class="gate-submit" id="gate-signin">Sign in</button>
     </form>
-    <button class="gate-toggle" id="gate-toggle">need an account? create one</button>
+    <button class="gate-toggle" id="gate-toggle" onclick="gateToggleMode()">need an account? create one</button>
     <div class="gate-err" id="gate-err"></div>
     <button class="gate-offline" id="gate-offline" onclick="gateContinueOffline()">Continue on this device only</button>
   </div>

@@ -381,6 +381,13 @@ function setGate(signedIn) {
   if (!gate) return; // a build whose cached page has no gate
   if (signedIn) { gate.classList.remove("show"); return; }
   if (window.__bmGateOfflineOk) return;
+  // Clearing the previous attempt on the way in means a re-show (after signing
+  // out, or after a failed try) never greets the person with a stale error or a
+  // password still sitting in the field — the latter matters on a shared device.
+  const err = document.getElementById("gate-err");
+  if (err) err.textContent = "";
+  const pass = document.getElementById("gate-pass");
+  if (pass) pass.value = "";
   gate.classList.add("show");
 }
 
