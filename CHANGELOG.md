@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.10] - 2026-10-28
+
+### Changed
+
+- **An empty device now signs in and pulls the cloud on its own.** Reported on
+  the phone: after the sign-in started persisting, reopening the app showed an
+  empty budget and made you tap "use the cloud copy" every time. The decision
+  logic treated any two differing copies as a conflict to ask about — including
+  the case where the device was holding nothing. An empty device is not a
+  conflict: there is nothing to overwrite, so it now pulls the cloud
+  automatically. The question is still asked, unchanged, when both the device
+  and the cloud hold real, different data — the case where picking for you could
+  lose work.
+
 ## [2.2.9] - 2026-10-27
 
 ### Added

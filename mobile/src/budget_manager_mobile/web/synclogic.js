@@ -32,6 +32,26 @@
     return hashOf(canonical(value));
   }
 
+  /** True when the document holds nothing a user would miss: no month with
+   *  content, no goals, no recurring rules, no settled marks. The document's
+   *  own `months` map already omits blank months (see budget_data.to_doc), so an
+   *  empty device reads `months: {}`. Kept conservative — any content anywhere
+   *  makes it non-empty — because it gates an automatic pull, and an automatic
+   *  pull must never discard a real copy. */
+  function isEmptyDoc(d) {
+    if (!d || typeof d !== "object") return true;
+    var m = d.months;
+    if (m && typeof m === "object" && Object.keys(m).length) return false;
+    if (d.goals && d.goals.length) return false;
+    if (d.recurring && d.recurring.length) return false;
+    if (d.rules && d.rules.length) return false;
+    var s = d.settled;
+    if (s && typeof s === "object") {
+      for (var k in s) { if (s[k] && s[k].length) return false; }
+    }
+    return true;
+  }
+
   function hashOf(text) {
     // FNV-1a over the serialized document. Sync correctness leans on the hash
     // only to answer "is anything different", never to authenticate.
@@ -49,21 +69,33 @@
    *   'push' — local changed; send it
    *   'pull' — remote changed; apply it
    *   'ask'  — the two sides diverged in a way this function cannot order:
-   *            first sign-in, or both moved since the last agreement. The user
-   *            chooses which copy wins.
+   *            first sign-in, or both moved since the last agreement, AND the
+   *            local copy holds something. The user chooses which copy wins.
+   *
+   *  `localEmpty` (optional) says the device holds nothing worth keeping. An
+   *  empty device is never a conflict worth asking about: there is nothing to
+   *  overwrite, so the cloud is simply the user's data. Absent/false leaves the
+   *  old behaviour, so callers that do not compute it are unaffected.
    */
   function decide(s) {
     if (s.localHash === s.remoteHash) return 'none';
     if (s.remoteHash === s.lastHash) return 'push';   // remote is what we left it
     if (s.localHash === s.lastHash) return 'pull';    // we left it matching; cloud moved
-    // Diverged: neither side is what we left, and both hold something new.
+    // Diverged: neither side is what we left, and both hashes differ.
     //
-    // This used to fall back to "last write wins" on the two timestamps. It
-    // does not any more, because the timestamps are not evidence. The remote
-    // one comes from whoever's phone wrote it; the local one is our own clock.
-    // A device an hour fast therefore wins every argument it has, forever, and
-    // the other device's work is overwritten each time it connects. Calling
-    // that last-write-wins was generous: it is wrongest-clock-wins.
+    // If the device is empty this is not really a contest. Pulling the cloud
+    // cannot lose anything here, and asking instead is what made a signed-in
+    // reopen greet a returning user with an empty screen and a question — when
+    // the only sensible answer was "of course, take the cloud copy".
+    if (s.localEmpty) return 'pull';
+    //
+    // Otherwise neither side is what we left, and both hold something new. This
+    // used to fall back to "last write wins" on the two timestamps. It does not
+    // any more, because the timestamps are not evidence. The remote one comes
+    // from whoever's phone wrote it; the local one is our own clock. A device an
+    // hour fast therefore wins every argument it has, forever, and the other
+    // device's work is overwritten each time it connects. Calling that
+    // last-write-wins was generous: it is wrongest-clock-wins.
     //
     // Ordering these two edits honestly needs a clock both sides trust. Our own
     // un-sent edits do not have one — they have no server time until they are
@@ -95,5 +127,5 @@
     return AUTH_ERRORS[code] || 'sync error — see console';
   }
 
-  window.__bmSyncLogic = { hashOf, hashOfDoc, canonical, decide, friendlyAuthError };
+  window.__bmSyncLogic = { hashOf, hashOfDoc, canonical, isEmptyDoc, decide, friendlyAuthError };
 }());
