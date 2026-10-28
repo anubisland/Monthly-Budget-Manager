@@ -154,6 +154,21 @@ describe('isEmptyDoc', () => {
     expect(isEmptyDoc({ months: {}, settled: { '2026-10': [3] } })).toBe(false);
   });
 
+  test('recurring alone counts as content', () => {
+    expect(isEmptyDoc({ months: {}, recurring: [{ name: 'rent' }] })).toBe(false);
+  });
+
+  test('metadata-only (version/current) is empty', () => {
+    expect(isEmptyDoc({ version: 2, current: '2026-10' })).toBe(true);
+  });
+
+  test('a months entry, even a blank object, is treated as content (conservative)', () => {
+    // to_doc strips blank months before they reach a document, so this shape is
+    // not expected — but the empty-check must err toward "non-empty" so an
+    // automatic pull never clobbers something it did not fully understand.
+    expect(isEmptyDoc({ months: { '2026-10': {} } })).toBe(false);
+  });
+
   test('null/undefined reads as empty, not as a crash', () => {
     expect(isEmptyDoc(null)).toBe(true);
     expect(isEmptyDoc(undefined)).toBe(true);
@@ -172,6 +187,14 @@ describe('decide — an empty device pulls without being asked', () => {
 
   test('diverged but device is empty: pull, not ask', () => {
     expect(decide({ localHash: B, remoteHash: C, lastHash: A, localEmpty: true }))
+      .toBe('pull');
+  });
+
+  test('empty device never pushes, even when the cloud equals lastHash', () => {
+    // The data-loss hole: local lost its file (empty) while lastHash still
+    // remembers the full cloud copy. The old order hit push here and wiped the
+    // cloud with an empty document. localEmpty must win BEFORE push.
+    expect(decide({ localHash: B, remoteHash: A, lastHash: A, localEmpty: true }))
       .toBe('pull');
   });
 

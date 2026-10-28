@@ -19,6 +19,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   automatically. The question is still asked, unchanged, when both the device
   and the cloud hold real, different data — the case where picking for you could
   lose work.
+- **Closed a related cloud-wipe risk.** With the same "empty device" insight
+  placed only in the ask branch, an empty local could still fall into the *push*
+  branch when it remembered the cloud (e.g. the local file was lost or unreadable
+  but the remembered hash was intact) and push its emptiness over a full cloud —
+  unrecoverable. An empty device is now resolved to pull *before* any push, so it
+  can only ever recover data, never blank the cloud. Deleting everything on
+  purpose still syncs: Settings ▸ Reset pushes directly, not through this path.
 
 ## [2.2.9] - 2026-10-27
 
