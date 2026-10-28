@@ -32,6 +32,17 @@ from monthly_budget.i18n import I18n
 
 _web_dir = Path(__file__).parent / 'web'
 
+#: The loopback port the WebView is served from. Deliberately fixed: a browser
+#: stores the Firebase sign-in session against the site's origin, which is
+#: host *and port*, so a port that changes each launch reads as a different
+#: site and the sign-in is forgotten — the user was retyping their password on
+#: every open. 27810 is uncommon and below the ephemeral range every OS here
+#: hands out (Linux/Android start at 32768, Windows at 49152), so the OS is
+#: unlikely to have given it to some other connection before we bind. If it is
+#: taken anyway, _start_server falls back to an OS-chosen port and the app
+#: still opens — that one launch simply is not remembered, as before.
+PREFERRED_PORT = 27810
+
 
 CAT_COLORS = {
     "Food":"#FF6B6B","Rent":"#4ECDC4","Fuel":"#FFE66D","Electricity":"#FFD93D",
@@ -40,6 +51,35 @@ CAT_COLORS = {
     "Debt":"#E17055","Subscriptions":"#0984E3","Gifts":"#E84393","Misc":"#636E72",
     "Uncategorized":"#B2BEC3",
 }
+
+
+class LoopbackServer(http.server.HTTPServer):
+    """A loopback server that binds 127.0.0.1:port the right way per OS.
+
+    The port is deliberately stable (PREFERRED_PORT) so the WebView's origin —
+    and the Firebase sign-in the browser keys to that origin — survives a
+    restart. How a port may be reused differs by OS, so:
+
+    * POSIX (Android/Linux/macOS): keep allow_reuse_address. SO_REUSEADDR there
+      only relaxes the TIME_WAIT left by the previous process, which is exactly
+      what lets a fast relaunch rebind the same port instead of falling back.
+      A second LIVE listener on the port still fails, so no other process can
+      share it.
+
+    * Windows: SO_REUSEADDR is looser — it lets a second live socket bind the
+      same address and a foreign, earlier-bound process answer our requests.
+      So we do not set it; instead server_bind sets SO_EXCLUSIVEADDRUSE, which
+      reserves the port for us and makes a genuinely taken port fail closed into
+      App._bind's ephemeral fallback rather than being served by another server.
+    """
+
+    allow_reuse_address = sys.platform != 'win32'
+
+    def server_bind(self):
+        if sys.platform == 'win32':
+            # Guarded so the constant is only touched where it exists.
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 class BudgetAPIHandler(http.server.BaseHTTPRequestHandler):
@@ -206,17 +246,29 @@ class App(toga.App):
     def _start_server(self):
         handler = BudgetAPIHandler
         handler.app = self
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(('127.0.0.1', 0))
-        self._port = s.getsockname()[1]
-        s.close()
-        print(f"[budget] Server starting on port {self._port}")
-        # Held so the server can be shut down deliberately rather than only by
-        # the process exiting.
-        self._server = http.server.HTTPServer(('127.0.0.1', self._port), handler)
+        # Bind the stable port directly, falling back to an OS-chosen one only if
+        # it is genuinely taken (LoopbackServer decides what "taken" means per OS,
+        # and how the port may be reused). The old probe — bind port 0, read the
+        # number back, close, rebind — is gone: with a fixed port there is nothing
+        # to probe, and a port merely read back can be taken before the reopen.
+        self._server = self._bind(handler, PREFERRED_PORT) or self._bind(handler, 0)
+        self._port = self._server.server_address[1]
         t = threading.Thread(target=self._server.serve_forever, daemon=True)
         t.start()
         print(f"[budget] Server started on port {self._port}")
+
+    @staticmethod
+    def _bind(handler, port):
+        """A LoopbackServer on 127.0.0.1:port, or None if the port is taken.
+
+        On the preferred port an OSError means "fall back"; on port 0 the OS is
+        guaranteed to have one, so a failure there is a genuine error."""
+        try:
+            return LoopbackServer(('127.0.0.1', port), handler)
+        except OSError:
+            if port != 0:
+                return None
+            raise
 
     def api_state(self):
         """Everything the WebView renders from, for the month on screen."""

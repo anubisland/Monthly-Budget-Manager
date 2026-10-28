@@ -27,7 +27,7 @@
   var BEFORE_RESTORE_PREFIX = 'bm.before-restore-';
 
   var SCHEMA_VERSION = 2;
-  var APP_VERSION = '2.2.7-web';
+  var APP_VERSION = '2.2.8-web';
   var SAVINGS_CATEGORY = 'Savings';
   var MAX_AMOUNT = 1e12;
   var UNWRITABLE = /[\x00-\x1f\x7f"\\]/;

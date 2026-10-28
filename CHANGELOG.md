@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.2.8] - 2026-10-27
+
+### Fixed
+
+- **You should no longer be asked to sign in on every launch.** The app served
+  its screens from an OS-chosen (ephemeral) port that changed every time it
+  opened. A browser stores the Firebase sign-in against the site's origin —
+  host *and port* — so each launch looked like a different site and the session
+  was dropped. The WebView now binds a fixed loopback port (`27810`), keeping the
+  origin stable so the sign-in survives a restart.
+  - On Windows the port is bound with `SO_EXCLUSIVEADDRUSE` rather than the
+    socket-reuse default, because on Windows that default lets a second live
+    process bind the same port and answer our WebView; exclusive binding makes a
+    genuinely busy port fall back safely instead.
+  - If `27810` is already taken by another program the app still opens on a
+    random port — that one launch just isn't remembered, as before.
+  - This removes the confirmed cause of the bug. Whether the sign-in then
+    actually persists depends on the WebView keeping its storage across a full
+    app close, which is only observable on a real device: after this build, sign
+    in once, close the app completely and reopen. If you are still asked for the
+    password, the remaining cause is the WebView clearing its own storage, not
+    the port.
+
+### Added
+
+- A test asserts two start/close/start cycles land on the same port (the stable
+  origin the fix needs); it skips on a machine where that port is in use.
+
 ## [2.2.7] - 2026-10-27
 
 ### Changed
