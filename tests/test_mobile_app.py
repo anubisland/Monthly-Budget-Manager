@@ -55,6 +55,41 @@ def test_the_app_starts_and_shows_its_window(live):
     assert live._web.url == f"http://127.0.0.1:{live._port}/"
 
 
+def _preferred_port_free():
+    """True if PREFERRED_PORT can be bound right now on loopback.
+
+    The relaunch test asserts the app lands on that exact port. If another
+    process already holds it (the developer's own running app), the app falls
+    back to an ephemeral port and the assertion is not meaningful — so we skip
+    rather than fail a correct build on a busy machine.
+    """
+    import socket
+    probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        probe.bind(('127.0.0.1', app_module.PREFERRED_PORT))
+        return True
+    except OSError:
+        return False
+    finally:
+        probe.close()
+
+
+@pytest.mark.skipif(not _preferred_port_free(), reason="PREFERRED_PORT is in use by another process")
+def test_a_relaunch_reuses_the_same_port_so_the_origin_is_stable(tmp_path):
+    # The WebView keys the Firebase sign-in session to host:port. A port that
+    # changes every launch reads as a different site, so the login is forgotten
+    # and the user retypes their password on every open. A start/close/start
+    # must therefore land on the same port — the stable origin that fix needs.
+    ports = []
+    for _ in range(2):
+        instance = app_module.App("Test", "test.app", data_dir=tmp_path)
+        instance.startup()
+        ports.append(instance._port)
+        instance._server.shutdown()
+        instance._server.server_close()
+    assert ports == [app_module.PREFERRED_PORT, app_module.PREFERRED_PORT]
+
+
 def test_the_page_itself_is_served(live):
     with urllib.request.urlopen(_url(live, "/")) as response:
         body = response.read().decode("utf-8")
