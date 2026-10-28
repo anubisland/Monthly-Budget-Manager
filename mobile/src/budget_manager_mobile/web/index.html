@@ -1780,18 +1780,21 @@ function maybeShowSyncNudge() {
 // a deliberate act, and if sign-in persistence works the reload lands signed-in
 // and never shows the gate; a person who chose "this device only" has not signed
 // in, so re-asking after a reload is the gate doing its job, not nagging.
-window.gateContinueOffline = function () {
+// Declared as plain `function` (like every other page handler) so the page's
+// wiring guard can see them: a classic top-level script makes these global, and
+// the buttons' inline onclick resolve them.
+function gateContinueOffline() {
   window.__bmGateOfflineOk = true;
   let el = document.getElementById('login-gate');
   if (el) el.classList.remove('show');
-};
+}
 
-window.gateToggleMode = function () {
+function gateToggleMode() {
   let form = document.getElementById('gate-form');
   if (!form) return;
   form.dataset.mode = form.dataset.mode === 'signup' ? 'signin' : 'signup';
   applyGateLabels();
-};
+}
 
 // Gate text in the current language, read on demand so a language switch (and
 // the create/sign-in toggle) relabel it without a reload.
