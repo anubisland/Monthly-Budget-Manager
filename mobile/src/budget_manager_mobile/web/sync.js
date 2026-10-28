@@ -261,6 +261,10 @@ async function onRemoteWrite(snap) {
   const action = LOGIC.decide({
     localHash, remoteHash,
     lastHash: state.lastHash(),
+    // An empty device is not a side worth asking about: pulling the cloud loses
+    // nothing here, and it is the answer to "why did a signed-in reopen show an
+    // empty screen and make me choose the cloud by hand".
+    localEmpty: LOGIC.isEmptyDoc(local0),
   });
   if (action === "ask") {
     // "ask": the two copies diverged and nothing here can order them — a first

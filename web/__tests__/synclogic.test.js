@@ -9,7 +9,7 @@
 
 require('../../mobile/src/budget_manager_mobile/web/synclogic.js');
 
-const { hashOf, hashOfDoc, canonical, decide, friendlyAuthError } = window.__bmSyncLogic;
+const { hashOf, hashOfDoc, canonical, isEmptyDoc, decide, friendlyAuthError } = window.__bmSyncLogic;
 
 describe('hashOf', () => {
   test('same text, same hash; different text, different hash', () => {
@@ -133,6 +133,84 @@ describe('decide', () => {
   test('a fast remote clock does not quietly overwrite the device either', () => {
     const years = T + 1000 * 60 * 60 * 24 * 365 * 5;
     expect(decide({ localHash: B, remoteHash: C, lastHash: A, localAt: T, remoteAt: years }))
+      .toBe('ask');
+  });
+});
+
+describe('isEmptyDoc', () => {
+  test('a document with no months, goals, rules or marks is empty', () => {
+    expect(isEmptyDoc({ version: 2, current: '2026-10', months: {}, goals: [], recurring: [], rules: [], settled: {} }))
+      .toBe(true);
+  });
+
+  test('a month with content makes it non-empty', () => {
+    const d = { months: { '2026-10': { expenses: [{ name: 'x', amount: 5 }] } } };
+    expect(isEmptyDoc(d)).toBe(false);
+  });
+
+  test('goals, rules or settled marks alone count as content', () => {
+    expect(isEmptyDoc({ months: {}, goals: [{ name: 'g' }] })).toBe(false);
+    expect(isEmptyDoc({ months: {}, rules: [{ name: 'r' }] })).toBe(false);
+    expect(isEmptyDoc({ months: {}, settled: { '2026-10': [3] } })).toBe(false);
+  });
+
+  test('recurring alone counts as content', () => {
+    expect(isEmptyDoc({ months: {}, recurring: [{ name: 'rent' }] })).toBe(false);
+  });
+
+  test('metadata-only (version/current) is empty', () => {
+    expect(isEmptyDoc({ version: 2, current: '2026-10' })).toBe(true);
+  });
+
+  test('a months entry, even a blank object, is treated as content (conservative)', () => {
+    // to_doc strips blank months before they reach a document, so this shape is
+    // not expected — but the empty-check must err toward "non-empty" so an
+    // automatic pull never clobbers something it did not fully understand.
+    expect(isEmptyDoc({ months: { '2026-10': {} } })).toBe(false);
+  });
+
+  test('null/undefined reads as empty, not as a crash', () => {
+    expect(isEmptyDoc(null)).toBe(true);
+    expect(isEmptyDoc(undefined)).toBe(true);
+  });
+});
+
+describe('decide — an empty device pulls without being asked', () => {
+  const A = 'hashA';
+  const B = 'hashB';
+  const C = 'hashC';
+
+  test('first sign-in, device empty, cloud full: pull, not ask', () => {
+    expect(decide({ localHash: B, remoteHash: A, lastHash: null, localEmpty: true }))
+      .toBe('pull');
+  });
+
+  test('diverged but device is empty: pull, not ask', () => {
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localEmpty: true }))
+      .toBe('pull');
+  });
+
+  test('empty device never pushes, even when the cloud equals lastHash', () => {
+    // The data-loss hole: local lost its file (empty) while lastHash still
+    // remembers the full cloud copy. The old order hit push here and wiped the
+    // cloud with an empty document. localEmpty must win BEFORE push.
+    expect(decide({ localHash: B, remoteHash: A, lastHash: A, localEmpty: true }))
+      .toBe('pull');
+  });
+
+  test('an empty device never overwrites — same-content cloud is still none', () => {
+    // localEmpty must not turn a genuine match into a pointless pull.
+    expect(decide({ localHash: A, remoteHash: A, lastHash: null, localEmpty: true }))
+      .toBe('none');
+  });
+
+  test('a NON-empty device still gets asked on divergence (protection intact)', () => {
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A, localEmpty: false }))
+      .toBe('ask');
+  });
+
+  test('localEmpty is off unless given, so existing callers keep asking', () => {
+    expect(decide({ localHash: B, remoteHash: C, lastHash: A }))
       .toBe('ask');
   });
 });
