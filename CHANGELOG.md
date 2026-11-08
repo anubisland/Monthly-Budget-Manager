@@ -20,6 +20,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - No shippable change — re-published with updated date stamp.
 
+## [2.2.11] - 2026-11-07
+
+### Changed
+
+- **The launcher icon is now your artwork.** It used to be drawn in code by
+  `mobile/tools/make_icon.py`, which has been rewritten to resize a supplied
+  image instead; the artwork lives in `mobile/tools/icon-source/` so the icon
+  stays editable rather than being twenty-six binaries nobody can change.
+
+  Sizing it was the real decision. Only the middle 72dp of a 108dp adaptive
+  canvas survives the launcher's mask, so **a third of the width is cropped on
+  every Android 8+ device**, not just the ones using circles — measured from
+  the shipped APK, whose foreground is 432px with its content inside 294px.
+  Filling the canvas would have cut away the gold frame, the plant and the pie
+  chart, so the artwork is sized to exactly that safe square: complete under a
+  squircle or rounded mask, and costing only the frame's corners under a
+  circular one.
+
+  The adaptive canvas is filled with the deep blue measured from just inside
+  the frame, so the launcher's mask always crops our own colour rather than
+  whatever the Briefcase template puts in its background layer — a layer this
+  project does not control and could not verify.
+
+### Added
+
+- `tests/test_mobile_icon.py`. A missing or mis-sized icon family is the
+  quietest failure here: nothing errors, no test fails, and the launcher falls
+  back to the template's artwork — which is how the BeeWare mascot once reached
+  the home screen while every test passed. These check the files the device
+  actually reads, and one regenerates from the artwork and compares, so
+  replacing the image without regenerating fails with the command to run.
+
 ## [2.2.10] - 2026-10-28
 
 ### Changed

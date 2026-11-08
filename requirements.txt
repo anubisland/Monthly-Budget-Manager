@@ -3,3 +3,8 @@
 XlsxWriter==3.2.0
 customtkinter==6.0.0
 fpdf2>=2.8.7
+# The launcher icon is generated from mobile/tools/icon-source/ rather than
+# hand-exported, and tests/test_mobile_icon.py checks the committed files
+# still match that artwork. A skipped check guards nothing, so this is a
+# real requirement of the suite, not an optional extra.
+Pillow>=10.0.0
