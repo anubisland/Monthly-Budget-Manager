@@ -49,8 +49,12 @@ mobile/**/out/
 *.apk
 *.aab
 
-# Local tool bundles / artifacts
+# Local tool bundles / artifacts. The pattern matches any directory of
+# that name at any depth, which silently swallowed mobile/tools — so the
+# icon generator was never in the repository at all, while its own
+# docstring claimed it was kept there to keep the design editable.
 tools/
+!mobile/tools/
 artifacts/
 
 # Misc
